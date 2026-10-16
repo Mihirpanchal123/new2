@@ -20,41 +20,46 @@
   .mon img { display: block; image-rendering: pixelated; filter: drop-shadow(0 3px 2px rgba(0,0,0,.25)); }
 
   /* HUD */
-  .panel { position: absolute; top: 16px; width: 310px; background: #fffef5; border: 3px solid; border-radius: 14px; padding: 10px 14px; }
-  #panel0 { left: 16px; border-color: #2563eb; box-shadow: 0 4px 0 #2563eb; }
-  #panel1 { right: 16px; border-color: #dc2626; box-shadow: 0 4px 0 #dc2626; }
-  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .pname { font-weight: 800; font-size: 18px; }
-  .owner { font-size: 12px; font-weight: 700; opacity: .85; }
-  .badge { font-size: 11px; font-weight: 800; color: #fff; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
+  .panel { position: absolute; top: 10px; width: 210px; background: rgba(255,254,245,.92); border: 2px solid; border-radius: 10px; padding: 5px 9px; }
+  #panel0 { left: 10px; border-color: #2563eb; box-shadow: 0 2px 0 #2563eb; }
+  #panel1 { right: 10px; border-color: #dc2626; box-shadow: 0 2px 0 #dc2626; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .pname { font-weight: 800; font-size: 13px; }
+  .panel .type { font-size: 8px; padding: 0 4px; }
+  .owner { font-size: 10px; font-weight: 700; opacity: .85; }
+  .badge { font-size: 9px; font-weight: 800; color: #fff; padding: 1px 4px; border-radius: 4px; margin-left: 3px; }
   .mega-badge { background: linear-gradient(90deg, #f472b6, #a78bfa, #60a5fa); }
-  .hpwrap { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-  .hplabel { font-size: 12px; font-weight: 800; color: #f59e0b; background: #374151; padding: 1px 5px; border-radius: 5px; }
-  .hpbar { flex: 1; height: 10px; background: #4b5563; border-radius: 6px; overflow: hidden; }
+  .hpwrap { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+  .hplabel { font-size: 8px; font-weight: 800; color: #f59e0b; background: #374151; padding: 0 3px; border-radius: 3px; }
+  .hpbar { flex: 1; height: 6px; background: #4b5563; border-radius: 4px; overflow: hidden; }
   .hpfill { height: 100%; transition: width .5s ease, background .5s; }
-  .hptext { text-align: right; font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .hptext { text-align: right; font-size: 10px; font-weight: 700; margin-top: 1px; }
   .balls { display: flex; gap: 3px; }
-  .ball { width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(#ef4444 50%, #fff 50%); border: 2px solid #374151; }
+  .ball { width: 8px; height: 8px; border-radius: 50%; background: linear-gradient(#ef4444 50%, #fff 50%); border: 1px solid #374151; }
   .ball.dead { filter: grayscale(1); opacity: .35; }
 
-  #bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(920px, calc(100% - 32px)); }
-  #msg { background: #fffef5; border: 4px solid #374151; border-radius: 14px; padding: 14px 18px; font-size: 19px; min-height: 60px; box-shadow: 0 4px 0 #374151; cursor: pointer; }
-  #actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+  #bottom { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: min(640px, calc(100% - 24px)); }
+  #msg { background: rgba(255,254,245,.9); border: 2px solid #374151; border-radius: 10px; padding: 6px 12px; font-size: 14px; min-height: 0; box-shadow: 0 2px 0 #374151; cursor: pointer; }
+  #actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 5px; }
   #actions:empty, #switches:empty { display: none; }
-  #switches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .mv { border: 3px solid rgba(0,0,0,.35); border-radius: 12px; padding: 9px 14px; color: #fff; font-weight: 800; font-size: 17px; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.55); display: flex; justify-content: space-between; align-items: center; }
-  .mv small { font-weight: 600; font-size: 12px; }
+  #switches { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; justify-content: center; }
+  .mv { border: 2px solid rgba(0,0,0,.35); border-radius: 8px; padding: 4px 8px; color: #fff; font-weight: 800; font-size: 12px; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.55); display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
+  .mv small { font-weight: 600; font-size: 9px; opacity: .95; }
   .mv:hover:not(:disabled) { filter: brightness(1.1); }
   .mv:disabled { opacity: .4; cursor: not-allowed; }
-  .sw { border: 2px solid #374151; background: #fff; border-radius: 10px; padding: 6px 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-  .sw img { height: 28px; image-rendering: pixelated; }
+  .sw { border: 1px solid #374151; background: rgba(255,255,255,.92); border-radius: 8px; padding: 2px 8px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .sw img { height: 20px; image-rendering: pixelated; }
   .sw:hover { background: #f3f4f6; }
   .megabtn { border: 3px solid #a78bfa; background: #fff; color: #7c3aed; font-weight: 900; }
   .megabtn.on { background: linear-gradient(90deg, #f472b6, #a78bfa, #60a5fa); color: #fff; }
 
   /* Record button */
-  #recBtn { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50; background: #111827; color: #fff; border: 2px solid #ef4444; border-radius: 999px; padding: 7px 16px; font-weight: 800; cursor: pointer; }
-  #recBtn::before { content: ""; display: inline-block; width: 10px; height: 10px; background: #ef4444; border-radius: 50%; margin-right: 7px; }
+  #battleCtl { position: absolute; top: 10px; left: 50%; transform: translateX(calc(-50% - 62px)); z-index: 50; display: flex; gap: 4px; }
+  #battleCtl button { width: 30px; height: 24px; border-radius: 8px; border: 1px solid #475569; background: rgba(17,24,39,.75); color: #fff; font-size: 13px; cursor: pointer; line-height: 1; }
+  #battleCtl button:hover { background: rgba(51,65,85,.95); }
+  #pauseMenu { background: rgba(15,23,42,.6); z-index: 40; }
+  #recBtn { position: absolute; top: 10px; left: calc(50% + 62px); transform: translateX(-50%); z-index: 50; background: rgba(17,24,39,.75); color: #fff; border: 1px solid #ef4444; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+  #recBtn::before { content: ""; display: inline-block; width: 7px; height: 7px; background: #ef4444; border-radius: 50%; margin-right: 5px; }
   #toast { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 8px 16px; border-radius: 10px; font-weight: 600; z-index: 60; transition: opacity .4s; opacity: 0; pointer-events: none; }
 
   /* Overlays */
@@ -73,7 +78,35 @@
   .seg button { background: #1e293b; color: #cbd5e1; border: none; padding: 6px 12px; font-weight: 800; cursor: pointer; }
   .seg button.on0 { background: #2563eb; color: #fff; }
   .seg button.on1 { background: #dc2626; color: #fff; }
-  #dex { flex: 1; min-height: 120px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; padding-right: 4px; }
+  /* two-column home screen: each column scrolls on its own */
+  #builder { height: 100vh; overflow: hidden; }
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(460px, 42%); gap: 14px; }
+  .pane { background: #0b1222; border: 1px solid #1e293b; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .pane-title { font-weight: 900; font-size: 16px; letter-spacing: .5px; }
+  .muted { color: #94a3b8; font-weight: 600; font-size: 12px; }
+  .chk { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .tabs { align-self: flex-start; }
+  .tabs button { padding: 8px 18px; font-size: 14px; }
+  .tabs small { opacity: .8; margin-left: 4px; }
+  .footer { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  #dex { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; padding-right: 6px; }
+  .teams { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; }
+  .teamrow.compact { cursor: pointer; opacity: .85; }
+  .teamrow.compact:hover { opacity: 1; }
+  .strip { display: flex; gap: 6px; align-items: flex-end; flex-wrap: wrap; min-height: 44px; }
+  .strip img { height: 44px; image-rendering: pixelated; }
+  #builder ::-webkit-scrollbar { width: 12px; height: 12px; }
+  #builder ::-webkit-scrollbar-track { background: #0f172a; border-radius: 8px; }
+  #builder ::-webkit-scrollbar-thumb { background: #475569; border-radius: 8px; border: 2px solid #0f172a; }
+  #builder ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  @media (max-width: 1000px) {
+    #builder { height: auto; overflow-y: auto; }
+    .main { display: flex; flex-direction: column; flex: none; }
+    .pane { min-height: auto; }
+    #dex { flex: none; max-height: 55vh; }
+    .teams { flex: none; overflow: visible; }
+    .footer { position: sticky; bottom: -14px; background: rgba(15, 23, 42, .97); padding: 10px 0 14px; margin: 0 -18px -14px; }
+  }
   .dexcard { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; position: relative; }
   .dexcard:hover { border-color: #facc15; }
   .dexcard .spr { height: 64px; display: flex; align-items: flex-end; justify-content: center; }
@@ -82,17 +115,17 @@
   .dexcard .meta { font-size: 10px; color: #94a3b8; }
   .dexcard .mg { position: absolute; top: 4px; right: 4px; font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 4px; }
   .type { display: inline-block; font-size: 10px; font-weight: 800; color: #fff; padding: 1px 6px; border-radius: 5px; margin: 1px; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
-  .teams { display: flex; flex-direction: column; gap: 8px; }
-  .teamrow { background: #0f172a; border: 2px solid; border-radius: 12px; padding: 8px; }
+  .teamrow { background: #0f172a; border: 2px solid; border-radius: 12px; padding: 8px; margin-bottom: 10px; }
   .teamrow.t0 { border-color: #2563eb; } .teamrow.t1 { border-color: #dc2626; }
   .teamrow.editing { box-shadow: 0 0 0 3px #facc15; }
   .teamhead { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-weight: 800; }
+  .pname-input { width: 110px; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 6px; padding: 3px 6px; font-weight: 800; }
   .teamhead select { background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 6px; padding: 3px 6px; }
   .small { background: #334155; color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-weight: 700; cursor: pointer; }
   .small:hover { background: #475569; }
-  .slots { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
-  .slot { background: #1e293b; border-radius: 10px; padding: 6px 8px; min-width: 200px; width: 200px; font-size: 12px; position: relative; }
-  .slot.empty { display: flex; align-items: center; justify-content: center; color: #64748b; border: 2px dashed #334155; min-height: 150px; background: transparent; }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .slot { background: #1e293b; border-radius: 10px; padding: 6px 8px; min-width: 0; font-size: 12px; position: relative; }
+  .slot.empty { display: flex; align-items: center; justify-content: center; color: #64748b; border: 2px dashed #334155; min-height: 110px; background: transparent; cursor: pointer; }
   .slot .hd { display: flex; align-items: center; gap: 6px; }
   .slot .hd img { height: 40px; image-rendering: pixelated; }
   .slot .x { position: absolute; top: 4px; right: 6px; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; }
@@ -116,7 +149,6 @@
 </head>
 <body>
 
-<div id="stage"></div>
 
 <div id="hud" class="hidden">
   <div class="panel" id="panel0"></div>
@@ -128,6 +160,11 @@
   </div>
 </div>
 
+<div id="battleCtl" class="hidden">
+  <button id="ctlPause" title="Pause (Esc / P)">⏸</button>
+  <button id="ctlRestart" title="Restart battle">↻</button>
+  <button id="ctlExit" title="Exit to team builder">✕</button>
+</div>
 <button id="recBtn" class="hidden" title="Record (R)">REC</button>
 <div id="toast"></div>
 
@@ -137,23 +174,33 @@
     <h1 class="logo">POKéMON ARENA</h1>
     <label>Team size <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <label>Default level <input type="number" id="setLevel" min="1" max="100" value="50"></label>
+    <label>Arena <select id="setTheme"><option value="random">Random</option></select></label>
     <label>Battle speed <select id="setSpeed"><option value="1">Normal</option><option value="0.6">Fast</option><option value="0.35">Turbo</option></select></label>
+    <label title="Official = real HP numbers. Long/Epic multiply HP so battles last more turns.">Battle length <select id="setLength"><option value="1">Official</option><option value="2">Long (2× HP)</option><option value="3">Epic (3× HP)</option></select></label>
+    <label title="Which Pokémon the Random buttons can pick">Random pool <select id="setPool"><option value="final">Fully evolved</option><option value="any">Any Pokémon</option></select></label>
     <label><input type="checkbox" id="setAuto"> Auto-play next random battle (CPU vs CPU)</label>
     <label><input type="checkbox" id="setMute"> Mute cries</label>
   </div>
-  <div class="tools">
-    <span style="font-weight:700">Adding to:</span>
-    <div class="seg"><button id="edit0" class="on0">Player 1</button><button id="edit1">Player 2</button></div>
-    <input id="search" placeholder="Search Pokémon...">
-    <select id="typeFilter"><option value="">All types</option></select>
-    <label style="font-size:13px"><input type="checkbox" id="megaOnly"> Can Mega Evolve</label>
+  <div class="main">
+    <section class="pane">
+      <div class="pane-title">Pokédex <span id="dexCount" class="muted"></span></div>
+      <div class="tools">
+        <input id="search" type="search" placeholder="Search Pokémon...">
+        <select id="typeFilter"><option value="">All types</option></select>
+        <label class="chk"><input type="checkbox" id="megaOnly"> Can Mega Evolve</label>
+      </div>
+      <div id="dex"></div>
+    </section>
+    <section class="pane">
+      <div class="pane-title">Teams <span class="muted">— click a Pokémon in the Pokédex to add it to the selected team</span></div>
+      <div class="seg tabs"><button id="edit0" class="on0">Player 1</button><button id="edit1">Player 2</button></div>
+      <div class="teams">
+        <div class="teamrow t0" id="team0"></div>
+        <div class="teamrow t1" id="team1"></div>
+      </div>
+    </section>
   </div>
-  <div id="dex"></div>
-  <div class="teams">
-    <div class="teamrow t0" id="team0"></div>
-    <div class="teamrow t1" id="team1"></div>
-  </div>
-  <div style="display:flex; gap:12px; justify-content:center;">
+  <div class="footer">
     <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
     <button class="btn alt" id="randomBoth">Random Both Teams</button>
     <button class="btn" id="startBtn">Start Battle!</button>
@@ -161,6 +208,16 @@
 </div>
 
 <div class="overlay center hidden" id="intro"></div>
+
+<div class="overlay center hidden" id="pauseMenu">
+  <h1 class="logo" style="font-size:46px">Paused</h1>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:260px;">
+    <button class="btn" id="pmResume">▶ Resume</button>
+    <button class="btn alt" id="pmRestart">↻ Restart battle</button>
+    <button class="btn alt" id="pmExit">✕ Exit to team builder</button>
+  </div>
+  <div style="color:#94a3b8; font-size:13px">Esc or P to pause / resume</div>
+</div>
 
 <div class="overlay center hidden" id="endScreen">
   <h1 class="logo" id="endTitle" style="font-size:52px"></h1>
@@ -172,8 +229,9 @@
   </div>
 </div>
 
-<script src="data.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="game.js"></script>
+<div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The 3D engine needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
+<script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
+<script type="module" src="boot.mjs" data-scripts="data.js,models.js,core.js,arenas.js,actors.js,trainers.js,vfx.js,game.js"></script>
 </body>
 </html>

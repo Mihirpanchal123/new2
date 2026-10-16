@@ -1,0 +1,13 @@
+{
+  "name": "pokemon-arena",
+  "version": "1.0.0",
+  "description": "3D arena battles with 81 Pokémon (full evolution lines) and 33 Mega Evolutions, real stats, level-up movesets and the official damage formula.",
+  "main": "data.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

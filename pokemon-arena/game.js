@@ -114,219 +114,8 @@ function defaultMoves(species, level) {
   return chosen;
 }
 
-// =====================================================================
-//  3D ARENA
-// =====================================================================
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.prepend(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 18, 40);
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
-const CAM_BASE = new THREE.Vector3(0, 3.2, 9);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x6b8e5a, 0.75));
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(4, 10, 6);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
-scene.add(sun);
-
-const M = color => new THREE.MeshToonMaterial({ color });
-(function buildArena() {
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), M(0x6fbf5f));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; ground.receiveShadow = true; scene.add(ground);
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.4, 0.4, 64), M(0x8fd07a));
-  base.position.y = -0.2; base.receiveShadow = true; scene.add(base);
-  const field = new THREE.Mesh(new THREE.BoxGeometry(10, 0.04, 5.5), M(0xe8d5a3));
-  field.position.y = 0.02; field.receiveShadow = true; scene.add(field);
-  const line = (w, d, x, z) => { const l = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), M(0xffffff)); l.position.set(x, 0.05, z); scene.add(l); };
-  line(10, 0.08, 0, 2.75); line(10, 0.08, 0, -2.75); line(0.08, 5.5, 5, 0); line(0.08, 5.5, -5, 0); line(0.08, 5.5, 0, 0);
-  const ring = (r, x, c) => { const t = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 48), M(c)); t.rotation.x = -Math.PI / 2; t.position.set(x, 0.05, 0); scene.add(t); };
-  ring(1.1, 0, 0xffffff); ring(0.95, -3, 0x2563eb); ring(0.95, 3, 0xdc2626);
-  [[9, 0.8, 0xb0b8c4], [10, 1.6, 0x9aa3b0], [11, 2.4, 0x86909e]].forEach(([r, h, c]) => {
-    const mat = new THREE.MeshToonMaterial({ color: c, side: THREE.DoubleSide });
-    const s = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 64, 1, true), mat); s.position.y = h / 2 - 0.4; scene.add(s);
-    const top = new THREE.Mesh(new THREE.RingGeometry(r - 1, r, 64), mat); top.rotation.x = -Math.PI / 2; top.position.y = h - 0.4; scene.add(top);
-  });
-  const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.45, 0.3), new THREE.MeshToonMaterial(), 420);
-  const dummy = new THREE.Object3D(), col = new THREE.Color();
-  for (let i = 0; i < 420; i++) {
-    const tier = i % 3, r = [8.5, 9.5, 10.5][tier], h = [0.8, 1.6, 2.4][tier];
-    const a = Math.PI + (i / 420) * Math.PI;
-    dummy.position.set(Math.cos(a) * r, h - 0.18, Math.sin(a) * r);
-    dummy.updateMatrix();
-    crowd.setMatrixAt(i, dummy.matrix);
-    crowd.setColorAt(i, col.setHSL(Math.random(), 0.6, 0.55));
-  }
-  scene.add(crowd);
-})();
-
-// --- Battle positions: an invisible holder + shadow in 3D, a sprite in the DOM ---
-const BASE_X = [-3, 3];
-const holders = [0, 1].map(i => {
-  const h = new THREE.Group();
-  h.position.set(BASE_X[i], 0, 0.3);
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.75, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 }));
-  shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.06; shadow.scale.set(1, 0.55, 1);
-  h.add(shadow); h.userData.shadow = shadow;
-  h.visible = false;
-  scene.add(h);
-  return h;
-});
-const fx = [0, 1].map(() => ({ y: 0, scale: 1, rot: 0, opacity: 1, visible: false, flash: 0 }));
-const sprites = [0, 1].map(i => {
-  const wrap = document.createElement('div');
-  wrap.className = 'mon';
-  const img = document.createElement('img');
-  img.onload = () => sizeSprite(i);
-  wrap.append(img);
-  document.getElementById('stage').append(wrap);
-  return { wrap, img };
-});
-function sizeSprite(i) {
-  const img = sprites[i].img;
-  if (!img.naturalWidth) return;
-  const k = 2.1 * innerHeight / 800 * (img.src.endsWith('.png') ? 1.1 : 1);
-  img.style.width = img.naturalWidth * k + 'px';
-}
-function setSprite(p, src) { sprites[p].img.src = src || ''; }
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  sizeSprite(0); sizeSprite(1);
-});
-
-// --- Tweens ---
-const tweens = [];
-let camShake = 0;
-let SPEED = 1;
-function tween(dur, fn) { return new Promise(res => tweens.push({ t: 0, dur: dur * SPEED, fn, res })); }
-const ease = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-const wait = ms => new Promise(r => setTimeout(r, ms * SPEED));
-
-const projOrb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshBasicMaterial());
-projOrb.visible = false; scene.add(projOrb);
-const fxLight = new THREE.PointLight(0xffffff, 0, 5);
-scene.add(fxLight);
-const flashBall = new THREE.Mesh(new THREE.SphereGeometry(0.6, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }));
-flashBall.visible = false; scene.add(flashBall);
-const megaOrbs = [0xf472b6, 0xa78bfa, 0x60a5fa, 0x34d399, 0xfacc15].map(c => {
-  const o = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshBasicMaterial({ color: c }));
-  o.visible = false; scene.add(o); return o;
-});
-
-async function animLunge(p) {
-  const dir = p === 0 ? 1 : -1, x0 = BASE_X[p];
-  await tween(0.2, k => holders[p].position.x = x0 + dir * 4 * ease(k));
-  await tween(0.24, k => holders[p].position.x = x0 + dir * 4 * (1 - ease(k)));
-}
-async function animProjectile(p, type, small) {
-  const from = holders[p].position, to = holders[1 - p].position;
-  projOrb.material.color.set(TYPE_COLORS[type] || '#ffffff');
-  fxLight.color.copy(projOrb.material.color);
-  const size = small ? 0.55 : 1;
-  await tween(0.1, k => fx[p].scale = 1 - 0.1 * Math.sin(k * Math.PI));
-  projOrb.visible = true; fxLight.intensity = 1.5;
-  await tween(0.42, k => {
-    projOrb.position.set(from.x + (to.x - from.x) * k, 0.9 + Math.sin(k * Math.PI) * 0.8, from.z);
-    projOrb.scale.setScalar(size * (1 + 0.3 * Math.sin(k * 20)));
-    fxLight.position.copy(projOrb.position);
-  });
-  projOrb.visible = false; fxLight.intensity = 0;
-}
-async function animSelf(p) {
-  await tween(0.5, k => { fx[p].y = Math.sin(k * Math.PI) * 0.5; fx[p].flash = Math.sin(k * Math.PI); });
-  fx[p].flash = 0;
-}
-async function animHit(p) {
-  const x0 = BASE_X[p];
-  await tween(0.4, k => {
-    fx[p].opacity = Math.floor(k * 8) % 2 === 0 ? 1 : 0.15;
-    holders[p].position.x = x0 + Math.sin(k * 40) * 0.08 * (1 - k);
-  });
-  fx[p].opacity = 1; holders[p].position.x = x0;
-}
-async function animFaint(p) {
-  await tween(0.6, k => { fx[p].y = -k * 0.6; fx[p].opacity = 1 - k; });
-  fx[p].visible = false; holders[p].visible = false;
-}
-async function animAppear(p) {
-  fx[p] = { y: 0, scale: 0.01, rot: 0, opacity: 1, visible: true, flash: 1 };
-  holders[p].visible = true;
-  flashBall.position.set(BASE_X[p], 0.7, holders[p].position.z);
-  flashBall.visible = true;
-  await tween(0.4, k => { flashBall.scale.setScalar(0.3 + k * 1.6); flashBall.material.opacity = 1 - k; fx[p].scale = Math.max(0.01, ease(k)); fx[p].flash = 1 - k; });
-  flashBall.visible = false;
-  fx[p].scale = 1; fx[p].flash = 0;
-}
-async function animRecall(p) {
-  await tween(0.35, k => { fx[p].scale = Math.max(0.01, 1 - k); fx[p].flash = k; });
-  fx[p].visible = false; holders[p].visible = false;
-}
-async function animMega(p, newSprite) {
-  const cx = BASE_X[p], cz = holders[p].position.z;
-  fxLight.color.set(0xffffff);
-  fxLight.position.set(cx, 1, cz + 0.7);
-  megaOrbs.forEach(o => o.visible = true);
-  await tween(1.1, k => {
-    megaOrbs.forEach((o, i) => {
-      const a = k * Math.PI * 6 + i * (Math.PI * 2 / megaOrbs.length), r = 1.2 * (1 - k * 0.8);
-      o.position.set(cx + Math.cos(a) * r, 0.3 + k * 1.4, cz + Math.sin(a) * r);
-    });
-    fx[p].flash = k; fxLight.intensity = k * 3;
-  });
-  megaOrbs.forEach(o => o.visible = false);
-  setSprite(p, newSprite);
-  camShake = 0.15;
-  await tween(0.5, k => { fx[p].flash = 1 - k; fxLight.intensity = 3 * (1 - k); fx[p].scale = 1 + 0.25 * Math.sin(k * Math.PI); });
-  fxLight.intensity = 0;
-  fx[p].flash = 0; fx[p].scale = 1;
-}
-
-// --- Render loop ---
-const clock = new THREE.Clock();
-const projV = new THREE.Vector3();
-(function loop() {
-  requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
-  for (let i = tweens.length - 1; i >= 0; i--) {
-    const tw = tweens[i];
-    tw.t += dt;
-    const k = Math.min(1, tw.t / Math.max(tw.dur, 0.001));
-    tw.fn(k);
-    if (k >= 1) { tweens.splice(i, 1); tw.res(); }
-  }
-  camera.position.set(CAM_BASE.x + Math.sin(t * 0.25) * 1.2, CAM_BASE.y, CAM_BASE.z);
-  if (camShake > 0) {
-    camera.position.x += (Math.random() - 0.5) * camShake;
-    camera.position.y += (Math.random() - 0.5) * camShake;
-    camShake = Math.max(0, camShake - dt * 0.6);
-  }
-  camera.lookAt(0, 0.9, 0);
-  renderer.render(scene, camera);
-
-  for (const p of [0, 1]) {
-    const s = sprites[p].wrap, f = fx[p];
-    if (!f.visible) { s.style.display = 'none'; continue; }
-    s.style.display = 'block';
-    const bob = Math.abs(Math.sin(t * 2.6 + p * 1.7)) * 0.05;
-    projV.set(holders[p].position.x, f.y + bob, holders[p].position.z).project(camera);
-    const x = (projV.x + 1) / 2 * innerWidth, y = (1 - projV.y) / 2 * innerHeight;
-    const flip = p === 0 ? -1 : 1; // sprites face left; mirror player 1 so both face each other
-    s.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%) scale(${flip * f.scale}, ${f.scale}) rotate(${f.rot}rad)`;
-    s.style.opacity = f.opacity;
-    s.firstChild.style.filter = f.flash > 0 ? `brightness(${1 + f.flash * 2.5}) drop-shadow(0 0 ${8 * f.flash}px #fff)` : '';
-  }
-})();
+// Rendering lives in core.js + arenas.js, 3D Pokémon in actors.js,
+// move effects in vfx.js and trainers in trainers.js.
 
 // =====================================================================
 //  SOUND & RECORDING
@@ -356,6 +145,8 @@ const recBtn2 = document.getElementById('recBtn2');
 const inBattle = () => document.getElementById('builder').classList.contains('hidden');
 function updateRecButtons() {
   recBtn.classList.toggle('hidden', !!Rec.stream || !inBattle());
+  // in-battle controls stay out of recordings (Esc still pauses)
+  document.getElementById('battleCtl').classList.toggle('hidden', !!Rec.stream || !battleActive);
   recBtn2.textContent = Rec.stream ? '⏹ Stop Recording' : '⏺ Record';
 }
 function pickMime() {
@@ -417,6 +208,7 @@ recBtn2.onclick = () => Rec.stream ? stopRecording() : startRecording();
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 'r' || e.key === 'R') Rec.stream ? stopRecording() : startRecording();
+  if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && battleActive) setPaused(!PAUSED);
 });
 
 // =====================================================================
@@ -424,7 +216,7 @@ addEventListener('keydown', e => {
 // =====================================================================
 const $ = id => document.getElementById(id);
 const PLAYER = ['Player 1', 'Player 2'];
-const settings = { teamSize: 3, level: 50, auto: false };
+const settings = { teamSize: 3, level: 50, auto: false, theme: 'random', outfits: ['red', 'blue'], hpMult: 1, pool: 'final' };
 const teams = [[], []];               // builder specs: { species, level, mega, moves }
 const controllers = ['human', 'cpu'];
 let state = null;
@@ -440,10 +232,11 @@ const blankStages = () => ({ atk: 0, def: 0, spa: 0, spd: 0, spe: 0, acc: 0, eva
 
 function makeMon(spec, owner) {
   const sp = DEX.species[spec.species];
-  const maxhp = Math.floor((2 * sp.base[0] + 31) * spec.level / 100) + spec.level + 10;
+  // official HP formula; the optional 'Battle length' setting multiplies it for longer battles
+  const maxhp = (Math.floor((2 * sp.base[0] + 31) * spec.level / 100) + spec.level + 10) * settings.hpMult;
   return {
     owner, species: sp.name, name: sp.display, level: spec.level, types: sp.types.slice(),
-    stats: calcStats(sp.base, spec.level), maxhp, hp: maxhp, sprite: sp.sprite, cry: sp.cry,
+    stats: calcStats(sp.base, spec.level), maxhp, hp: maxhp, sprite: sp.sprite, cry: sp.cry, modelKey: sp.name,
     megaForm: spec.mega ? sp.megas.find(m => m.name === spec.mega) : null, isMega: false,
     status: null, sleepTurns: 0, vol: {}, stages: blankStages(), turnsOut: 0,
     moves: spec.moves.map(id => ({ id, ...MOVES[id], ppLeft: MOVES[id].pp }))
@@ -454,6 +247,8 @@ function updateHud() {
   for (const p of [0, 1]) {
     const m = active(p);
     if (!m) continue;
+    World.setTint(p, m.status);
+    World.setState(p, m.status, m.hp / m.maxhp);
     const pct = Math.max(0, m.hp / m.maxhp * 100);
     const color = pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444';
     const st = m.status ? STATUS_INFO[m.status] : null;
@@ -472,12 +267,29 @@ function updateHud() {
 let skipWait = null;
 $('msg').onclick = () => skipWait && skipWait();
 async function say(html, ms = 1150) {
+  guard();
   $('msg').innerHTML = html;
   await new Promise(res => {
-    const t = setTimeout(res, ms * SPEED);
-    skipWait = () => { clearTimeout(t); res(); };
+    let done = false;
+    const finish = () => { if (!done) { done = true; res(); } };
+    later(finish, ms);
+    skipWait = finish;
   });
   skipWait = null;
+  guard();
+}
+
+// ---- battle lifecycle: every battle has a token; restart/exit invalidates it
+let battleToken = 0, battleActive = false;
+class BattleAbort extends Error {}
+const pendingChoices = new Set();              // rejecters for choice menus waiting on a human
+function guard() { if (!state || state.token !== battleToken) throw new BattleAbort(); }
+function humanChoice(build) {
+  return new Promise((res, rej) => {
+    const finish = v => { pendingChoices.delete(rej); res(v); };
+    pendingChoices.add(rej);
+    build(finish);
+  });
 }
 function clearButtons() { $('actions').innerHTML = ''; $('switches').innerHTML = ''; }
 const canMega = p => { const u = active(p); return u.megaForm && !u.isMega && !state.players[p].usedMega; };
@@ -486,7 +298,7 @@ const canMega = p => { const u = active(p); return u.megaForm && !u.isMega && !s
 //  CHOOSING ACTIONS (human UI + CPU AI)
 // =====================================================================
 function chooseActionHuman(p) {
-  return new Promise(res => {
+  return humanChoice(res => {
     const u = active(p);
     let mega = false;
     const done = a => { clearButtons(); res(a); };
@@ -606,7 +418,7 @@ const chooseAction = p => controllers[p] === 'cpu' ? chooseActionCPU(p) : choose
 
 function chooseReplacement(p) {
   if (controllers[p] === 'cpu') return wait(400).then(() => bestMatchupIdx(p));
-  return new Promise(res => {
+  return humanChoice(res => {
     $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b>: Choose your next Pokémon!`;
     clearButtons();
     state.players[p].team.forEach((m, i) => {
@@ -645,12 +457,14 @@ async function inflict(t, ailment, moveName) {
     t.status = code;
     if (code === 'slp') t.sleepTurns = 1 + Math.floor(rand() * 3);
     updateHud();
+    await VFX.status(code, t.owner);
     await say(`${lbl(t)} ${STATUS_INFO[code].msg}`);
     return true;
   }
   if (code === 'conf') {
     if (t.vol.conf) return false;
     t.vol.conf = 2 + Math.floor(rand() * 4);
+    await VFX.status('confused', t.owner);
     await say(`${lbl(t)} became confused!`);
     return true;
   }
@@ -691,26 +505,31 @@ async function hurt(p, amount) {
 async function faint(p) {
   const m = active(p);
   playCry(m, 0.8);
-  await animFaint(p);
+  World.focusOne(p);
+  World.trainers.dismay(p);
+  if (World.actors[1 - p].visible) World.trainers.cheer(1 - p);
+  await World.faint(p);
+  World.overview();
   updateHud();
   await say(`${lbl(m)} fainted!`);
 }
 
 async function doSwitch(p, idx, forced) {
   const pl = state.players[p];
-  if (!forced && fx[p].visible) {
+  if (!forced && World.actors[p].visible) {
     await say(`<b class="p${p}">${PLAYER[p]}</b>: Come back, ${active(p).name}!`, 800);
-    await animRecall(p);
+    await World.recall(p);
   }
   pl.active = idx;
   const m = active(p);
   m.stages = blankStages();
   m.vol = {};
   m.turnsOut = 0;
-  setSprite(p, m.sprite);
+  World.setSpeedStat(p, m.stats.spe);
   updateHud();
-  playCry(m);
-  await animAppear(p);
+  const out = World.sendOut(p, m);
+  later(() => playCry(m), 550);
+  await out;
   await say(`<b class="p${p}">${PLAYER[p]}</b>: Go! ${m.name}!`, 900);
 }
 
@@ -718,7 +537,12 @@ async function megaEvolve(p) {
   const u = active(p), f = u.megaForm;
   state.players[p].usedMega = true;
   await say(`${lbl(u)}'s ${f.stone} is reacting to <b class="p${p}">${PLAYER[p]}</b>'s Key Stone!`, 1300);
-  await animMega(p, f.sprite);
+  await World.trainers.mega(p);
+  World.focusOne(p);
+  await VFX.other('megaevo', p);
+  u.modelKey = f.name;
+  u.sprite = f.sprite;
+  await World.megaSwap(p, u);
   const prev = u.name;
   u.isMega = true;
   u.name = f.display;
@@ -729,6 +553,7 @@ async function megaEvolve(p) {
   playCry(u);
   updateHud();
   await say(`<b class="p${p}">${prev}</b> has Mega Evolved into <b class="p${p}">${f.display}</b>!`, 1500);
+  World.overview();
 }
 
 async function useMove(p, idx) {
@@ -738,22 +563,24 @@ async function useMove(p, idx) {
 
   // --- can the user act? ---
   if (u.status === 'slp') {
-    if (u.sleepTurns > 0) { u.sleepTurns--; await say(`${lbl(u)} is fast asleep.`); return; }
+    if (u.sleepTurns > 0) { u.sleepTurns--; await VFX.status('slp', p); await say(`${lbl(u)} is fast asleep.`); return; }
     u.status = null; updateHud(); await say(`${lbl(u)} woke up!`);
   }
   if (u.status === 'frz') {
     if (rand() < 0.2) { u.status = null; updateHud(); await say(`${lbl(u)} thawed out!`); }
-    else { await say(`${lbl(u)} is frozen solid!`); return; }
+    else { await VFX.status('frz', p); await say(`${lbl(u)} is frozen solid!`); return; }
   }
-  if (u.vol.flinch) { await say(`${lbl(u)} flinched and couldn't move!`); return; }
+  if (u.vol.flinch) { await VFX.status('flinch', p); await say(`${lbl(u)} flinched and couldn't move!`); return; }
   if (u.vol.conf) {
     u.vol.conf--;
     if (u.vol.conf === 0) await say(`${lbl(u)} snapped out of its confusion!`);
     else {
+      await VFX.status('confused', p);
       await say(`${lbl(u)} is confused!`, 800);
       if (rand() < 1 / 3) {
         const self = { id: 'confusion-hit', type: null, cat: 'physical', power: 40 };
-        await animHit(p);
+        await VFX.status('confusedselfhit', p);
+        await World.blink(p);
         await hurt(p, Math.max(1, calcDamage(u, u, self)));
         await say('It hurt itself in its confusion!');
         if (u.hp <= 0) await faint(p);
@@ -761,25 +588,34 @@ async function useMove(p, idx) {
       }
     }
   }
-  if (u.status === 'par' && rand() < 0.25) { await say(`${lbl(u)} is paralyzed! It can't move!`); return; }
+  if (u.status === 'par' && rand() < 0.25) { await VFX.status('par', p); await say(`${lbl(u)} is paralyzed! It can't move!`); return; }
 
   if (idx >= 0) m.ppLeft--;
+  World.trainers.command(p);
   await say(`${lbl(u)} used <b>${m.name}</b>!`, 900);
 
   const selfTarget = SELF_TARGETS.has(m.target) || m.id === 'rest';
   if (!selfTarget && t.hp <= 0) { await say('But there was no target...'); return; }
   if (m.id === 'fake-out' && u.turnsOut > 0) { await say('But it failed!'); return; }
-  if (!selfTarget && t.vol.protect) { await say(`${lbl(t)} protected itself!`); return; }
+  if (!selfTarget && t.vol.protect) {
+    await VFX.move(m.id, p, 1 - p, { blocked: true });
+    await say(`${lbl(t)} protected itself!`);
+    return;
+  }
   if (!selfTarget && m.acc != null) {
     const st = Math.max(-6, Math.min(6, u.stages.acc - t.stages.eva));
-    if (rand() * 100 >= m.acc * accMult(st)) { await say(`${lbl(u)}'s attack missed!`); return; }
+    if (rand() * 100 >= m.acc * accMult(st)) {
+      await Promise.all([VFX.move(m.id, p, 1 - p, { miss: true }), wait(120).then(() => World.dodge(1 - p, p))]);
+      await say(`${lbl(u)}'s attack missed!`);
+      return;
+    }
   }
 
   // --- status moves ---
   if (m.cat === 'status') {
     if (m.id === 'rest') {
       if (u.hp === u.maxhp) { await say('But it failed!'); return; }
-      await animSelf(p);
+      await VFX.move(m.id, p, p);
       u.hp = u.maxhp; u.status = 'slp'; u.sleepTurns = 2;
       updateHud();
       await say(`${lbl(u)} slept and became healthy!`);
@@ -789,23 +625,23 @@ async function useMove(p, idx) {
       if (rand() < 1 / Math.pow(3, u.vol.protectCount || 0)) {
         u.vol.protect = true;
         u.vol.protectCount = (u.vol.protectCount || 0) + 1;
-        await animSelf(p);
+        await VFX.move(m.id, p, p);
         await say(`${lbl(u)} protected itself!`);
       } else { u.vol.protectCount = 0; await say('But it failed!'); }
       return;
     }
     if (m.healing > 0 && selfTarget) {
       if (u.hp === u.maxhp) { await say(`${lbl(u)}'s HP is full!`); return; }
-      await animSelf(p);
+      await VFX.move(m.id, p, p);
       u.hp = Math.min(u.maxhp, u.hp + Math.floor(u.maxhp * m.healing / 100));
       updateHud();
       await say(`${lbl(u)} restored HP!`);
       return;
     }
-    if (selfTarget) { await animSelf(p); await changeStats(u, m.stats); return; }
+    if (selfTarget) { await VFX.move(m.id, p, p); await changeStats(u, m.stats); return; }
     if (POWDER.has(m.id) && t.types.includes('Grass')) { await say(`It doesn't affect ${lbl(t)}...`); return; }
     if (m.id === 'thunder-wave' && effectiveness('Electric', t.types) === 0) { await say(`It doesn't affect ${lbl(t)}...`); return; }
-    await animProjectile(p, m.type, true);
+    await VFX.move(m.id, p, 1 - p);
     if (m.ailment !== 'none') {
       if (!(await inflict(t, m.ailment, m.name))) await say('But it failed!');
     }
@@ -815,9 +651,8 @@ async function useMove(p, idx) {
 
   // --- damaging moves ---
   const eff = m.type ? effectiveness(m.type, t.types) : 1;
-  if (m.id === 'earthquake' || m.id === 'magnitude' || m.id === 'bulldoze') { camShake = 0.35; await animLunge(p); }
-  else if (m.cat === 'physical') await animLunge(p);
-  else await animProjectile(p, m.type);
+  if (['earthquake', 'magnitude', 'bulldoze'].includes(m.id)) World.shake(0.4);
+  await VFX.move(m.id, p, 1 - p, { eff });
   if (eff === 0) { await say(`It doesn't affect ${lbl(t)}...`); return; }
 
   let hits = 1;
@@ -827,6 +662,7 @@ async function useMove(p, idx) {
   }
   let total = 0, landed = 0, critHappened = false;
   for (let h = 0; h < hits && t.hp > 0; h++) {
+    if (h > 0) await VFX.move(m.id, p, 1 - p, { eff });
     const critStage = (m.crit || 0) + (m.id === 'aqua-cutter' ? 1 : 0);
     const crit = FIXED_DAMAGE[m.id] === undefined && rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
     let dmg = calcDamage(u, t, m, crit, (85 + Math.floor(rand() * 16)) / 100);
@@ -834,11 +670,12 @@ async function useMove(p, idx) {
     if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
     t.hp -= dmg; total += dmg; landed++;
     if (crit) critHappened = true;
-    await animHit(1 - p);
     updateHud();
+    await World.hit(1 - p, p, eff * (crit ? 1.5 : 1) * (m.power || 60) / 80, { eff, crit, ko: t.hp <= 0 });
     if (crit && hits > 1) await say('A critical hit!', 700);
   }
   if (critHappened && hits === 1) await say('A critical hit!', 900);
+  if (eff > 1 || critHappened) World.trainers.cheer(p);
   if (eff > 1) await say("It's super effective!", 900);
   if (eff < 1) await say("It's not very effective...", 900);
   if (hits > 1) await say(`Hit ${landed} time(s)!`, 900);
@@ -864,6 +701,7 @@ async function useMove(p, idx) {
   if (m.drain < 0 && u.hp > 0) {
     const recoil = m.id === 'struggle' ? Math.floor(u.maxhp / 4) : Math.floor(total * -m.drain / 100);
     await hurt(p, Math.max(1, recoil));
+    await World.blink(p);
     await say(`${lbl(u)} is damaged by recoil!`);
     if (u.hp <= 0) await faint(p);
   }
@@ -873,7 +711,8 @@ async function endOfTurn() {
   for (const p of [0, 1]) {
     const m = active(p);
     if (m.hp > 0 && (m.status === 'brn' || m.status === 'psn')) {
-      await animHit(p);
+      await VFX.status(m.status, p);
+      await World.blink(p);
       await hurt(p, Math.max(1, Math.floor(m.maxhp / (m.status === 'brn' ? 16 : 8))));
       await say(`${lbl(m)} is hurt by its ${m.status === 'brn' ? 'burn' : 'poison'}!`);
       if (m.hp <= 0) await faint(p);
@@ -881,7 +720,8 @@ async function endOfTurn() {
     if (m.hp > 0 && m.vol.seed) {
       const foe = active(1 - p);
       const amt = Math.max(1, Math.floor(m.maxhp / 8));
-      await animHit(p);
+      if (foe.hp > 0) await VFX.other('leech', 1 - p, p);
+      await World.blink(p);
       await hurt(p, amt);
       if (foe.hp > 0) foe.hp = Math.min(foe.maxhp, foe.hp + amt);
       updateHud();
@@ -889,7 +729,8 @@ async function endOfTurn() {
       if (m.hp <= 0) await faint(p);
     }
     if (m.hp > 0 && m.vol.trap) {
-      await animHit(p);
+      await VFX.other('bound', p);
+      await World.blink(p);
       await hurt(p, Math.max(1, Math.floor(m.maxhp / 8)));
       await say(`${lbl(m)} is hurt by ${m.vol.trapName}!`);
       if (--m.vol.trap <= 0) { delete m.vol.trap; if (m.hp > 0) await say(`${lbl(m)} was freed from ${m.vol.trapName}!`); }
@@ -916,6 +757,7 @@ async function resolveTurn(actions) {
   for (const p of order) {
     if (active(p).hp <= 0) continue;
     await useMove(p, actions[p].idx);
+    World.overview();
     if (battleOver()) return;
   }
   await endOfTurn();
@@ -933,7 +775,7 @@ function showIntro(players) {
   const side = p => `<div class="vsteam"><div class="vsname p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}${controllers[p] === 'cpu' ? ' (CPU)' : ''}</div>
     <div class="sprs">${players[p].team.map(m => `<img src="${m.sprite}" title="${m.name}" style="${p === 0 ? 'transform:scaleX(-1)' : ''}">`).join('')}</div>
     <div style="color:#cbd5e1">${players[p].team.map(m => `${m.name} Lv${m.level}`).join(' · ')}</div></div>`;
-  $('intro').innerHTML = `<h1 class="logo">POKéMON ARENA</h1><div class="vs">${side(0)}<div class="vsword">VS</div>${side(1)}</div>`;
+  $('intro').innerHTML = `<h1 class="logo">POKéMON ARENA</h1><div style="font-size:20px;color:#facc15;font-weight:800">${World.themeName(state.theme)}</div><div class="vs">${side(0)}<div class="vsword">VS</div>${side(1)}</div>`;
   $('intro').classList.remove('hidden');
 }
 
@@ -941,10 +783,21 @@ async function startBattle(specs) {
   clearTimeout(autoTimer);
   lastSpecs = specs;
   state = {
-    players: [0, 1].map(p => ({ team: specs[p].map(s => makeMon(s, p)), active: 0, usedMega: false }))
+    players: [0, 1].map(p => ({ team: specs[p].map(s => makeMon(s, p)), active: 0, usedMega: false })),
+    token: ++battleToken
   };
-  fx.forEach(f => f.visible = false);
-  holders.forEach(h => h.visible = false);
+  battleActive = true;
+  setPaused(false);
+  try { await runBattle(); }
+  catch (e) { if (!(e instanceof BattleAbort)) throw e; }
+}
+
+async function runBattle() {
+  World.reset();
+  World.trainers.reset();
+  state.theme = World.setTheme(settings.theme);
+  [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
+  World.preload(state.players.flatMap(pl => pl.team.flatMap(m => [m.modelKey, ...(m.megaForm ? [m.megaForm.name] : [])])));
   $('builder').classList.add('hidden');
   $('endScreen').classList.add('hidden');
   $('hud').classList.add('hidden');
@@ -969,7 +822,49 @@ async function startBattle(specs) {
   if (!battleOver()) await say('The turn limit was reached! The side with more HP left wins.', 1600);
   const w = battleOver() ? (hasAlive(0) ? 0 : 1) : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
   await say(`<b class="p${w}">${PLAYER[w]}</b> wins the battle!`, 1800);
+  World.trainers.celebrate(w);
+  World.trainers.dismay(1 - w, 4);
+  VFX.victory(World.trainers.list[w].root.position);
+  World.focusPoint(World.trainers.list[w].root.position.clone().setY(1.4), 9);
+  await wait(1800);
+  guard();
+  battleActive = false;
+  updateRecButtons();
   showEnd(w);
+}
+
+// cancel the running battle: stop its flow, timers, effects and menus
+function abortBattle() {
+  battleToken++;
+  battleActive = false;
+  for (const rej of pendingChoices) rej(new BattleAbort());
+  pendingChoices.clear();
+  skipWait = null;
+  World.clearTimers();
+  VFX.clear();
+  World.reset();
+  World.trainers.reset();
+  clearButtons();
+  setPaused(false);
+}
+function exitToBuilder() {
+  abortBattle();
+  clearTimeout(autoTimer);
+  $('endScreen').classList.add('hidden');
+  $('intro').classList.add('hidden');
+  $('hud').classList.add('hidden');
+  $('builder').classList.remove('hidden');
+  updateRecButtons();
+  renderTeams();
+}
+function restartBattle() { abortBattle(); startBattle(lastSpecs); }
+function setPaused(v) {
+  v = !!v && battleActive;
+  PAUSED = v;
+  $('pauseMenu').classList.toggle('hidden', !v);
+  $('ctlPause').textContent = v ? '▶' : '⏸';
+  // paused time is left out of recordings
+  if (Rec.recorder) { if (v && Rec.recorder.state === 'recording') Rec.recorder.pause(); else if (!v && Rec.recorder.state === 'paused') Rec.recorder.resume(); }
 }
 
 function showEnd(w) {
@@ -997,16 +892,13 @@ function showEnd(w) {
 
 $('rematchBtn').onclick = () => startBattle(lastSpecs);
 $('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s })))); };
-$('builderBtn').onclick = () => {
-  clearTimeout(autoTimer);
-  $('endScreen').classList.add('hidden');
-  $('hud').classList.add('hidden');
-  fx.forEach(f => f.visible = false);
-  holders.forEach(h => h.visible = false);
-  $('builder').classList.remove('hidden');
-  updateRecButtons();
-  renderTeams();
-};
+$('builderBtn').onclick = exitToBuilder;
+$('ctlPause').onclick = () => setPaused(!PAUSED);
+$('ctlRestart').onclick = restartBattle;
+$('ctlExit').onclick = exitToBuilder;
+$('pmResume').onclick = () => setPaused(false);
+$('pmRestart').onclick = restartBattle;
+$('pmExit').onclick = exitToBuilder;
 
 // =====================================================================
 //  TEAM BUILDER
@@ -1020,7 +912,10 @@ function makeSpec(species, level) {
 }
 
 function randomTeam() {
-  const pool = DEX.order.filter(n => DEX.species[n].minLevel <= settings.level);
+  const LEGENDARY = ['mewtwo', 'rayquaza'];
+  // balanced pool: fully evolved, non-legendary Pokémon only
+  const pool = DEX.order.filter(n => DEX.species[n].minLevel <= settings.level &&
+    (settings.pool === 'any' || (!DEX.species[n].evolvesTo.length && !LEGENDARY.includes(n))));
   const picks = [];
   while (picks.length < settings.teamSize && pool.length) picks.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
   return picks.map(n => {
@@ -1035,11 +930,13 @@ function randomizeTeams() { teams[0] = randomTeam(); teams[1] = randomTeam(); }
 function renderDex() {
   const q = $('search').value.trim().toLowerCase(), tf = $('typeFilter').value, megaOnly = $('megaOnly').checked;
   $('dex').innerHTML = '';
+  let shown = 0;
   for (const n of DEX.order) {
     const s = DEX.species[n];
     if (q && !s.display.toLowerCase().includes(q)) continue;
     if (tf && !s.types.includes(tf)) continue;
     if (megaOnly && !s.megas.length) continue;
+    shown++;
     const c = document.createElement('div');
     c.className = 'dexcard';
     const evo = s.evoFrom ? `from ${DEX.species[s.evoFrom].display} · ${s.evoMethod}` : 'Base form';
@@ -1056,18 +953,34 @@ function renderDex() {
     };
     $('dex').append(c);
   }
+  $('dexCount').textContent = `${shown} of ${DEX.order.length}`;
 }
 
 function renderTeams() {
   for (const p of [0, 1]) {
     const row = $('team' + p);
+    const name = `${PLAYER[p]} <small>${teams[p].length}/${settings.teamSize}</small>`;
+    $('edit' + p).innerHTML = name;
     row.classList.toggle('editing', editing === p);
+    row.classList.toggle('compact', editing !== p);
+    if (editing !== p) {
+      // the team not being edited collapses to a strip of sprites; click to edit it
+      row.innerHTML = `<div class="teamhead"><span style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}</span>
+        <span class="muted">${controllers[p] === 'cpu' ? 'CPU' : 'Human'} · ${teams[p].length}/${settings.teamSize} · click to edit</span></div>
+        <div class="strip">${teams[p].map(s => `<img src="${DEX.species[s.species].sprite}" title="${DEX.species[s.species].display} Lv${s.level}">`).join('') || '<span class="muted">No Pokémon yet</span>'}</div>`;
+      row.onclick = () => setEditing(p);
+      continue;
+    }
     row.innerHTML = `<div class="teamhead"><span class="p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}</span>
+      <input class="pname-input" data-name="${p}" value="${PLAYER[p]}" maxlength="14" title="Trainer name">
+      <select data-outfit="${p}" title="Trainer outfit">${Object.entries(OUTFITS).map(([k, o]) => `<option value="${k}" ${settings.outfits[p] === k ? 'selected' : ''}>${o.label}</option>`).join('')}</select>
       <select data-ctrl="${p}"><option value="human">Human</option><option value="cpu">CPU</option></select>
       <button class="small" data-rand="${p}">Random</button><button class="small" data-clear="${p}">Clear</button>
       <span style="font-weight:600;color:#94a3b8;font-size:12px">${teams[p].length}/${settings.teamSize}</span></div><div class="slots"></div>`;
-    row.querySelector('select').value = controllers[p];
-    row.querySelector('select').onchange = e => { controllers[p] = e.target.value; };
+    row.querySelector('[data-ctrl]').value = controllers[p];
+    row.querySelector('[data-ctrl]').onchange = e => { controllers[p] = e.target.value; };
+    row.querySelector('[data-name]').onchange = e => { PLAYER[p] = e.target.value.trim() || `Player ${p + 1}`; World.trainers.setup(p, settings.outfits[p], PLAYER[p]); };
+    row.querySelector('[data-outfit]').onchange = e => { settings.outfits[p] = e.target.value; World.trainers.setup(p, settings.outfits[p], PLAYER[p]); };
     row.querySelector('[data-rand]').onclick = () => { teams[p] = randomTeam(); renderTeams(); };
     row.querySelector('[data-clear]').onclick = () => { teams[p] = []; renderTeams(); };
     row.onclick = e => { if (e.target === row || e.target.classList.contains('teamhead')) setEditing(p); };
@@ -1159,6 +1072,10 @@ $('setAuto').onchange = e => {
   if (settings.auto) { controllers[0] = controllers[1] = 'cpu'; renderTeams(); }
 };
 $('setMute').onchange = e => { muted = e.target.checked; };
+$('setLength').onchange = e => { settings.hpMult = +e.target.value; };
+$('setPool').onchange = e => { settings.pool = e.target.value; };
+World.themeKeys.forEach(k => $('setTheme').insertAdjacentHTML('beforeend', `<option value="${k}">${World.themeName(k)}</option>`));
+$('setTheme').onchange = e => { settings.theme = e.target.value; if (settings.theme !== 'random') World.setTheme(settings.theme); };
 $('randomBoth').onclick = () => { randomizeTeams(); renderTeams(); };
 $('startBtn').onclick = () => {
   if (!teams[0].length || !teams[1].length) { toast('Both players need at least one Pokémon.'); return; }
@@ -1169,3 +1086,6 @@ $('startBtn').onclick = () => {
 
 renderDex();
 renderTeams();
+World.setTheme('stadium');
+[0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
+startLoop();
