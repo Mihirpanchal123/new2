@@ -4,808 +4,176 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pokémon Arena</title>
+<link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; background: #87ceeb; color: #1f2937; }
   canvas { display: block; }
+  button, select, input { font-family: inherit; }
   .p0 { color: #2563eb; }
   .p1 { color: #dc2626; }
+  .hidden { display: none !important; }
+
+  /* Pokémon sprites (positioned over the 3D arena every frame) */
+  #stage { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .mon { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; will-change: transform; }
+  .mon img { display: block; image-rendering: pixelated; filter: drop-shadow(0 3px 2px rgba(0,0,0,.25)); }
 
   /* HUD */
-  .panel { position: absolute; top: 16px; width: 300px; background: #fffef5; border: 3px solid #374151; border-radius: 14px; padding: 10px 14px; box-shadow: 0 4px 0 #374151; display: none; }
+  .panel { position: absolute; top: 16px; width: 310px; background: #fffef5; border: 3px solid; border-radius: 14px; padding: 10px 14px; }
   #panel0 { left: 16px; border-color: #2563eb; box-shadow: 0 4px 0 #2563eb; }
   #panel1 { right: 16px; border-color: #dc2626; box-shadow: 0 4px 0 #dc2626; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .pname { font-weight: 800; font-size: 18px; }
-  .owner { font-size: 12px; font-weight: 700; opacity: .8; }
-  .lv { font-weight: 700; }
-  .status { font-size: 11px; font-weight: 800; color: #fff; padding: 2px 6px; border-radius: 6px; display: none; }
+  .owner { font-size: 12px; font-weight: 700; opacity: .85; }
+  .badge { font-size: 11px; font-weight: 800; color: #fff; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
+  .mega-badge { background: linear-gradient(90deg, #f472b6, #a78bfa, #60a5fa); }
   .hpwrap { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
   .hplabel { font-size: 12px; font-weight: 800; color: #f59e0b; background: #374151; padding: 1px 5px; border-radius: 5px; }
   .hpbar { flex: 1; height: 10px; background: #4b5563; border-radius: 6px; overflow: hidden; }
-  .hpfill { height: 100%; width: 100%; background: #22c55e; transition: width .6s ease, background .6s; }
+  .hpfill { height: 100%; transition: width .5s ease, background .5s; }
   .hptext { text-align: right; font-size: 13px; font-weight: 700; margin-top: 2px; }
-  .balls { display: flex; gap: 4px; }
+  .balls { display: flex; gap: 3px; }
   .ball { width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(#ef4444 50%, #fff 50%); border: 2px solid #374151; }
-  .ball.dead { filter: grayscale(1); opacity: .4; }
+  .ball.dead { filter: grayscale(1); opacity: .35; }
 
-  /* Bottom box */
-  #bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(900px, calc(100% - 32px)); display: none; }
+  #bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(920px, calc(100% - 32px)); }
   #msg { background: #fffef5; border: 4px solid #374151; border-radius: 14px; padding: 14px 18px; font-size: 19px; min-height: 60px; box-shadow: 0 4px 0 #374151; cursor: pointer; }
   #actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+  #actions:empty, #switches:empty { display: none; }
   #switches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .mv { border: 3px solid rgba(0,0,0,.35); border-radius: 12px; padding: 10px 14px; color: #fff; font-weight: 800; font-size: 17px; cursor: pointer; text-align: left; text-shadow: 0 1px 2px rgba(0,0,0,.5); display: flex; justify-content: space-between; align-items: center; }
-  .mv small { font-weight: 600; font-size: 12px; opacity: .95; }
-  .mv:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+  .mv { border: 3px solid rgba(0,0,0,.35); border-radius: 12px; padding: 9px 14px; color: #fff; font-weight: 800; font-size: 17px; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.55); display: flex; justify-content: space-between; align-items: center; }
+  .mv small { font-weight: 600; font-size: 12px; }
+  .mv:hover:not(:disabled) { filter: brightness(1.1); }
   .mv:disabled { opacity: .4; cursor: not-allowed; }
-  .sw { border: 2px solid #374151; background: #fff; border-radius: 10px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+  .sw { border: 2px solid #374151; background: #fff; border-radius: 10px; padding: 6px 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .sw img { height: 28px; image-rendering: pixelated; }
   .sw:hover { background: #f3f4f6; }
+  .megabtn { border: 3px solid #a78bfa; background: #fff; color: #7c3aed; font-weight: 900; }
+  .megabtn.on { background: linear-gradient(90deg, #f472b6, #a78bfa, #60a5fa); color: #fff; }
+
+  /* Record button */
+  #recBtn { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50; background: #111827; color: #fff; border: 2px solid #ef4444; border-radius: 999px; padding: 7px 16px; font-weight: 800; cursor: pointer; }
+  #recBtn::before { content: ""; display: inline-block; width: 10px; height: 10px; background: #ef4444; border-radius: 50%; margin-right: 7px; }
+  #toast { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 8px 16px; border-radius: 10px; font-weight: 600; z-index: 60; transition: opacity .4s; opacity: 0; pointer-events: none; }
 
   /* Overlays */
-  .overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, .82); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 28px 16px; overflow-y: auto; color: #fff; }
-  .overlay h1 { margin: 0 0 4px; font-size: 40px; letter-spacing: 1px; color: #facc15; text-shadow: 3px 3px 0 #1d4ed8; }
-  .overlay h2 { margin: 8px 0 18px; }
-  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; width: min(1100px, 100%); }
-  .card { background: #fffef5; color: #1f2937; border-radius: 14px; padding: 12px; border: 4px solid transparent; cursor: pointer; position: relative; }
-  .card:hover { transform: translateY(-2px); }
-  .card.sel { border-color: #facc15; box-shadow: 0 0 0 3px #facc15; }
-  .card .pick { position: absolute; top: 8px; right: 10px; background: #facc15; color: #000; font-weight: 900; border-radius: 50%; width: 28px; height: 28px; display: none; align-items: center; justify-content: center; }
-  .card.sel .pick { display: flex; }
-  .card .head { display: flex; align-items: center; gap: 10px; }
-  .icon { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
-  .type { display: inline-block; font-size: 11px; font-weight: 800; color: #fff; padding: 2px 7px; border-radius: 6px; margin-right: 4px; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
-  .stat { display: grid; grid-template-columns: 52px 30px 1fr; align-items: center; font-size: 12px; gap: 4px; margin-top: 2px; }
-  .stat .bar { height: 6px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
-  .stat .bar div { height: 100%; background: #22c55e; }
-  .mvlist { font-size: 12px; margin-top: 8px; color: #374151; }
-  .btn { margin-top: 20px; font-size: 20px; font-weight: 800; padding: 12px 34px; border-radius: 12px; border: none; background: #facc15; color: #000; cursor: pointer; box-shadow: 0 4px 0 #a16207; }
+  .overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, .9); color: #fff; z-index: 20; }
+  h1.logo { margin: 0; font-size: 34px; letter-spacing: 1px; color: #facc15; text-shadow: 3px 3px 0 #1d4ed8; }
+
+  /* Team builder */
+  #builder { display: flex; flex-direction: column; padding: 14px 18px; gap: 10px; }
+  .topbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .topbar label { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .topbar select, .topbar input[type=number], .tools input, .tools select { background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 8px; padding: 5px 8px; }
+  .topbar input[type=number] { width: 64px; }
+  .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #search { width: 200px; }
+  .seg { display: inline-flex; border: 1px solid #475569; border-radius: 8px; overflow: hidden; }
+  .seg button { background: #1e293b; color: #cbd5e1; border: none; padding: 6px 12px; font-weight: 800; cursor: pointer; }
+  .seg button.on0 { background: #2563eb; color: #fff; }
+  .seg button.on1 { background: #dc2626; color: #fff; }
+  #dex { flex: 1; min-height: 120px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; padding-right: 4px; }
+  .dexcard { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; position: relative; }
+  .dexcard:hover { border-color: #facc15; }
+  .dexcard .spr { height: 64px; display: flex; align-items: flex-end; justify-content: center; }
+  .dexcard .spr img { max-height: 64px; max-width: 100%; image-rendering: pixelated; }
+  .dexcard .nm { font-weight: 800; font-size: 13px; margin-top: 2px; }
+  .dexcard .meta { font-size: 10px; color: #94a3b8; }
+  .dexcard .mg { position: absolute; top: 4px; right: 4px; font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 4px; }
+  .type { display: inline-block; font-size: 10px; font-weight: 800; color: #fff; padding: 1px 6px; border-radius: 5px; margin: 1px; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+  .teams { display: flex; flex-direction: column; gap: 8px; }
+  .teamrow { background: #0f172a; border: 2px solid; border-radius: 12px; padding: 8px; }
+  .teamrow.t0 { border-color: #2563eb; } .teamrow.t1 { border-color: #dc2626; }
+  .teamrow.editing { box-shadow: 0 0 0 3px #facc15; }
+  .teamhead { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-weight: 800; }
+  .teamhead select { background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 6px; padding: 3px 6px; }
+  .small { background: #334155; color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-weight: 700; cursor: pointer; }
+  .small:hover { background: #475569; }
+  .slots { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .slot { background: #1e293b; border-radius: 10px; padding: 6px 8px; min-width: 200px; width: 200px; font-size: 12px; position: relative; }
+  .slot.empty { display: flex; align-items: center; justify-content: center; color: #64748b; border: 2px dashed #334155; min-height: 150px; background: transparent; }
+  .slot .hd { display: flex; align-items: center; gap: 6px; }
+  .slot .hd img { height: 40px; image-rendering: pixelated; }
+  .slot .x { position: absolute; top: 4px; right: 6px; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; }
+  .slot select, .slot input { width: 100%; background: #0f172a; color: #fff; border: 1px solid #334155; border-radius: 5px; padding: 2px 4px; margin-top: 3px; font-size: 12px; }
+  .slot .lvrow { display: flex; gap: 4px; align-items: center; margin-top: 3px; }
+  .slot .lvrow input { width: 54px; margin: 0; }
+  .evo { background: #065f46; color: #fff; border: none; border-radius: 5px; padding: 2px 6px; font-size: 11px; font-weight: 700; cursor: pointer; margin-top: 3px; margin-right: 3px; }
+  .btn { font-size: 18px; font-weight: 800; padding: 10px 30px; border-radius: 12px; border: none; background: #facc15; color: #000; cursor: pointer; box-shadow: 0 4px 0 #a16207; }
+  .btn.alt { background: #e2e8f0; box-shadow: 0 4px 0 #64748b; }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Intro / end */
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+  .vs { display: flex; align-items: center; gap: 40px; }
+  .vsteam { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .vsteam .sprs { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; justify-content: center; max-width: 420px; }
+  .vsteam img { height: 72px; image-rendering: pixelated; }
+  .vsword { font-size: 64px; font-weight: 900; color: #facc15; text-shadow: 4px 4px 0 #b91c1c; }
+  .vsname { font-size: 28px; font-weight: 900; }
 </style>
 </head>
 <body>
 
-<div class="panel" id="panel0"></div>
-<div class="panel" id="panel1"></div>
+<div id="stage"></div>
 
-<div id="bottom">
-  <div id="msg"></div>
-  <div id="actions"></div>
-  <div id="switches"></div>
+<div id="hud" class="hidden">
+  <div class="panel" id="panel0"></div>
+  <div class="panel" id="panel1"></div>
+  <div id="bottom">
+    <div id="msg"></div>
+    <div id="actions"></div>
+    <div id="switches"></div>
+  </div>
 </div>
 
-<div class="overlay" id="select">
-  <h1>POKéMON ARENA</h1>
-  <h2 id="selTitle"></h2>
-  <div id="cards"></div>
-  <button class="btn" id="selBtn" disabled>Confirm Team</button>
+<button id="recBtn" class="hidden" title="Record (R)">REC</button>
+<div id="toast"></div>
+
+<!-- Team builder -->
+<div class="overlay" id="builder">
+  <div class="topbar">
+    <h1 class="logo">POKéMON ARENA</h1>
+    <label>Team size <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+    <label>Default level <input type="number" id="setLevel" min="1" max="100" value="50"></label>
+    <label>Battle speed <select id="setSpeed"><option value="1">Normal</option><option value="0.6">Fast</option><option value="0.35">Turbo</option></select></label>
+    <label><input type="checkbox" id="setAuto"> Auto-play next random battle (CPU vs CPU)</label>
+    <label><input type="checkbox" id="setMute"> Mute cries</label>
+  </div>
+  <div class="tools">
+    <span style="font-weight:700">Adding to:</span>
+    <div class="seg"><button id="edit0" class="on0">Player 1</button><button id="edit1">Player 2</button></div>
+    <input id="search" placeholder="Search Pokémon...">
+    <select id="typeFilter"><option value="">All types</option></select>
+    <label style="font-size:13px"><input type="checkbox" id="megaOnly"> Can Mega Evolve</label>
+  </div>
+  <div id="dex"></div>
+  <div class="teams">
+    <div class="teamrow t0" id="team0"></div>
+    <div class="teamrow t1" id="team1"></div>
+  </div>
+  <div style="display:flex; gap:12px; justify-content:center;">
+    <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
+    <button class="btn alt" id="randomBoth">Random Both Teams</button>
+    <button class="btn" id="startBtn">Start Battle!</button>
+  </div>
 </div>
 
-<div class="overlay" id="endScreen" style="display:none; justify-content:center;">
-  <h1 id="endTitle"></h1>
-  <button class="btn" onclick="location.reload()">Play Again</button>
+<div class="overlay center hidden" id="intro"></div>
+
+<div class="overlay center hidden" id="endScreen">
+  <h1 class="logo" id="endTitle" style="font-size:52px"></h1>
+  <div id="endSub" style="font-size:18px;color:#cbd5e1"></div>
+  <div style="display:flex; gap:12px;">
+    <button class="btn" id="rematchBtn">Rematch</button>
+    <button class="btn alt" id="randomBattleBtn">New Random Battle</button>
+    <button class="btn alt" id="builderBtn">Team Builder</button>
+  </div>
 </div>
 
+<script src="data.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-// =====================================================================
-//  DATA — real Pokémon stats, moves and type chart
-// =====================================================================
-const LEVEL = 50;
-const TEAM_SIZE = 3;
-
-const TYPE_COLORS = {
-  Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Grass: '#78c850', Electric: '#f8d030',
-  Ice: '#98d8d8', Poison: '#a040a0', Ground: '#e0c068', Dark: '#705848', Ghost: '#705898',
-  Steel: '#b8b8d0', Dragon: '#7038f8', Psychic: '#f85888'
-};
-
-// attacking type -> { defending type: multiplier } (only non-1x entries)
-const CHART = {
-  Normal:   { Ghost: 0, Steel: .5, Rock: .5 },
-  Fire:     { Fire: .5, Water: .5, Grass: 2, Ice: 2, Steel: 2, Dragon: .5, Bug: 2, Rock: .5 },
-  Water:    { Fire: 2, Water: .5, Grass: .5, Ground: 2, Rock: 2, Dragon: .5 },
-  Grass:    { Fire: .5, Water: 2, Grass: .5, Poison: .5, Ground: 2, Flying: .5, Bug: .5, Rock: 2, Dragon: .5, Steel: .5 },
-  Electric: { Water: 2, Electric: .5, Grass: .5, Ground: 0, Flying: 2, Dragon: .5 },
-  Ice:      { Fire: .5, Water: .5, Grass: 2, Ice: .5, Ground: 2, Flying: 2, Dragon: 2, Steel: .5 },
-  Poison:   { Grass: 2, Poison: .5, Ground: .5, Rock: .5, Ghost: .5, Steel: 0, Fairy: 2 },
-  Ground:   { Fire: 2, Electric: 2, Grass: .5, Poison: 2, Flying: 0, Bug: .5, Rock: 2, Steel: 2 },
-  Dark:     { Fighting: .5, Psychic: 2, Ghost: 2, Dark: .5, Fairy: .5 },
-  Ghost:    { Normal: 0, Psychic: 2, Ghost: 2, Dark: .5 },
-  Steel:    { Fire: .5, Water: .5, Electric: .5, Ice: 2, Rock: 2, Steel: .5, Fairy: 2 },
-  Dragon:   { Dragon: 2, Steel: .5, Fairy: 0 },
-  Psychic:  { Fighting: 2, Poison: 2, Psychic: .5, Steel: .5, Dark: 0 }
-};
-function effectiveness(atkType, defTypes) {
-  return defTypes.reduce((m, d) => m * (CHART[atkType] && d in CHART[atkType] ? CHART[atkType][d] : 1), 1);
-}
-
-const MOVES = {
-  'Thunderbolt':   { type: 'Electric', cat: 'special',  power: 90,  acc: 100, pp: 15, effect: { status: 'par', chance: 10 } },
-  'Quick Attack':  { type: 'Normal',   cat: 'physical', power: 40,  acc: 100, pp: 30, priority: 1 },
-  'Iron Tail':     { type: 'Steel',    cat: 'physical', power: 100, acc: 75,  pp: 15, effect: { stat: 'def', stages: -1, chance: 30 } },
-  'Thunder Wave':  { type: 'Electric', cat: 'status',   acc: 90,  pp: 20, effect: { status: 'par', chance: 100 } },
-  'Flamethrower':  { type: 'Fire',     cat: 'special',  power: 90,  acc: 100, pp: 15, effect: { status: 'brn', chance: 10 } },
-  'Slash':         { type: 'Normal',   cat: 'physical', power: 70,  acc: 100, pp: 20, highCrit: true },
-  'Dragon Breath': { type: 'Dragon',   cat: 'special',  power: 60,  acc: 100, pp: 20, effect: { status: 'par', chance: 30 } },
-  'Growl':         { type: 'Normal',   cat: 'status',   acc: 100, pp: 40, effect: { stat: 'atk', stages: -1, chance: 100 } },
-  'Surf':          { type: 'Water',    cat: 'special',  power: 90,  acc: 100, pp: 15 },
-  'Bite':          { type: 'Dark',     cat: 'physical', power: 60,  acc: 100, pp: 25, effect: { flinch: true, chance: 30 } },
-  'Ice Beam':      { type: 'Ice',      cat: 'special',  power: 90,  acc: 100, pp: 10, effect: { status: 'frz', chance: 10 } },
-  'Withdraw':      { type: 'Water',    cat: 'status',   acc: null, pp: 40, self: { stat: 'def', stages: 1 } },
-  'Razor Leaf':    { type: 'Grass',    cat: 'physical', power: 55,  acc: 95,  pp: 25, highCrit: true },
-  'Sludge Bomb':   { type: 'Poison',   cat: 'special',  power: 90,  acc: 100, pp: 10, effect: { status: 'psn', chance: 30 } },
-  'Sleep Powder':  { type: 'Grass',    cat: 'status',   acc: 75,  pp: 15, powder: true, effect: { status: 'slp', chance: 100 } },
-  'Giga Drain':    { type: 'Grass',    cat: 'special',  power: 75,  acc: 100, pp: 10, drain: 0.5 },
-  'Shadow Ball':   { type: 'Ghost',    cat: 'special',  power: 80,  acc: 100, pp: 15, effect: { stat: 'spd', stages: -1, chance: 20 } },
-  'Hypnosis':      { type: 'Psychic',  cat: 'status',   acc: 60,  pp: 20, effect: { status: 'slp', chance: 100 } },
-  'Dark Pulse':    { type: 'Dark',     cat: 'special',  power: 80,  acc: 100, pp: 15, effect: { flinch: true, chance: 20 } },
-  'Body Slam':     { type: 'Normal',   cat: 'physical', power: 85,  acc: 100, pp: 15, effect: { status: 'par', chance: 30 } },
-  'Rest':          { type: 'Psychic',  cat: 'status',   acc: null, pp: 5, rest: true },
-  'Crunch':        { type: 'Dark',     cat: 'physical', power: 80,  acc: 100, pp: 15, effect: { stat: 'def', stages: -1, chance: 20 } },
-  'Earthquake':    { type: 'Ground',   cat: 'physical', power: 100, acc: 100, pp: 10, quake: true }
-};
-const STRUGGLE = { name: 'Struggle', type: null, cat: 'physical', power: 50, acc: null, recoil: 0.25 };
-
-// base stats: HP, Atk, Def, SpA, SpD, Spe
-const SPECIES = {
-  Pikachu:    { types: ['Electric'],        base: [35, 55, 40, 50, 50, 90],    moves: ['Thunderbolt', 'Quick Attack', 'Iron Tail', 'Thunder Wave'], build: buildPikachu },
-  Charmander: { types: ['Fire'],            base: [39, 52, 43, 60, 50, 65],    moves: ['Flamethrower', 'Slash', 'Dragon Breath', 'Growl'],          build: buildCharmander },
-  Squirtle:   { types: ['Water'],           base: [44, 48, 65, 50, 64, 43],    moves: ['Surf', 'Bite', 'Ice Beam', 'Withdraw'],                     build: buildSquirtle },
-  Bulbasaur:  { types: ['Grass', 'Poison'], base: [45, 49, 49, 65, 65, 45],    moves: ['Razor Leaf', 'Sludge Bomb', 'Sleep Powder', 'Giga Drain'],  build: buildBulbasaur },
-  Gengar:     { types: ['Ghost', 'Poison'], base: [60, 65, 60, 130, 75, 110],  moves: ['Shadow Ball', 'Sludge Bomb', 'Hypnosis', 'Dark Pulse'],     build: buildGengar },
-  Snorlax:    { types: ['Normal'],          base: [160, 110, 65, 65, 110, 30], moves: ['Body Slam', 'Rest', 'Crunch', 'Earthquake'],                build: buildSnorlax }
-};
-
-const STAT_NAMES = { atk: 'Attack', def: 'Defense', spa: 'Sp. Atk', spd: 'Sp. Def', spe: 'Speed' };
-const STATUS_INFO = {
-  par: { label: 'PAR', color: '#eab308', msg: 'is paralyzed! It may be unable to move!' },
-  brn: { label: 'BRN', color: '#ef4444', msg: 'was burned!' },
-  psn: { label: 'PSN', color: '#a855f7', msg: 'was poisoned!' },
-  slp: { label: 'SLP', color: '#6b7280', msg: 'fell asleep!' },
-  frz: { label: 'FRZ', color: '#38bdf8', msg: 'was frozen solid!' }
-};
-
-function makeMon(speciesName, owner) {
-  const s = SPECIES[speciesName];
-  const [hp, atk, def, spa, spd, spe] = s.base;
-  const calc = b => Math.floor((2 * b + 31) * LEVEL / 100) + 5; // IV 31, EV 0, neutral nature
-  const maxhp = Math.floor((2 * hp + 31) * LEVEL / 100) + LEVEL + 10;
-  return {
-    species: speciesName, name: speciesName, owner, types: s.types,
-    stats: { atk: calc(atk), def: calc(def), spa: calc(spa), spd: calc(spd), spe: calc(spe) },
-    maxhp, hp: maxhp, status: null, sleepTurns: 0, flinch: false,
-    stages: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
-    moves: s.moves.map(n => ({ name: n, ...MOVES[n], ppLeft: MOVES[n].pp }))
-  };
-}
-
-// =====================================================================
-//  3D SCENE
-// =====================================================================
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.prepend(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 18, 40);
-
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
-const CAM_BASE = new THREE.Vector3(0, 3.4, 9);
-camera.position.copy(CAM_BASE);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x6b8e5a, 0.75));
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(4, 10, 6);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
-scene.add(sun);
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-const M = color => new THREE.MeshToonMaterial({ color });
-const S = r => new THREE.SphereGeometry(r, 24, 16);
-function part(parent, geo, color, x, y, z, sx = 1, sy = 1, sz = 1) {
-  const m = new THREE.Mesh(geo, M(color));
-  m.position.set(x, y, z);
-  m.scale.set(sx, sy, sz);
-  m.castShadow = true;
-  parent.add(m);
-  return m;
-}
-function eyes(g, x, y, z, r = 0.07, color = 0x111111) {
-  for (const s of [-1, 1]) {
-    part(g, S(r), color, s * x, y, z);
-    part(g, S(r * 0.35), 0xffffff, s * x - s * 0.02, y + r * 0.4, z + r * 0.8);
-  }
-}
-
-// --- Arena ---
-(function buildArena() {
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), M(0x6fbf5f));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; ground.receiveShadow = true;
-  scene.add(ground);
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.4, 0.4, 64), M(0x8fd07a));
-  base.position.y = -0.2; base.receiveShadow = true; scene.add(base);
-
-  const field = new THREE.Mesh(new THREE.BoxGeometry(10, 0.04, 5.5), M(0xe8d5a3));
-  field.position.y = 0.02; field.receiveShadow = true; scene.add(field);
-
-  const white = 0xffffff;
-  const line = (w, d, x, z) => { const l = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), M(white)); l.position.set(x, 0.05, z); l.receiveShadow = true; scene.add(l); };
-  line(10, 0.08, 0, 2.75); line(10, 0.08, 0, -2.75); line(0.08, 5.5, 5, 0); line(0.08, 5.5, -5, 0); line(0.08, 5.5, 0, 0);
-  const ring = (r, x, color) => { const t = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 48), M(color)); t.rotation.x = -Math.PI / 2; t.position.set(x, 0.05, 0); scene.add(t); };
-  ring(1.1, 0, white); ring(0.95, -3, 0x2563eb); ring(0.95, 3, 0xdc2626);
-
-  // stands
-  [[9, 0.8, 0xb0b8c4], [10, 1.6, 0x9aa3b0], [11, 2.4, 0x86909e]].forEach(([r, h, c]) => {
-    const s = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 64, 1, true), new THREE.MeshToonMaterial({ color: c, side: THREE.DoubleSide }));
-    s.position.y = h / 2 - 0.4; scene.add(s);
-    const top = new THREE.Mesh(new THREE.RingGeometry(r - 1, r, 64), new THREE.MeshToonMaterial({ color: c, side: THREE.DoubleSide }));
-    top.rotation.x = -Math.PI / 2; top.position.y = h - 0.4; scene.add(top);
-  });
-  // crowd
-  const crowd = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.45, 0.3), new THREE.MeshToonMaterial(), 420);
-  const dummy = new THREE.Object3D(), col = new THREE.Color();
-  for (let i = 0; i < 420; i++) {
-    const tier = i % 3, r = [8.5, 9.5, 10.5][tier], h = [0.8, 1.6, 2.4][tier];
-    const a = Math.PI + (i / 420) * Math.PI + Math.random() * 0.02; // back half only
-    dummy.position.set(Math.cos(a) * r, h - 0.4 + 0.22, Math.sin(a) * r);
-    dummy.updateMatrix();
-    crowd.setMatrixAt(i, dummy.matrix);
-    crowd.setColorAt(i, col.setHSL(Math.random(), 0.6, 0.55));
-  }
-  crowd.userData.crowd = true;
-  scene.add(crowd);
-  window.crowdMesh = crowd;
-})();
-
-// --- Pokémon models (chibi, built from simple shapes, facing +z) ---
-function buildPikachu() {
-  const g = new THREE.Group(), Y = 0xf8d030;
-  part(g, S(0.45), Y, 0, 0.5, 0, 1, 1.1, 0.9);
-  part(g, S(0.42), Y, 0, 1.15, 0.05);
-  for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.2, 1.45, 0); ear.rotation.z = -s * 0.35; g.add(ear);
-    part(ear, new THREE.ConeGeometry(0.1, 0.55, 12), Y, 0, 0.25, 0);
-    part(ear, new THREE.ConeGeometry(0.068, 0.2, 12), 0x222222, 0, 0.44, 0);
-    part(g, S(0.09), 0xe33b3b, s * 0.28, 1.05, 0.3, 1, 1, 0.4);
-    part(g, S(0.1), Y, s * 0.3, 0.65, 0.3);
-    part(g, S(0.13), Y, s * 0.2, 0.08, 0.15, 1, 0.7, 1.3);
-  }
-  eyes(g, 0.16, 1.22, 0.36);
-  part(g, S(0.025), 0x222222, 0, 1.12, 0.46);
-  const t1 = part(g, new THREE.BoxGeometry(0.12, 0.45, 0.07), 0xa0702a, 0, 0.55, -0.5); t1.rotation.z = 0.7;
-  const t2 = part(g, new THREE.BoxGeometry(0.16, 0.55, 0.07), Y, 0.18, 0.88, -0.55); t2.rotation.z = -0.6;
-  const t3 = part(g, new THREE.BoxGeometry(0.3, 0.55, 0.07), Y, 0.05, 1.25, -0.6); t3.rotation.z = 0.6;
-  g.userData.h = 0.9;
-  return g;
-}
-function buildCharmander() {
-  const g = new THREE.Group(), O = 0xf08030, C = 0xf8e0a0;
-  part(g, S(0.42), O, 0, 0.5, 0, 1, 1.15, 0.9);
-  part(g, S(0.32), C, 0, 0.45, 0.14, 1, 1.1, 0.8);
-  part(g, S(0.4), O, 0, 1.15, 0.08, 1, 0.95, 1.05);
-  eyes(g, 0.15, 1.22, 0.42, 0.075, 0x1a3a6b);
-  for (const s of [-1, 1]) {
-    part(g, S(0.1), O, s * 0.36, 0.65, 0.2);
-    part(g, S(0.13), O, s * 0.2, 0.08, 0.15, 1, 0.7, 1.3);
-  }
-  const tail = part(g, new THREE.CylinderGeometry(0.07, 0.15, 0.75, 12), O, 0, 0.38, -0.55); tail.rotation.x = -1.0;
-  const flame = new THREE.Group(); flame.position.set(0, 0.72, -0.85); g.add(flame);
-  flame.add(new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 12), new THREE.MeshBasicMaterial({ color: 0xff5a1f })));
-  const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 12), new THREE.MeshBasicMaterial({ color: 0xffe14d }));
-  inner.position.y = -0.05; flame.add(inner);
-  g.userData.flame = flame;
-  g.userData.h = 0.9;
-  return g;
-}
-function buildSquirtle() {
-  const g = new THREE.Group(), B = 0x80c8f0;
-  part(g, S(0.45), 0xa0602a, 0, 0.55, -0.12, 1, 1.15, 0.8);
-  const rim = part(g, new THREE.TorusGeometry(0.43, 0.06, 8, 32), 0xf5ecd0, 0, 0.55, -0.02, 1, 1.15, 1);
-  part(g, S(0.36), 0xf0dc90, 0, 0.52, 0.06, 1, 1.15, 0.6);
-  part(g, S(0.42), B, 0, 1.15, 0.05);
-  eyes(g, 0.15, 1.22, 0.37, 0.08, 0x5a2a1a);
-  for (const s of [-1, 1]) {
-    part(g, S(0.11), B, s * 0.42, 0.68, 0.12);
-    part(g, S(0.14), B, s * 0.22, 0.08, 0.15, 1, 0.7, 1.3);
-  }
-  part(g, S(0.15), B, 0, 0.3, -0.58);
-  part(g, S(0.1), B, 0, 0.45, -0.7);
-  g.userData.h = 0.9;
-  return g;
-}
-function buildBulbasaur() {
-  const g = new THREE.Group(), T = 0x78c8a0;
-  part(g, S(0.45), T, 0, 0.45, -0.05, 1.1, 0.85, 1.2);
-  part(g, S(0.42), T, 0, 0.78, 0.45, 1.15, 0.9, 1);
-  for (const sx of [-1, 1]) for (const z of [0.3, -0.35])
-    part(g, new THREE.CylinderGeometry(0.12, 0.13, 0.3, 12), T, sx * 0.3, 0.15, z);
-  for (const s of [-1, 1]) {
-    const ear = part(g, new THREE.ConeGeometry(0.1, 0.22, 10), T, s * 0.32, 1.1, 0.38); ear.rotation.z = -s * 0.4;
-    part(g, S(0.06), 0x4e9a7c, s * 0.2, 1.05, 0.65);
-  }
-  eyes(g, 0.22, 0.86, 0.78, 0.08, 0xc8323a);
-  part(g, S(0.38), 0x4fa052, 0, 0.98, -0.15, 1, 1.05, 1);
-  part(g, new THREE.ConeGeometry(0.15, 0.32, 12), 0x4fa052, 0, 1.4, -0.15);
-  g.userData.h = 0.7;
-  return g;
-}
-function buildGengar() {
-  const g = new THREE.Group(), P = 0x705898;
-  part(g, S(0.6), P, 0, 0.72, 0, 1.1, 1, 0.95);
-  for (const s of [-1, 1]) {
-    const ear = part(g, new THREE.ConeGeometry(0.15, 0.42, 10), P, s * 0.38, 1.35, 0); ear.rotation.z = -s * 0.35;
-    const eye = part(g, S(0.1), 0xe8303a, s * 0.22, 0.95, 0.53, 1.3, 0.6, 0.5); eye.rotation.z = s * 0.35;
-    part(g, S(0.14), P, s * 0.66, 0.6, 0.15);
-    part(g, S(0.18), P, s * 0.3, 0.12, 0.1, 1, 0.6, 1.3);
-  }
-  [[0, 1.3, -0.3], [0.25, 1.15, -0.45], [-0.25, 1.15, -0.45], [0, 0.95, -0.58]].forEach(([x, y, z]) => {
-    const sp = part(g, new THREE.ConeGeometry(0.1, 0.3, 8), P, x, y, z); sp.rotation.x = -0.9;
-  });
-  const grin = part(g, new THREE.TorusGeometry(0.26, 0.055, 8, 20, Math.PI), 0xffffff, 0, 0.72, 0.55);
-  grin.rotation.z = Math.PI;
-  g.userData.h = 0.8;
-  return g;
-}
-function buildSnorlax() {
-  const g = new THREE.Group(), D = 0x2f6474, C = 0xf0e0c0;
-  part(g, S(0.85), D, 0, 0.85, 0, 1.1, 1, 0.95);
-  part(g, S(0.7), C, 0, 0.75, 0.26, 1, 1, 0.75);
-  part(g, S(0.48), D, 0, 1.75, 0.1, 1.15, 0.9, 1);
-  part(g, S(0.38), C, 0, 1.68, 0.3, 1.1, 0.8, 0.6);
-  for (const s of [-1, 1]) {
-    part(g, new THREE.ConeGeometry(0.12, 0.25, 10), D, s * 0.36, 2.15, 0.05);
-    part(g, new THREE.BoxGeometry(0.15, 0.03, 0.02), 0x111111, s * 0.13, 1.78, 0.53);
-    part(g, S(0.26), D, s * 0.88, 1.0, 0.1);
-    part(g, S(0.3), C, s * 0.45, 0.22, 0.38, 1, 1, 0.5);
-  }
-  part(g, new THREE.BoxGeometry(0.2, 0.04, 0.02), 0xffffff, 0, 1.6, 0.53);
-  g.userData.h = 1.1;
-  return g;
-}
-
-// --- Battle positions ---
-const BASE_X = [-3, 3];
-const holders = [new THREE.Group(), new THREE.Group()];
-holders.forEach((h, i) => {
-  h.position.set(BASE_X[i], 0, 0);
-  h.rotation.y = i === 0 ? Math.PI / 2 - 0.35 : -Math.PI / 2 + 0.35;
-  scene.add(h);
-});
-const models = [null, null];
-function setModel(p, mon) {
-  if (models[p]) holders[p].remove(models[p]);
-  const g = SPECIES[mon.species].build();
-  models[p] = g;
-  holders[p].add(g);
-  return g;
-}
-
-// --- Tweens / animation helpers ---
-const tweens = [];
-let camShake = 0;
-function tween(dur, fn) { return new Promise(res => tweens.push({ t: 0, dur, fn, res })); }
-const ease = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function animLunge(p) {
-  const dir = p === 0 ? 1 : -1, x0 = BASE_X[p];
-  await tween(0.22, k => holders[p].position.x = x0 + dir * 4 * ease(k));
-  await tween(0.25, k => holders[p].position.x = x0 + dir * 4 * (1 - ease(k)));
-}
-async function animProjectile(p, mv, small) {
-  const from = holders[p].position, to = holders[1 - p].position;
-  const hFrom = models[p].userData.h, hTo = models[1 - p] ? models[1 - p].userData.h : 0.8;
-  const color = new THREE.Color(TYPE_COLORS[mv.type] || '#ffffff');
-  const orb = new THREE.Mesh(S(small ? 0.15 : 0.28), new THREE.MeshBasicMaterial({ color }));
-  const glow = new THREE.PointLight(color, 1.5, 4);
-  orb.add(glow);
-  scene.add(orb);
-  await tween(0.12, k => models[p].scale.setScalar(1 - 0.12 * Math.sin(k * Math.PI)));
-  await tween(0.45, k => {
-    orb.position.set(from.x + (to.x - from.x) * k, hFrom + (hTo - hFrom) * k + Math.sin(k * Math.PI) * 0.8, 0);
-    orb.scale.setScalar(1 + 0.3 * Math.sin(k * 20));
-  });
-  scene.remove(orb);
-}
-async function animSelf(p) {
-  const m = models[p];
-  await tween(0.5, k => { m.rotation.y = k * Math.PI * 2; m.position.y = Math.sin(k * Math.PI) * 0.4; });
-  m.rotation.y = 0;
-}
-async function animHit(p) {
-  const m = models[p], h = holders[p], x0 = BASE_X[p];
-  await tween(0.45, k => {
-    m.visible = Math.floor(k * 8) % 2 === 0;
-    h.position.x = x0 + Math.sin(k * 40) * 0.08 * (1 - k);
-  });
-  m.visible = true; h.position.x = x0;
-}
-async function animFaint(p) {
-  const m = models[p];
-  await tween(0.6, k => { m.scale.setScalar(1 - k); m.position.y = -k * 0.4; m.rotation.z = k * 0.6; });
-  m.visible = false;
-}
-async function animAppear(p) {
-  const m = models[p];
-  m.scale.setScalar(0.001);
-  const flash = new THREE.Mesh(S(0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }));
-  flash.position.set(BASE_X[p], 0.7, 0);
-  scene.add(flash);
-  await tween(0.4, k => { flash.scale.setScalar(0.3 + k * 1.6); flash.material.opacity = 1 - k; m.scale.setScalar(Math.max(0.001, ease(k))); });
-  scene.remove(flash);
-  m.scale.setScalar(1);
-}
-async function animRecall(p) {
-  const m = models[p];
-  await tween(0.35, k => m.scale.setScalar(Math.max(0.001, 1 - k)));
-}
-
-// --- Render loop ---
-const clock = new THREE.Clock();
-(function loop() {
-  requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
-  for (let i = tweens.length - 1; i >= 0; i--) {
-    const tw = tweens[i];
-    tw.t += dt;
-    const k = Math.min(1, tw.t / tw.dur);
-    tw.fn(k);
-    if (k >= 1) { tweens.splice(i, 1); tw.res(); }
-  }
-  models.forEach((m, i) => {
-    if (!m || !m.visible) return;
-    if (m.scale.x === 1) m.position.y = Math.abs(Math.sin(t * 3 + i * 1.7)) * 0.06;
-    if (m.userData.flame) { const s = 0.85 + Math.random() * 0.3; m.userData.flame.scale.set(s, s * 1.15, s); }
-  });
-  camera.position.set(CAM_BASE.x + Math.sin(t * 0.25) * 1.2, CAM_BASE.y, CAM_BASE.z);
-  if (camShake > 0) {
-    camera.position.x += (Math.random() - 0.5) * camShake;
-    camera.position.y += (Math.random() - 0.5) * camShake;
-    camShake = Math.max(0, camShake - dt * 0.6);
-  }
-  camera.lookAt(0, 0.9, 0);
-  renderer.render(scene, camera);
-})();
-
-// =====================================================================
-//  UI
-// =====================================================================
-const $ = id => document.getElementById(id);
-const PLAYER = ['Player 1', 'Player 2'];
-const state = { players: [{ team: [], active: 0 }, { team: [], active: 0 }] };
-const active = p => state.players[p].team[state.players[p].active];
-const lbl = mon => `<b class="p${mon.owner}">${mon.name}</b>`;
-
-function typeBadge(t) { return `<span class="type" style="background:${TYPE_COLORS[t]}">${t.toUpperCase()}</span>`; }
-
-function updateHud() {
-  for (const p of [0, 1]) {
-    const m = active(p);
-    if (!m) continue;
-    const pct = Math.max(0, m.hp / m.maxhp * 100);
-    const color = pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444';
-    const st = m.status ? STATUS_INFO[m.status] : null;
-    const balls = state.players[p].team.map(x => `<div class="ball ${x.hp <= 0 ? 'dead' : ''}"></div>`).join('');
-    $('panel' + p).innerHTML = `
-      <div class="row"><span class="owner p${p}">${PLAYER[p]}</span><div class="balls">${balls}</div></div>
-      <div class="row"><span class="pname">${m.name}</span>
-        <span><span class="status" style="display:${st ? 'inline-block' : 'none'};background:${st ? st.color : ''}">${st ? st.label : ''}</span>
-        <span class="lv">Lv${LEVEL}</span></span></div>
-      <div>${m.types.map(typeBadge).join('')}</div>
-      <div class="hpwrap"><span class="hplabel">HP</span><div class="hpbar"><div class="hpfill" style="width:${pct}%;background:${color}"></div></div></div>
-      <div class="hptext">${Math.max(0, m.hp)} / ${m.maxhp}</div>`;
-  }
-}
-
-let skipWait = null;
-$('msg').onclick = () => skipWait && skipWait();
-async function say(html, ms = 1200) {
-  $('msg').innerHTML = html;
-  await new Promise(res => {
-    const t = setTimeout(res, ms);
-    skipWait = () => { clearTimeout(t); res(); };
-  });
-  skipWait = null;
-}
-function clearButtons() { $('actions').innerHTML = ''; $('switches').innerHTML = ''; }
-
-function chooseAction(p) {
-  return new Promise(res => {
-    const u = active(p);
-    const done = a => { clearButtons(); res(a); };
-    $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b>: What will ${u.name} do?`;
-    clearButtons();
-    if (u.moves.every(m => m.ppLeft <= 0)) {
-      const b = document.createElement('button');
-      b.className = 'mv'; b.style.background = '#6b7280';
-      b.innerHTML = 'Struggle <small>no PP left</small>';
-      b.onclick = () => done({ type: 'move', idx: -1 });
-      $('actions').append(b);
-    } else {
-      u.moves.forEach((m, i) => {
-        const b = document.createElement('button');
-        b.className = 'mv'; b.style.background = TYPE_COLORS[m.type];
-        b.innerHTML = `${m.name} <small>${m.type} · ${m.power ? 'POW ' + m.power : m.cat.toUpperCase()} · PP ${m.ppLeft}/${m.pp}</small>`;
-        b.disabled = m.ppLeft <= 0;
-        b.onclick = () => done({ type: 'move', idx: i });
-        $('actions').append(b);
-      });
-    }
-    state.players[p].team.forEach((m, i) => {
-      if (i === state.players[p].active || m.hp <= 0) return;
-      const b = document.createElement('button');
-      b.className = 'sw';
-      b.textContent = `Switch → ${m.name} (${m.hp}/${m.maxhp})`;
-      b.onclick = () => done({ type: 'switch', idx: i });
-      $('switches').append(b);
-    });
-  });
-}
-
-function chooseReplacement(p) {
-  return new Promise(res => {
-    $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b>: Choose your next Pokémon!`;
-    clearButtons();
-    state.players[p].team.forEach((m, i) => {
-      if (m.hp <= 0) return;
-      const b = document.createElement('button');
-      b.className = 'sw';
-      b.textContent = `${m.name} (${m.hp}/${m.maxhp})`;
-      b.onclick = () => { clearButtons(); res(i); };
-      $('switches').append(b);
-    });
-  });
-}
-
-// =====================================================================
-//  BATTLE LOGIC
-// =====================================================================
-const stageMult = s => s >= 0 ? (2 + s) / 2 : 2 / (2 - s);
-const speedOf = m => m.stats.spe * stageMult(m.stages.spe) * (m.status === 'par' ? 0.5 : 1);
-const hasAlive = p => state.players[p].team.some(m => m.hp > 0);
-
-function canStatus(mon, s) {
-  if (mon.status || mon.hp <= 0) return false;
-  if (s === 'brn' && mon.types.includes('Fire')) return false;
-  if (s === 'par' && mon.types.includes('Electric')) return false;
-  if (s === 'psn' && (mon.types.includes('Poison') || mon.types.includes('Steel'))) return false;
-  if (s === 'frz' && mon.types.includes('Ice')) return false;
-  return true;
-}
-async function applyStatus(mon, s) {
-  mon.status = s;
-  if (s === 'slp') mon.sleepTurns = 1 + Math.floor(Math.random() * 3);
-  updateHud();
-  await say(`${lbl(mon)} ${STATUS_INFO[s].msg}`);
-}
-async function changeStat(mon, stat, n) {
-  const cur = mon.stages[stat];
-  if ((n > 0 && cur >= 6) || (n < 0 && cur <= -6)) {
-    await say(`${lbl(mon)}'s ${STAT_NAMES[stat]} won't go any ${n > 0 ? 'higher' : 'lower'}!`);
-    return;
-  }
-  mon.stages[stat] = Math.max(-6, Math.min(6, cur + n));
-  await say(`${lbl(mon)}'s ${STAT_NAMES[stat]} ${n > 0 ? 'rose' : 'fell'}!`);
-}
-async function faint(p) {
-  await animFaint(p);
-  updateHud();
-  await say(`${lbl(active(p))} fainted!`);
-}
-
-async function doSwitch(p, idx, forced) {
-  const pl = state.players[p];
-  if (!forced && models[p]) {
-    await say(`<b class="p${p}">${PLAYER[p]}</b>: Come back, ${active(p).name}!`, 800);
-    await animRecall(p);
-  }
-  pl.active = idx;
-  const m = active(p);
-  m.stages = { atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
-  m.flinch = false;
-  setModel(p, m);
-  updateHud();
-  await animAppear(p);
-  await say(`<b class="p${p}">${PLAYER[p]}</b>: Go! ${m.name}!`, 900);
-}
-
-async function useMove(p, idx) {
-  const u = active(p), t = active(1 - p);
-  const mv = idx < 0 ? STRUGGLE : u.moves[idx];
-
-  // can it act?
-  if (u.status === 'slp') {
-    if (u.sleepTurns > 0) { u.sleepTurns--; await say(`${lbl(u)} is fast asleep.`); return; }
-    u.status = null; updateHud(); await say(`${lbl(u)} woke up!`);
-  }
-  if (u.status === 'frz') {
-    if (Math.random() < 0.2) { u.status = null; updateHud(); await say(`${lbl(u)} thawed out!`); }
-    else { await say(`${lbl(u)} is frozen solid!`); return; }
-  }
-  if (u.flinch) { await say(`${lbl(u)} flinched and couldn't move!`); return; }
-  if (u.status === 'par' && Math.random() < 0.25) { await say(`${lbl(u)} is paralyzed! It can't move!`); return; }
-
-  if (idx >= 0) mv.ppLeft--;
-  await say(`${lbl(u)} used <b>${mv.name}</b>!`, 900);
-
-  const selfTarget = mv.self || mv.rest;
-  if (!selfTarget && t.hp <= 0) { await say('But there was no target...'); return; }
-  if (mv.acc != null && Math.random() * 100 >= mv.acc) { await say(`${lbl(u)}'s attack missed!`); return; }
-
-  // ----- status moves -----
-  if (mv.cat === 'status') {
-    if (mv.rest) {
-      if (u.hp === u.maxhp) { await say('But it failed!'); return; }
-      await animSelf(p);
-      u.hp = u.maxhp; u.status = 'slp'; u.sleepTurns = 2;
-      updateHud();
-      await say(`${lbl(u)} slept and became healthy!`);
-    } else if (mv.self) {
-      await animSelf(p);
-      await changeStat(u, mv.self.stat, mv.self.stages);
-    } else {
-      if (mv.powder && t.types.includes('Grass')) { await say(`It doesn't affect ${lbl(t)}...`); return; }
-      await animProjectile(p, mv, true);
-      const e = mv.effect;
-      if (e.status) {
-        if (!canStatus(t, e.status)) { await say('But it failed!'); return; }
-        await applyStatus(t, e.status);
-      } else if (e.stat) {
-        await changeStat(t, e.stat, e.stages);
-      }
-    }
-    return;
-  }
-
-  // ----- damaging moves -----
-  const eff = mv.type ? effectiveness(mv.type, t.types) : 1;
-  if (mv.quake) { camShake = 0.35; await animLunge(p); }
-  else if (mv.cat === 'physical') await animLunge(p);
-  else await animProjectile(p, mv);
-
-  if (eff === 0) { await say(`It doesn't affect ${lbl(t)}...`); return; }
-
-  const crit = Math.random() < (mv.highCrit ? 1 / 8 : 1 / 24);
-  const phys = mv.cat === 'physical';
-  let aSt = u.stages[phys ? 'atk' : 'spa'], dSt = t.stages[phys ? 'def' : 'spd'];
-  if (crit) { aSt = Math.max(0, aSt); dSt = Math.min(0, dSt); }
-  const A = u.stats[phys ? 'atk' : 'spa'] * stageMult(aSt);
-  const D = t.stats[phys ? 'def' : 'spd'] * stageMult(dSt);
-
-  // official formula (Gen 5+)
-  let dmg = Math.floor(Math.floor(Math.floor(2 * LEVEL / 5 + 2) * mv.power * A / D) / 50) + 2;
-  if (crit) dmg *= 1.5;
-  dmg *= (85 + Math.floor(Math.random() * 16)) / 100;
-  if (mv.type && u.types.includes(mv.type)) dmg *= 1.5; // STAB
-  dmg *= eff;
-  if (phys && u.status === 'brn') dmg *= 0.5;
-  dmg = Math.min(t.hp, Math.max(1, Math.floor(dmg)));
-
-  t.hp -= dmg;
-  await animHit(1 - p);
-  updateHud();
-  if (crit) await say('A critical hit!', 900);
-  if (eff > 1) await say("It's super effective!", 900);
-  if (eff < 1) await say("It's not very effective...", 900);
-
-  if (mv.drain) {
-    u.hp = Math.min(u.maxhp, u.hp + Math.max(1, Math.floor(dmg * mv.drain)));
-    updateHud();
-    await say(`${lbl(t)} had its energy drained!`);
-  }
-
-  if (t.hp <= 0) await faint(1 - p);
-  else if (mv.effect && Math.random() * 100 < mv.effect.chance) {
-    const e = mv.effect;
-    if (e.status) { if (canStatus(t, e.status)) await applyStatus(t, e.status); }
-    else if (e.stat) await changeStat(t, e.stat, e.stages);
-    else if (e.flinch) t.flinch = true; // only matters if the target hasn't moved yet
-  }
-
-  if (mv.recoil) {
-    u.hp = Math.max(0, u.hp - Math.max(1, Math.floor(u.maxhp * mv.recoil)));
-    updateHud();
-    await say(`${lbl(u)} is damaged by recoil!`);
-    if (u.hp <= 0) await faint(p);
-  }
-}
-
-async function resolveTurn(actions) {
-  for (const p of [0, 1])
-    if (actions[p].type === 'switch') await doSwitch(p, actions[p].idx, false);
-
-  const prio = p => actions[p].idx >= 0 ? (active(p).moves[actions[p].idx].priority || 0) : 0;
-  const order = [0, 1].filter(p => actions[p].type === 'move').sort((a, b) =>
-    (prio(b) - prio(a)) || (speedOf(active(b)) - speedOf(active(a))) || (Math.random() - 0.5));
-
-  for (const p of order) {
-    if (active(p).hp <= 0) continue;
-    await useMove(p, actions[p].idx);
-  }
-
-  // end-of-turn burn / poison
-  for (const p of [0, 1]) {
-    const m = active(p);
-    if (m.hp > 0 && (m.status === 'brn' || m.status === 'psn')) {
-      m.hp = Math.max(0, m.hp - Math.max(1, Math.floor(m.maxhp / (m.status === 'brn' ? 16 : 8))));
-      await animHit(p);
-      updateHud();
-      await say(`${lbl(m)} is hurt by its ${m.status === 'brn' ? 'burn' : 'poison'}!`);
-      if (m.hp <= 0) await faint(p);
-    }
-    m.flinch = false;
-  }
-
-  // replace fainted Pokémon
-  for (const p of [0, 1])
-    if (active(p).hp <= 0 && hasAlive(p) && hasAlive(1 - p))
-      await doSwitch(p, await chooseReplacement(p), true);
-}
-
-async function battle() {
-  $('panel0').style.display = $('panel1').style.display = 'block';
-  $('bottom').style.display = 'block';
-  await say('The battle begins!', 1000);
-  await doSwitch(0, 0, true);
-  await doSwitch(1, 0, true);
-  while (hasAlive(0) && hasAlive(1)) {
-    const actions = [await chooseAction(0), await chooseAction(1)];
-    await resolveTurn(actions);
-  }
-  const w = hasAlive(0) ? 0 : 1;
-  await say(`<b class="p${w}">${PLAYER[w]}</b> wins the battle!`, 1800);
-  $('endTitle').innerHTML = `${PLAYER[w]} Wins!`;
-  $('endScreen').style.display = 'flex';
-}
-
-// =====================================================================
-//  TEAM SELECT
-// =====================================================================
-let selPlayer = 0, picks = [];
-function renderSelect() {
-  $('selTitle').innerHTML = `<span style="color:${selPlayer ? '#f87171' : '#60a5fa'}">${PLAYER[selPlayer]}</span>: choose ${TEAM_SIZE} Pokémon (${picks.length}/${TEAM_SIZE})`;
-  $('selBtn').disabled = picks.length !== TEAM_SIZE;
-  $('cards').innerHTML = '';
-  for (const [name, s] of Object.entries(SPECIES)) {
-    const mon = makeMon(name, 0);
-    const c = document.createElement('div');
-    const pickIdx = picks.indexOf(name);
-    c.className = 'card' + (pickIdx >= 0 ? ' sel' : '');
-    const stats = [['HP', s.base[0]], ['Atk', s.base[1]], ['Def', s.base[2]], ['SpA', s.base[3]], ['SpD', s.base[4]], ['Spe', s.base[5]]]
-      .map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b><div class="bar"><div style="width:${Math.min(100, v / 1.6)}%"></div></div></div>`).join('');
-    c.innerHTML = `
-      <div class="pick">${pickIdx + 1}</div>
-      <div class="head"><div class="icon" style="background:${TYPE_COLORS[s.types[0]]}">${name[0]}</div>
-        <div><div style="font-weight:800;font-size:18px">${name}</div>${s.types.map(typeBadge).join('')}</div></div>
-      <div style="margin-top:8px">${stats}</div>
-      <div class="mvlist"><b>Moves:</b> ${mon.moves.map(m => `<span style="color:${TYPE_COLORS[m.type]};font-weight:700">${m.name}</span>`).join(', ')}</div>`;
-    c.onclick = () => {
-      if (pickIdx >= 0) picks.splice(pickIdx, 1);
-      else if (picks.length < TEAM_SIZE) picks.push(name);
-      renderSelect();
-    };
-    $('cards').append(c);
-  }
-}
-$('selBtn').onclick = () => {
-  state.players[selPlayer].team = picks.map(n => makeMon(n, selPlayer));
-  picks = [];
-  if (selPlayer === 0) { selPlayer = 1; renderSelect(); }
-  else { $('select').style.display = 'none'; battle(); }
-};
-renderSelect();
-</script>
+<script src="game.js"></script>
 </body>
 </html>
