@@ -10,6 +10,7 @@
 - **Cinematic:** intro with drone fly-over, title card, trainer walk-outs with spotlights, team reveal, "who will win?" prompt and 3-2-1 countdown (click or Space skips it); attacker close-ups, camera follows projectiles, slow motion on crits/KOs, low-angle Mega Evolution, a replay of the battle-winning blow and a victory orbit.
 - **Series & reach:** 🏆 8-trainer tournaments with 12 original CPU trainers (bracket screens, champion ceremony, resumable), 📊 saved records / Hall of Fame, an automatic highlights reel after each battle (saved as its own video while recording), 🖼 auto thumbnails, and 📱 Shorts mode (9:16 — the recording is cropped to the vertical frame in Chrome/Edge).
 - **6 arenas:** Pokémon Stadium, Viridian Forest, Mt. Chimney Crater, Sunny Beach, Ice Path Cavern and Lumiose Night Arena.
+- **👾 Retro 2D mode** (switch at the top of the team builder): top-down pixel-art battles in real time. Both Pokémon move around and attack on their own cooldowns, so beams can meet mid-field (**CLASH!**, the stronger beam pushes through). Animated sprites, pixel trainers, pixel move effects (fire pillars, beams, lightning, quakes, rock slides, slashes...), scorch marks that build up, a cheering crowd and a broadcast HUD: portrait, type and stat-change chips (ATK+2, DEF-1), HP bar with number, party balls, move-name pills, timer, damage numbers, SUPER EFFECTIVE / CRITICAL text and "X FAINTED!" banners. 5 places: Prism Plaza (city plaza at night with string lights), Verdant Park, Sunset Beach, Frost Village and Magma Quarry (the Arena choice picks the matching one). Same stats, damage formula, type chart, AI, Megas, records, tournaments, recording and Shorts mode as 3D. Human players click a move (or press 1–4) when their Pokémon is ready.
 
 ## Run it
 Double-click **`start.bat`**. It starts a tiny local server and opens http://localhost:8080 in Chrome/Edge.
@@ -41,6 +42,8 @@ node tools/build-models.mjs
 Downloads the .glb models for every species in data.js from the Pokémon 3D API asset repo
 (https://github.com/Pokemon-3D-api/assets — fan project, non-commercial) and three.js r170 into `lib/`.
 `tools/model-preview.html` (open via the server) shows models side by side.
+
+The Retro 2D font is Tiny5 (SIL Open Font License, Google Fonts) in `lib/fonts/`.
 
 ## Not implemented (yet)
 Abilities, held items other than Mega Stones, weather/terrain, two-turn moves (Solar Beam, Fly, Hyper Beam…). Moves the engine can't run are hidden from move lists.

@@ -837,7 +837,31 @@ async function startBattle(specs, meta = {}) {
   catch (e) { if (!(e instanceof BattleAbort)) throw e; }
 }
 
+async function runRetroBattle() {
+  $('builder').classList.add('hidden');
+  $('endScreen').classList.add('hidden');
+  $('hud').classList.add('hidden');
+  $('bracket').classList.add('hidden');
+  $('intro').classList.add('hidden');
+  clearButtons();
+  Broadcast.resetBattle();
+  updateRecButtons();
+  state.started = true;
+  const w = await Retro.battle({ subtitle: state.meta.subtitle, lines: state.meta.lines });
+  guard();
+  Stats.saveBattle({
+    names: [PLAYER[0], PLAYER[1]], winner: w,
+    mons: state.players.flatMap((pl, side) => pl.team.map(m => ({ species: m.species, name: m.name, side, kos: m.kos || 0, dmg: m.dmgDealt || 0 })))
+  });
+  battleActive = false;
+  updateRecButtons();
+  if (Tour.onBattleEnd(w)) return;
+  showEnd(w);
+}
+
 async function runBattle() {
+  if (prefs.mode === 'retro') return runRetroBattle();
+  Retro.stop();
   World.reset();
   World.trainers.reset();
   state.theme = World.setTheme(settings.theme);
@@ -913,6 +937,7 @@ function abortBattle() {
   Broadcast.resetBattle();
   World.trainers.place();
   battleActive = false;
+  Retro.stop();
   for (const rej of pendingChoices) rej(new BattleAbort());
   pendingChoices.clear();
   skipWait = null;
@@ -1171,6 +1196,16 @@ $('setHpBars').checked = prefs.hpBars !== false; Broadcast.opts.hpBars = $('setH
 $('setHighlights').checked = prefs.highlights !== false;
 $('setReplays').checked = prefs.replays !== false;
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
+// battle style: full 3D or the retro top-down pixel mode
+const applyMode = mode => {
+  prefs.mode = mode === 'retro' ? 'retro' : '3d';
+  $('mode3d').classList.toggle('on0', prefs.mode === '3d');
+  $('modeRetro').classList.toggle('on0', prefs.mode === 'retro');
+  document.body.classList.toggle('retroMode', prefs.mode === 'retro');
+};
+applyMode(prefs.mode);
+$('mode3d').onclick = () => { applyMode('3d'); savePrefs(); };
+$('modeRetro').onclick = () => { applyMode('retro'); savePrefs(); toast('Retro 2D: real-time pixel battles. Both Pokémon move and attack at the same time.', 3500); };
 $('setChannel').value = prefs.channel || ''; Broadcast.opts.channel = prefs.channel || '';
 $('setMusic').oninput = e => { prefs.music = +e.target.value; AudioFX.setVolume('music', prefs.music); savePrefs(); };
 $('setSfx').oninput = e => { prefs.sfx = +e.target.value; AudioFX.setVolume('sfx', prefs.sfx); savePrefs(); };

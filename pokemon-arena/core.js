@@ -143,7 +143,7 @@ function startLoop() {
     frameHooks.forEach(fn => fn(dt, t));
     for (const u of updaters) u(dt, t);
     bloom.strength = lerp(bloom.strength, World.bloomBase, 1 - Math.exp(-dt * 3));
-    composer.render(dt);
-    if (captureWaiters.length) { const url = renderer.domElement.toDataURL('image/jpeg', 0.92); captureWaiters.splice(0).forEach(fn => fn(url)); }
+    if (!World.skip3D) composer.render(dt);
+    if (captureWaiters.length) { const url = (World.skip3D && World.captureSource || renderer.domElement).toDataURL('image/jpeg', 0.92); captureWaiters.splice(0).forEach(fn => fn(url)); }
   })();
 }
