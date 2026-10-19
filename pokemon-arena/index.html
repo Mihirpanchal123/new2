@@ -145,27 +145,248 @@
   .vsteam img { height: 72px; image-rendering: pixelated; }
   .vsword { font-size: 64px; font-weight: 900; color: #facc15; text-shadow: 4px 4px 0 #b91c1c; }
   .vsname { font-size: 28px; font-weight: 900; }
+
+  /* ---- frame (full window, or a 9:16 column in Shorts mode) ---- */
+  #frame { position: absolute; inset: 0; overflow: hidden; }
+  body.shorts { background: #000; }
+  body.shorts #frame { left: 50%; right: auto; width: min(100vw, calc(100vh * 9 / 16)); transform: translateX(-50%); }
+  body.shorts .panel { width: 46%; }
+  body.shorts #panel0 { left: 2%; } body.shorts #panel1 { right: 2%; }
+  body.shorts #bottom { width: 94%; }
+  body.shorts #actions { grid-template-columns: repeat(2, 1fr); }
+  body.shorts #moveBanner span { font-size: 26px; padding: 8px 40px; }
+  body.shorts .tc-vs { font-size: 40px; flex-direction: column; gap: 4px; }
+  body.shorts .reveal { flex-direction: column; gap: 8px; bottom: 16%; }
+  body.shorts .prompt { font-size: 38px; width: 92%; }
+  body.shorts .br-grid { grid-template-columns: 1fr; gap: 10px; }
+  body.shorts .br-col { height: auto; }
+  body.shorts #bigText { font-size: 80px; }
+  body.shorts .lowerThird { bottom: 28%; }
+  .paused * { animation-play-state: paused !important; }
+
+  /* ---- broadcast overlays ---- */
+  #fxLayer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 15; }
+  .dmg { position: absolute; left: 0; top: 0; font: 900 30px "Segoe UI", sans-serif; color: #fff; -webkit-text-stroke: 1.5px #000; text-shadow: 0 3px 0 #000; white-space: nowrap; }
+  .dmg.crit { color: #facc15; font-size: 42px; } .dmg.super { color: #fb923c; font-size: 36px; } .dmg.weak { color: #cbd5e1; font-size: 22px; }
+  .popx { position: absolute; left: 0; top: 0; font: 900 20px "Segoe UI", sans-serif; color: #fff; padding: 3px 14px; border-radius: 8px; background: rgba(0,0,0,.6); white-space: nowrap; letter-spacing: 1px; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
+  .popx.crit { background: linear-gradient(90deg, #f59e0b, #ef4444); } .popx.super { background: linear-gradient(90deg, #f97316, #dc2626); }
+  .popx.weak { background: #475569; font-size: 15px; } .popx.immune { background: #334155; } .popx.miss { background: #64748b; }
+  .popx.block { background: #16a34a; } .popx.ko { background: #111827; color: #facc15; font-size: 28px; border: 2px solid #facc15; }
+  .ohp { position: absolute; left: 0; top: 0; width: 86px; text-align: center; }
+  .ohp-name { font: 800 10px "Segoe UI", sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; white-space: nowrap; overflow: hidden; }
+  .ohp-bar { height: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.75); border-radius: 4px; overflow: hidden; }
+  .ohp-fill { height: 100%; transition: width .4s, background .4s; }
+  .ohp0 .ohp-bar { box-shadow: 0 0 0 1px #2563eb; } .ohp1 .ohp-bar { box-shadow: 0 0 0 1px #dc2626; }
+  #moveBanner { position: absolute; left: 0; right: 0; top: 20%; display: flex; justify-content: center; pointer-events: none; z-index: 16; opacity: 0; }
+  #moveBanner span { background: linear-gradient(90deg, transparent, var(--tc) 14%, var(--tc) 86%, transparent); padding: 10px 90px; font: italic 900 36px "Segoe UI", sans-serif; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.45); letter-spacing: 3px; text-transform: uppercase; white-space: nowrap; }
+  #moveBanner.go { animation: bannerIn 1.3s ease forwards; }
+  @keyframes bannerIn { 0% { opacity: 0; transform: translateX(-50%) skewX(-12deg); } 14% { opacity: 1; transform: translateX(0) skewX(-12deg); } 80% { opacity: 1; transform: translateX(2%) skewX(-12deg); } 100% { opacity: 0; transform: translateX(50%) skewX(-12deg); } }
+  #bigText { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 900 130px "Segoe UI", sans-serif; color: #facc15; -webkit-text-stroke: 3px #7c2d12; text-shadow: 0 8px 0 rgba(0,0,0,.35); opacity: 0; pointer-events: none; z-index: 17; text-align: center; }
+  #bigText.go { animation: bigIn .9s ease forwards; }
+  #bigText.start { font-size: 86px; color: #fff; -webkit-text-stroke: 3px #1d4ed8; }
+  #bigText.replay { font-size: 72px; color: #fff; -webkit-text-stroke: 3px #dc2626; }
+  #bigText.last { font-size: 66px; color: #fca5a5; -webkit-text-stroke: 3px #7f1d1d; }
+  @keyframes bigIn { 0% { opacity: 0; transform: scale(2.2); } 18% { opacity: 1; transform: scale(1); } 80% { opacity: 1; transform: scale(1.02); } 100% { opacity: 0; transform: scale(.92); } }
+  .speech { position: absolute; left: 0; top: 0; background: #fff; color: #111827; font: 700 14px "Segoe UI", sans-serif; padding: 7px 13px; border-radius: 12px; max-width: 260px; text-align: center; border: 2px solid; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  .speech.s0 { border-color: #2563eb; } .speech.s1 { border-color: #dc2626; }
+  #introLayer { position: absolute; inset: 0; pointer-events: none; z-index: 18; }
+  .out { animation: fadeOut .4s ease forwards !important; }
+  @keyframes fadeOut { to { opacity: 0; } }
+  @keyframes tcIn { from { opacity: 0; transform: translate(-50%, 20px) scale(.92); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+  .titleCard { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); text-align: center; animation: tcIn .7s ease; text-shadow: 0 3px 8px rgba(0,0,0,.6); white-space: nowrap; }
+  .tc-no { font: 800 22px "Segoe UI", sans-serif; color: #facc15; letter-spacing: 8px; }
+  .tc-vs { font: 900 66px "Segoe UI", sans-serif; color: #fff; display: flex; gap: 22px; align-items: center; justify-content: center; }
+  .tc-vs b { color: #facc15; font-size: 46px; }
+  .p0n { color: #60a5fa; } .p1n { color: #f87171; }
+  .tc-sub { font: 700 20px "Segoe UI", sans-serif; color: #e2e8f0; margin-top: 4px; }
+  .tc-ch { font: 600 14px "Segoe UI", sans-serif; color: #cbd5e1; margin-top: 6px; letter-spacing: 2px; }
+  .lowerThird { position: absolute; bottom: 20%; padding: 10px 28px; background: linear-gradient(90deg, rgba(15,23,42,.94), rgba(15,23,42,.55)); color: #fff; }
+  .lt0 { left: 4%; border-left: 6px solid #2563eb; animation: ltIn .5s ease; }
+  .lt1 { right: 4%; border-right: 6px solid #dc2626; text-align: right; background: linear-gradient(270deg, rgba(15,23,42,.94), rgba(15,23,42,.55)); animation: ltInR .5s ease; }
+  @keyframes ltIn { from { opacity: 0; transform: translateX(-40px); } } @keyframes ltInR { from { opacity: 0; transform: translateX(40px); } }
+  .lt-name { font: 900 34px "Segoe UI", sans-serif; } .lt-sub { font: 700 14px "Segoe UI", sans-serif; color: #cbd5e1; }
+  .reveal { position: absolute; left: 0; right: 0; bottom: 12%; display: flex; justify-content: center; align-items: center; gap: 22px; animation: ltIn .4s ease; }
+  .rv-side { text-align: center; } .rv-name { font: 900 20px "Segoe UI", sans-serif; text-shadow: 0 2px 4px #000; margin-bottom: 6px; }
+  .rv0 .rv-name { color: #60a5fa; } .rv1 .rv-name { color: #f87171; }
+  .rv-balls { display: flex; gap: 8px; justify-content: center; }
+  .rv-card { width: 62px; height: 78px; perspective: 400px; }
+  .rv-inner { position: relative; width: 100%; height: 100%; transition: transform .45s; transform-style: preserve-3d; }
+  .rv-card.flip .rv-inner { transform: rotateY(180deg); }
+  .rv-ball, .rv-mon { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rv-ball { background: radial-gradient(circle, #fff 16%, #222 17% 23%, transparent 24%), linear-gradient(#e3350d 47%, #222 47% 53%, #fff 53%); border: 3px solid #222; }
+  .rv-mon { background: rgba(15,23,42,.92); border: 2px solid #facc15; transform: rotateY(180deg); color: #fff; font: 700 9px "Segoe UI", sans-serif; }
+  .rv-mon img { height: 46px; image-rendering: pixelated; }
+  .rv-vs { font: 900 40px "Segoe UI", sans-serif; color: #facc15; text-shadow: 0 3px 0 #b91c1c; }
+  .prompt { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); text-align: center; font: 900 54px "Segoe UI", sans-serif; color: #fff; text-shadow: 0 4px 10px rgba(0,0,0,.7); animation: tcIn .5s ease; }
+  .prompt div { font-size: 30px; } .prompt small { display: block; font: 700 18px "Segoe UI", sans-serif; color: #facc15; margin-top: 6px; }
+
+  /* ---- tournament bracket (inside the frame) ---- */
+  #bracket { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; text-align: center; z-index: 25; overflow-y: auto; }
+  .br-ch { color: #cbd5e1; letter-spacing: 2px; margin-top: -10px; }
+  .br-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px; align-items: center; width: min(900px, 94%); }
+  .br-col { display: flex; flex-direction: column; gap: 16px; justify-content: space-around; height: 360px; }
+  .br-round { font: 800 14px "Segoe UI", sans-serif; color: #facc15; letter-spacing: 2px; text-transform: uppercase; }
+  .br-match { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 6px 12px; text-align: left; }
+  .br-match div { padding: 3px 0; font-weight: 700; } .br-match div + div { border-top: 1px solid #334155; }
+  .br-match.cur { border-color: #facc15; box-shadow: 0 0 0 4px rgba(250,204,21,.25); }
+  .br-match .win { color: #4ade80; } .br-match .lose { color: #64748b; text-decoration: line-through; }
+  .br-champ { font: 900 36px "Segoe UI", sans-serif; color: #facc15; text-shadow: 0 3px 0 #b45309; }
+  .br-next { color: #cbd5e1; } .br-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---- tournament setup + records (full screen) ---- */
+  #tourneySetup, #records { display: flex; align-items: center; justify-content: center; z-index: 30; }
+  #tourneySetup.hidden, #records.hidden { display: none; }
+  .ts-box { background: #0b1222; border: 1px solid #1e293b; border-radius: 16px; padding: 20px 24px; width: min(1040px, 94%); max-height: 92vh; overflow: auto; }
+  .ts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .ts-card { background: #1e293b; border: 2px solid #334155; border-radius: 12px; padding: 10px; cursor: pointer; }
+  .ts-card:hover { border-color: #64748b; } .ts-card.on { border-color: #facc15; box-shadow: 0 0 0 3px rgba(250,204,21,.2); }
+  .ts-name { font: 900 18px "Segoe UI", sans-serif; } .ts-title { color: #94a3b8; font-size: 12px; font-weight: 700; }
+  .ts-team { display: flex; flex-wrap: wrap; margin: 4px 0; } .ts-team img { height: 34px; image-rendering: pixelated; }
+  .ts-rec { font-size: 11px; color: #cbd5e1; }
+  .ts-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .rec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 12px; }
+  .rec-grid h3 { margin: 0 0 8px; color: #facc15; }
+  .rec-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid #1e293b; padding: 5px 0; font-size: 13px; }
+  .rec-row span { color: #94a3b8; text-align: right; }
+  .broadcast-row { font-size: 13px; padding-top: 2px; } .broadcast-row input[type=range] { width: 90px; }
+  #setChannel { width: 150px; background: #1e293b; color: #fff; border: 1px solid #475569; border-radius: 8px; padding: 4px 8px; }
+
+  /* ---- tournament chart ---- */
+  #bracket { display: block; padding: 0; overflow: hidden; background: radial-gradient(ellipse at center, rgba(30,41,59,.92), rgba(2,6,23,.96)); }
+  .brc { position: absolute; left: 50%; top: 50%; transform-origin: center; color: #fff; }
+  .brtitle { position: absolute; left: 0; right: 0; text-align: center; }
+  .brtitle .logo { font: 900 52px "Segoe UI", sans-serif; color: #facc15; text-shadow: 3px 3px 0 #1d4ed8; }
+  .brtitle .br-ch { font: 700 16px "Segoe UI", sans-serif; color: #cbd5e1; letter-spacing: 3px; margin-top: 2px; }
+  .brlines { position: absolute; left: 0; top: 0; overflow: visible; }
+  .brlines path { fill: none; stroke: #475569; stroke-width: 4; stroke-linejoin: round; }
+  .brlines path.done { stroke: #facc15; stroke-width: 6; filter: drop-shadow(0 0 6px rgba(250,204,21,.7)); }
+  .brtag { position: absolute; font: 800 14px "Segoe UI", sans-serif; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; }
+  .brbox { position: absolute; background: #0f172a; border: 2px solid #334155; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,.45); }
+  .brbox.final { border-color: #a16207; }
+  .brbox.cur { border-color: #facc15; animation: brPulse 1.6s ease-in-out infinite; }
+  @keyframes brPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(250,204,21,.25), 0 0 18px rgba(250,204,21,.25); } 50% { box-shadow: 0 0 0 6px rgba(250,204,21,.4), 0 0 34px rgba(250,204,21,.5); } }
+  .brrow { height: 63px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+  .brrow + .brrow { border-top: 1px solid #1e293b; }
+  .brrow .lead { width: 50px; height: 50px; object-fit: contain; image-rendering: pixelated; flex: none; }
+  .brrow .lead.q { display: flex; align-items: center; justify-content: center; font: 900 26px "Segoe UI"; color: #475569; border: 2px dashed #334155; border-radius: 50%; width: 42px; height: 42px; }
+  .brrow .who { min-width: 0; }
+  .brrow .nm { font: 900 21px "Segoe UI", sans-serif; white-space: nowrap; }
+  .brrow .tt { font: 600 12px "Segoe UI", sans-serif; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brrow .mini { margin-left: auto; display: flex; flex: none; }
+  .brrow .mini img { height: 28px; image-rendering: pixelated; }
+  .brrow.win { background: linear-gradient(90deg, rgba(34,197,94,.28), transparent 70%); }
+  .brrow.win .nm::after { content: " ✓"; color: #4ade80; }
+  .brrow.lose { opacity: .4; } .brrow.lose .nm { text-decoration: line-through; }
+  .brrow.tbd .nm { color: #64748b; }
+  .brchamp { position: absolute; text-align: center; border: 3px solid #a16207; border-radius: 18px; background: radial-gradient(circle at 50% 35%, #3b2f0b, #0f172a 75%); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .brchamp.won { border-color: #facc15; box-shadow: 0 0 40px rgba(250,204,21,.45); }
+  .brchamp .trophy { font-size: 78px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(250,204,21,.5)); }
+  .brchamp .cl { font: 900 15px "Segoe UI", sans-serif; letter-spacing: 6px; color: #facc15; margin-top: 6px; }
+  .brchamp .cn { font: 900 26px "Segoe UI", sans-serif; color: #fff; margin-top: 2px; }
+  .brchamp.pill { flex-direction: row; gap: 14px; border-radius: 40px; }
+  .brchamp.pill .trophy { font-size: 40px; }
+  .brfoot { position: absolute; left: 0; right: 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .brfoot .br-next { font: 700 22px "Segoe UI", sans-serif; color: #e2e8f0; }
+  .brfoot .btn { font-size: 22px; padding: 12px 34px; }
+  .brc.port .brrow .nm { font-size: 27px; } .brc.port .brrow .tt { font-size: 15px; }
+  .brc.port .brrow .lead { width: 58px; height: 58px; } .brc.port .brrow .mini img { height: 34px; }
+  .brc.port .brtag { font-size: 17px; } .brc.port .brtitle .logo { font-size: 66px; }
+  .brc.port .brchamp .cn { font-size: 30px; } .brc.port .brfoot .br-next { font-size: 30px; } .brc.port .brfoot .btn { font-size: 30px; padding: 16px 40px; }
+
+  /* ---- portrait (Shorts): keep the overlays small so the battle stays the focus ---- */
+  body.shorts .panel { width: 40%; top: 6px; padding: 3px 7px; border-width: 1.5px; border-radius: 8px; }
+  body.shorts .pname { font-size: 11px; }
+  body.shorts .owner { font-size: 8px; }
+  body.shorts .panel .type { font-size: 7px; padding: 0 3px; }
+  body.shorts .badge { font-size: 7px; padding: 0 3px; }
+  body.shorts .hpwrap { margin-top: 2px; } body.shorts .hplabel { font-size: 6px; }
+  body.shorts .hpbar { height: 5px; } body.shorts .hptext { font-size: 8px; }
+  body.shorts .ball { width: 6px; height: 6px; }
+  body.shorts #bottom { width: 90%; bottom: 6px; }
+  body.shorts #msg { font-size: 11px; padding: 4px 9px; border-width: 1.5px; border-radius: 8px; }
+  body.shorts #actions { gap: 3px; margin-top: 3px; }
+  body.shorts .mv { font-size: 10px; padding: 3px 6px; border-width: 1.5px; border-radius: 6px; }
+  body.shorts .mv small { font-size: 7px; }
+  body.shorts #switches { gap: 3px; margin-top: 3px; }
+  body.shorts .sw { font-size: 9px; padding: 1px 5px; } body.shorts .sw img { height: 14px; }
+  body.shorts #battleCtl, body.shorts #recBtn { top: 76px; }
+  body.shorts #battleCtl button { width: 24px; height: 20px; font-size: 11px; }
+  body.shorts #recBtn { font-size: 9px; padding: 2px 7px; }
+  body.shorts #moveBanner { top: 13%; }
+  body.shorts #moveBanner span { font-size: 18px; padding: 6px 30px; letter-spacing: 2px; }
+  body.shorts .dmg { font-size: 20px; } body.shorts .dmg.crit { font-size: 28px; } body.shorts .dmg.super { font-size: 24px; } body.shorts .dmg.weak { font-size: 15px; }
+  body.shorts .popx { font-size: 12px; padding: 2px 8px; } body.shorts .popx.ko { font-size: 16px; } body.shorts .popx.weak { font-size: 10px; }
+  body.shorts .ohp { width: 60px; } body.shorts .ohp-name { font-size: 8px; } body.shorts .ohp-bar { height: 4px; }
+  body.shorts #bigText { font-size: 64px; } body.shorts #bigText.start { font-size: 42px; } body.shorts #bigText.replay { font-size: 40px; } body.shorts #bigText.last { font-size: 34px; }
+  body.shorts .speech { font-size: 10px; max-width: 150px; padding: 4px 8px; }
+  body.shorts .tc-no { font-size: 14px; letter-spacing: 5px; } body.shorts .tc-vs { font-size: 34px; } body.shorts .tc-vs b { font-size: 24px; } body.shorts .tc-sub { font-size: 13px; }
+  body.shorts .titleCard { white-space: normal; width: 90%; }
+  body.shorts .lowerThird { padding: 6px 14px; } body.shorts .lt-name { font-size: 20px; } body.shorts .lt-sub { font-size: 10px; }
+  body.shorts .rv-card { width: 42px; height: 54px; } body.shorts .rv-mon img { height: 30px; } body.shorts .rv-mon { font-size: 7px; } body.shorts .rv-name { font-size: 14px; } body.shorts .rv-vs { font-size: 24px; }
+  body.shorts .prompt { font-size: 28px; } body.shorts .prompt div { font-size: 18px; } body.shorts .prompt small { font-size: 12px; }
+  body.shorts #endScreen h1 { font-size: 34px !important; } body.shorts #endScreen .btn { font-size: 14px; padding: 8px 16px; }
+  body.shorts #pauseMenu .btn { font-size: 15px; }
+
+  /* portrait: slim HP cards + one row of move chips */
+  body.shorts .panel b { font-size: 10px; margin-left: 3px !important; }
+  body.shorts .panel > div:nth-child(3) { display: none; }
+  body.shorts .panel .row { gap: 4px; }
+  body.shorts #actions { grid-template-columns: repeat(4, 1fr); }
+  body.shorts .mv { font-size: 9px; padding: 4px 3px; align-items: center; text-align: center; line-height: 1.1; }
+  body.shorts .mv small { display: none; }
+  body.shorts .megabtn { font-size: 9px; }
 </style>
 </head>
 <body>
+<!-- everything that appears in recordings lives in #frame -->
+<div id="frame">
+  <div id="fxLayer"></div>
+  <div id="moveBanner"></div>
+  <div id="bigText"></div>
+  <div id="introLayer" class="hidden"></div>
 
-
-<div id="hud" class="hidden">
-  <div class="panel" id="panel0"></div>
-  <div class="panel" id="panel1"></div>
-  <div id="bottom">
-    <div id="msg"></div>
-    <div id="actions"></div>
-    <div id="switches"></div>
+  <div id="hud" class="hidden">
+    <div class="panel" id="panel0"></div>
+    <div class="panel" id="panel1"></div>
+    <div id="bottom">
+      <div id="msg"></div>
+      <div id="actions"></div>
+      <div id="switches"></div>
+    </div>
   </div>
-</div>
 
-<div id="battleCtl" class="hidden">
-  <button id="ctlPause" title="Pause (Esc / P)">⏸</button>
-  <button id="ctlRestart" title="Restart battle">↻</button>
-  <button id="ctlExit" title="Exit to team builder">✕</button>
+  <div id="battleCtl" class="hidden">
+    <button id="ctlPause" title="Pause (Esc / P)">⏸</button>
+    <button id="ctlRestart" title="Restart battle">↻</button>
+    <button id="ctlExit" title="Exit to team builder">✕</button>
+  </div>
+  <button id="recBtn" class="hidden" title="Record (R)">REC</button>
+
+  <div class="overlay center hidden" id="intro"></div>
+
+  <div class="overlay center hidden" id="pauseMenu">
+    <h1 class="logo" style="font-size:46px">Paused</h1>
+    <div style="display:flex; flex-direction:column; gap:12px; min-width:260px;">
+      <button class="btn" id="pmResume">▶ Resume</button>
+      <button class="btn alt" id="pmRestart">↻ Restart battle</button>
+      <button class="btn alt" id="pmExit">✕ Exit to team builder</button>
+    </div>
+    <div style="color:#94a3b8; font-size:13px">Esc or P to pause / resume</div>
+  </div>
+
+  <div class="overlay center hidden" id="endScreen">
+    <h1 class="logo" id="endTitle" style="font-size:52px"></h1>
+    <div id="endSub" style="font-size:18px;color:#cbd5e1"></div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+      <button class="btn" id="rematchBtn">Rematch</button>
+      <button class="btn alt" id="randomBattleBtn">New Random Battle</button>
+      <button class="btn alt" id="thumbBtn">🖼 Thumbnail</button>
+      <button class="btn alt" id="builderBtn">Team Builder</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="bracket"></div>
 </div>
-<button id="recBtn" class="hidden" title="Record (R)">REC</button>
 <div id="toast"></div>
 
 <!-- Team builder -->
@@ -180,6 +401,15 @@
     <label title="Which Pokémon the Random buttons can pick">Random pool <select id="setPool"><option value="final">Fully evolved</option><option value="any">Any Pokémon</option></select></label>
     <label><input type="checkbox" id="setAuto"> Auto-play next random battle (CPU vs CPU)</label>
     <label><input type="checkbox" id="setMute"> Mute cries</label>
+  </div>
+  <div class="topbar broadcast-row">
+    <label>🎵 Music <input type="range" id="setMusic" min="0" max="1" step="0.05" value="0.6"></label>
+    <label>🔊 Effects <input type="range" id="setSfx" min="0" max="1" step="0.05" value="0.85"></label>
+    <label><input type="checkbox" id="setHpBars" checked> HP bars over Pokémon</label>
+    <label><input type="checkbox" id="setHighlights" checked> Highlights reel</label>
+    <label><input type="checkbox" id="setReplays" checked> Final-blow replay</label>
+    <label><input type="checkbox" id="setShorts"> 📱 Shorts mode (9:16)</label>
+    <label>Channel <input id="setChannel" type="text" placeholder="your channel name" maxlength="28"></label>
   </div>
   <div class="main">
     <section class="pane">
@@ -201,37 +431,20 @@
     </section>
   </div>
   <div class="footer">
+    <button class="btn alt" id="recordsBtn">📊 Records</button>
+    <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
     <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
     <button class="btn alt" id="randomBoth">Random Both Teams</button>
     <button class="btn" id="startBtn">Start Battle!</button>
   </div>
 </div>
 
-<div class="overlay center hidden" id="intro"></div>
-
-<div class="overlay center hidden" id="pauseMenu">
-  <h1 class="logo" style="font-size:46px">Paused</h1>
-  <div style="display:flex; flex-direction:column; gap:12px; min-width:260px;">
-    <button class="btn" id="pmResume">▶ Resume</button>
-    <button class="btn alt" id="pmRestart">↻ Restart battle</button>
-    <button class="btn alt" id="pmExit">✕ Exit to team builder</button>
-  </div>
-  <div style="color:#94a3b8; font-size:13px">Esc or P to pause / resume</div>
-</div>
-
-<div class="overlay center hidden" id="endScreen">
-  <h1 class="logo" id="endTitle" style="font-size:52px"></h1>
-  <div id="endSub" style="font-size:18px;color:#cbd5e1"></div>
-  <div style="display:flex; gap:12px;">
-    <button class="btn" id="rematchBtn">Rematch</button>
-    <button class="btn alt" id="randomBattleBtn">New Random Battle</button>
-    <button class="btn alt" id="builderBtn">Team Builder</button>
-  </div>
-</div>
+<div class="overlay hidden" id="tourneySetup"></div>
+<div class="overlay hidden" id="records"></div>
 
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The 3D engine needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
 <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
-<script type="module" src="boot.mjs" data-scripts="data.js,models.js,core.js,arenas.js,actors.js,trainers.js,vfx.js,game.js"></script>
+<script type="module" src="boot.mjs" data-scripts="data.js,models.js,core.js,arenas.js,actors.js,trainers.js,audio.js,vfx.js,broadcast.js,tournament.js,game.js"></script>
 </body>
 </html>

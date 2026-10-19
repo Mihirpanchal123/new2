@@ -384,40 +384,67 @@ function homeStep(a, dt) {
 // ---------------------------------------------------------------------
 //  Camera director: high-angle broadcast view with close-ups
 // ---------------------------------------------------------------------
-const Cam = { target: new V3(0, 0.8, 0), dist: 25, elev: 0.9, mode: 'overview', a: 0, b: 1, point: new V3(), pointDist: 12, shake: 0, punch: 0 };
-World.overview = () => { Cam.mode = 'overview'; };
-World.focusMove = (a, b) => { Cam.mode = 'move'; Cam.a = a; Cam.b = b; };
-World.focusOne = p => { Cam.mode = 'one'; Cam.a = p; };
-World.focusPoint = (v, dist = 12) => { Cam.mode = 'point'; Cam.point.copy(v); Cam.pointDist = dist; };
+const Cam = {
+  target: new V3(0, 0.8, 0), dist: 25, elev: 0.9, az: 0, mode: 'overview', a: 0, b: 1,
+  point: new V3(), pointDist: 12, pointElev: 0.8, oneElev: 0.55, oneDist: 1, orbitSpeed: 0.5,
+  shake: 0, punch: 0, baseAz: 0, shorts: false, script: null
+};
+World.overview = () => { Cam.mode = 'overview'; Cam.script = null; };
+World.focusMove = (a, b) => { Cam.mode = 'move'; Cam.a = a; Cam.b = b; Cam.script = null; };
+// close-up on one Pokémon; elev 0.2 = dramatic low angle, 0.9 = high
+World.focusOne = (p, { elev = 0.55, dist = 1 } = {}) => { Cam.mode = 'one'; Cam.a = p; Cam.oneElev = elev; Cam.oneDist = dist; Cam.script = null; };
+// az (optional): absolute viewing direction, e.g. to look at a trainer from the field side
+World.focusPoint = (v, dist = 12, elev = 0.8, az = null) => { Cam.mode = 'point'; Cam.point.copy(v); Cam.pointDist = dist; Cam.pointElev = elev; Cam.pointAz = az; Cam.script = null; };
+// slowly circle a point (victory shots)
+World.orbit = (v, dist = 9, elev = 0.35, speed = 0.45) => { Cam.mode = 'orbit'; Cam.point.copy(v); Cam.pointDist = dist; Cam.pointElev = elev; Cam.orbitSpeed = speed; Cam.script = null; };
+// fully scripted camera (intro fly-over): fn(dt, camera) returns false when done
+World.camScript = fn => { Cam.script = fn; };
 World.shake = amount => { Cam.shake = Math.max(Cam.shake, amount); };
 World.punch = amount => { Cam.punch = Math.max(Cam.punch, amount); };
+// Shorts mode: tall frame, so look down the battle axis (one Pokémon near, one far)
+World.setShorts = on => { Cam.shorts = on; Cam.baseAz = on ? Math.PI / 2 : 0; };
+World.camState = () => ({ target: Cam.target.clone(), dist: Cam.dist, elev: Cam.elev, az: Cam.az });
 const camWant = new V3();
 function updateCamera(dt, t) {
-  let dist = 25;
+  if (Cam.script) {
+    if (Cam.script(dt, camera) !== false) return;
+    Cam.script = null;          // scripts leave Cam.target/dist/elev/az where they want the hand-off
+  }
+  let dist = Cam.shorts ? 23 : 25, elev = 0.9;
   camWant.set(0, 0.8, 0);
   const vis = actors.filter(a => a.visible);
+  let az = Cam.baseAz + Math.sin(t * 0.1) * 0.16;
   if (Cam.mode === 'move' && actors[Cam.a].visible) {
     const A = actors[Cam.a].root.position, B = actors[Cam.b].visible ? actors[Cam.b].root.position : A;
     camWant.set((A.x + B.x) / 2, 1.2, (A.z + B.z) / 2);
     dist = 12 + A.distanceTo(B) * 0.55;
+    elev = 0.72;
   } else if (Cam.mode === 'one' && actors[Cam.a].visible) {
     actors[Cam.a].anchor('center', camWant);
-    dist = 6.5 + actors[Cam.a].height * 1.6;
-  } else if (Cam.mode === 'point') {
-    camWant.copy(Cam.point); dist = Cam.pointDist;
+    dist = (6.5 + actors[Cam.a].height * 1.6) * Cam.oneDist;
+    elev = Cam.oneElev;
+    // look at the Pokémon's front-ish side rather than its back
+    if (!Cam.shorts) az = Cam.baseAz + (Cam.a === 0 ? -0.35 : 0.35);
+  } else if (Cam.mode === 'point' || Cam.mode === 'orbit') {
+    camWant.copy(Cam.point); dist = Cam.pointDist; elev = Cam.pointElev;
+    if (Cam.mode === 'orbit') { Cam.orbitAng = (Cam.orbitAng || 0) + dt * Cam.orbitSpeed; az = Cam.baseAz + Cam.orbitAng; }
+    else if (Cam.pointAz !== null && Cam.pointAz !== undefined) az = Cam.pointAz;
   } else if (vis.length) {
     vis.forEach(a => { camWant.x += a.pos.x / vis.length * 0.5; camWant.z += a.pos.z / vis.length * 0.5; });
   }
+  if (Cam.mode !== 'orbit') Cam.orbitAng = 0;
   const k = 1 - Math.exp(-dt * 2.4 / Math.max(SPEED, 0.3));
   Cam.target.lerp(camWant, k);
   Cam.dist = lerp(Cam.dist, dist, k);
+  Cam.elev = lerp(Cam.elev, elev, k);
+  let dAz = az - Cam.az; dAz = Math.atan2(Math.sin(dAz), Math.cos(dAz));
+  Cam.az += dAz * (Cam.mode === 'orbit' ? 1 : k);
   Cam.punch = Math.max(0, Cam.punch - dt * 2.5);
   const punchDist = Cam.dist * (1 - 0.18 * Math.sin(Math.min(1, Cam.punch) * Math.PI / 2));
-  const az = Math.sin(t * 0.1) * 0.16;
   camera.position.set(
-    Cam.target.x + Math.sin(az) * Math.cos(Cam.elev) * punchDist,
+    Cam.target.x + Math.sin(Cam.az) * Math.cos(Cam.elev) * punchDist,
     Cam.target.y + Math.sin(Cam.elev) * punchDist,
-    Cam.target.z + Math.cos(az) * Math.cos(Cam.elev) * punchDist
+    Cam.target.z + Math.cos(Cam.az) * Math.cos(Cam.elev) * punchDist
   );
   if (Cam.shake > 0) {
     camera.position.x += (Math.random() - 0.5) * Cam.shake;
@@ -469,7 +496,8 @@ World.sendOut = async (p, mon) => {
   const formJob = a.setForm(mon.modelKey, mon.sprite);
   const spot = a.home.set(SPAWN_X[p], 0, 0).clone();
   a.pos.copy(spot); a.offset.set(0, 0, 0);
-  World.focusPoint(new V3((TRAINER_X[p] + spot.x) / 2, 1, spot.z / 2), 13);
+  const ts = World.trainers ? World.trainers.spot(p) : new V3(TRAINER_X[p], 0, 0);
+  World.focusPoint(new V3((ts.x + spot.x) / 2, 1, (ts.z + spot.z) / 2), 13);
   const epoch = World.epoch;
   const hand = World.trainers ? await World.trainers.throwBall(p) : new V3(TRAINER_X[p], 1.6, 0);
   ball.visible = true;
@@ -497,6 +525,13 @@ World.sendOut = async (p, mon) => {
   if (!a.play('roar')) a.setPose({ headUp: 1, jaw: 1, arms: 0.4 }, 0.6);
   World.overview();
   a.locked = false; a.pause = 0;
+};
+World.placeInstant = async (p, mon) => {
+  const a = actors[p];
+  await a.setForm(mon.modelKey, mon.sprite);
+  a.pos.copy(a.home.set(SPAWN_X[p], 0, 0)); a.offset.set(0, 0, 0);
+  a.visible = true; a.scale = 1; a.opacity = 1; a.lift = 0; a.flash = 0; a.roll = 0; a.locked = false;
+  a.yaw = p === 0 ? Math.PI / 2 : -Math.PI / 2;
 };
 World.recall = async p => {
   const a = actors[p];

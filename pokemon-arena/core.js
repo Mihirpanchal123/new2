@@ -4,6 +4,7 @@
 // =====================================================================
 let SPEED = 1;                 // global animation speed (1 = normal, lower = faster)
 let PAUSED = false;            // freezes the game clock (tweens, timers, animation, effects)
+let TIME_SCALE = 1;            // < 1 = slow motion (crits, knockouts, replays)
 const FIELD = { w: 16, d: 10 };            // field size in theme units (themes are drawn at this size)
 const ARENA_SCALE = 1.35;                  // ...and scaled up in the world
 const ROAM = { hx: 6.2 * ARENA_SCALE, hz: 3.7 * ARENA_SCALE };
@@ -13,15 +14,18 @@ const World = {};
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-renderer.setSize(innerWidth, innerHeight);
+// the 3D view lives in #frame (full window, or a 9:16 column in Shorts mode)
+const frameEl = document.getElementById('frame');
+const frameSize = () => [frameEl.clientWidth || innerWidth, frameEl.clientHeight || innerHeight];
+renderer.setSize(...frameSize());
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
-document.body.prepend(renderer.domElement);
+frameEl.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 300);
+const camera = new THREE.PerspectiveCamera(38, frameSize()[0] / frameSize()[1], 0.1, 300);
 scene.add(camera);
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0x556b44, 2.4);
@@ -43,12 +47,14 @@ composer.addPass(new THREE.OutputPass());
 World.bloom = bloom;
 World.bloomBase = 0.42;
 
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+World.resize = () => {
+  const [w, h] = frameSize();
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
-});
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+};
+addEventListener('resize', World.resize);
 
 // ---------------------------------------------------------------------
 //  Timing: tweens + per-frame hooks (all scaled by SPEED)
@@ -113,13 +119,18 @@ const shadowTex = canvasTex(64, 64, ctx => {
 //  Render loop: updaters register in order (actors, trainers, vfx, camera)
 // ---------------------------------------------------------------------
 const updaters = [];
+const captureWaiters = [];
+// grab the next rendered frame as an image (for thumbnails)
+World.captureFrame = () => new Promise(res => captureWaiters.push(res));
+// slow motion for dramatic moments (real-time duration, independent of the game clock)
+World.slowmo = (scale, ms) => new Promise(res => { TIME_SCALE = scale; setTimeout(() => { TIME_SCALE = 1; res(); }, ms); });
 const clock = new THREE.Clock();
 let gameTime = 0;
 function startLoop() {
   (function loop() {
     requestAnimationFrame(loop);
     const realDt = Math.min(clock.getDelta(), 0.05);
-    const dt = PAUSED ? 0 : realDt;
+    const dt = PAUSED ? 0 : realDt * TIME_SCALE;
     gameTime += dt;
     const t = gameTime;
     for (let i = tweens.length - 1; i >= 0; i--) {
@@ -133,5 +144,6 @@ function startLoop() {
     for (const u of updaters) u(dt, t);
     bloom.strength = lerp(bloom.strength, World.bloomBase, 1 - Math.exp(-dt * 3));
     composer.render(dt);
+    if (captureWaiters.length) { const url = renderer.domElement.toDataURL('image/jpeg', 0.92); captureWaiters.splice(0).forEach(fn => fn(url)); }
   })();
 }

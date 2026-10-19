@@ -164,9 +164,13 @@ class Trainer {
     const o = { ...(OUTFITS[outfitKey] || OUTFITS.red), name };
     this.model = buildTrainer(o, this.p);
     this.root.add(this.model.root);
-    this.root.position.set(TRAINER_X[this.p], 0, 0.6);
+    this.placeAtSpot();
     this.root.scale.setScalar(0.95);
-    this.baseYaw = this.p === 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
+  }
+  placeAtSpot() {
+    const s = trainerSpot(this.p);
+    this.root.position.copy(s);
+    this.baseYaw = Cam.shorts ? Math.atan2(-s.x, -s.z) : (this.p === 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45);
     this.root.rotation.y = this.baseYaw;
   }
   pose(values, hold) {
@@ -195,7 +199,29 @@ class Trainer {
   hand(out = new V3()) { return this.model.J.rHand.getWorldPosition(out); }
 }
 
+// landscape: behind each Pokémon at the field ends; Shorts (vertical camera along the battle line): beside the field
+function trainerSpot(p) {
+  return Cam.shorts ? new V3(TRAINER_X[p] * 0.7, 0, p ? 5.6 : -5.6) : new V3(TRAINER_X[p], 0, 0.6);
+}
 const trainerObjs = [new Trainer(0), new Trainer(1)];
+
+// stage spotlights for the walk-out (always in the scene so no shader recompiles; off by default)
+const spotTex = canvasTex(64, 256, (c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.55)'); c.fillStyle = g; c.fillRect(0, 0, w, h); }, 1, 1, false);
+const spots = trainerObjs.map((tr, p) => {
+  const light = new THREE.SpotLight(p ? 0xffb4b4 : 0xb4ccff, 0, 30, 0.32, 0.5, 1);
+  light.position.set(TRAINER_X[p], 14, 3);
+  scene.add(light); scene.add(light.target);
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 2.2, 14, 24, 1, true),
+    new THREE.MeshBasicMaterial({ map: spotTex, color: p ? 0xffc4c4 : 0xc4d8ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  cone.renderOrder = 28; scene.add(cone);
+  return { light, cone };
+});
+function walkCycle(tr, k) {
+  const s = Math.sin(k * Math.PI * 2);
+  tr.tgt.lThigh = [-s * 0.5, 0, 0]; tr.tgt.rThigh = [s * 0.5, 0, 0];
+  tr.tgt.lKnee = [Math.max(0, s) * 0.6, 0, 0]; tr.tgt.rKnee = [Math.max(0, -s) * 0.6, 0, 0];
+  tr.tgt.lShoulder = [s * 0.5, 0, 0.12]; tr.tgt.rShoulder = [-s * 0.5, 0, -0.12];
+}
 const hop = async (tr, n = 1, h = 0.35) => {
   for (let i = 0; i < n; i++) await tween(0.32, k => { tr.jump = Math.sin(k * Math.PI) * h; });
   tr.jump = 0;
@@ -247,7 +273,30 @@ World.trainers = {
     tr.pose({ rShoulder: [-3.0, 0, -0.1], rElbow: [-0.2, 0, 0], lShoulder: [-0.4, 0, 0.3], lElbow: [-1.6, 0, 0] });
     await hop(tr, 3, 0.4);
   },
-  reset() { trainerObjs.forEach(t => { t.speedK = 10; t.rest(); t.jump = 0; t.model.heldBall.visible = false; t.model.keyStone.material.color.setRGB(1, 0.6, 1); t.model.keyStone.scale.setScalar(1); }); }
+  // walk out from behind the stands to the trainer box with a spotlight following
+  async walkIn(p, dur = 1.6) {
+    const tr = trainerObjs[p], sp = spots[p];
+    const end = trainerSpot(p), start = end.clone().add(new V3(Math.sign(end.x) * 6, 0, Cam.shorts ? Math.sign(end.z) * 3 : 3.4));
+    tr.root.position.copy(start);
+    tr.root.rotation.y = Math.atan2(end.x - start.x, end.z - start.z);
+    sp.light.intensity = 0; sp.cone.material.opacity = 0;
+    await tween(dur, k => {
+      tr.root.position.lerpVectors(start, end, k);
+      walkCycle(tr, k * 3);
+      sp.light.intensity = Math.min(1, k * 3) * 70; sp.cone.material.opacity = Math.min(1, k * 3) * 0.28;
+      sp.light.position.set(tr.root.position.x, 14, tr.root.position.z + 2.4); sp.light.target.position.copy(tr.root.position);
+      sp.cone.position.set(tr.root.position.x, 7, tr.root.position.z + 1.2);
+    });
+    tr.rest();
+    await tween(0.35, k => { tr.root.rotation.y = lerp(tr.root.rotation.y, tr.baseYaw, k); });
+    tr.root.rotation.y = tr.baseYaw;
+  },
+  spotsOff() { spots.forEach(s => { s.light.intensity = 0; s.cone.material.opacity = 0; }); },
+  // put both trainers off-stage (before the walk-out)
+  spot: p => trainerSpot(p),
+  hide() { trainerObjs.forEach((tr, p) => { const s = trainerSpot(p); tr.root.position.set(s.x + Math.sign(s.x) * 6, 0, s.z + 3.4); }); },
+  place() { trainerObjs.forEach(tr => tr.placeAtSpot()); },
+  reset() { this.spotsOff(); this.place(); trainerObjs.forEach(t => { t.speedK = 10; t.rest(); t.jump = 0; t.model.heldBall.visible = false; t.model.keyStone.material.color.setRGB(1, 0.6, 1); t.model.keyStone.scale.setScalar(1); }); }
 };
 
 updaters.push((dt, t) => trainerObjs.forEach(tr => tr.update(dt, t)));

@@ -6,6 +6,9 @@
 - **Trainers:** a 3D trainer per player (outfits: Red, Blue, Leaf, May, Dawn, Ethan; custom names). They throw the Poké Ball, point to command, raise their Key Stone for Mega Evolution, cheer and despair.
 - **3D move effects:** GPU particles, energy beams, lightning, shockwaves, debris, ground scorch/crack/frost marks, dynamic lights and bloom. Every move has an effect styled by its type (beam, stream, orb, bolt, sky strike, quake, rock slide, slash, bite, punch, buff, heal, drain, powder, shield...).
 - **Broadcast camera:** high-angle view with close-ups on attacks, throws, Mega Evolutions and faints.
+- **Broadcast presentation:** original synthesized music that intensifies in pinch moments, move sound effects, live crowd, anime-style move banners, floating damage numbers, CRITICAL / SUPER EFFECTIVE pop-ups and HP bars over each Pokémon.
+- **Cinematic:** intro with drone fly-over, title card, trainer walk-outs with spotlights, team reveal, "who will win?" prompt and 3-2-1 countdown (click or Space skips it); attacker close-ups, camera follows projectiles, slow motion on crits/KOs, low-angle Mega Evolution, a replay of the battle-winning blow and a victory orbit.
+- **Series & reach:** 🏆 8-trainer tournaments with 12 original CPU trainers (bracket screens, champion ceremony, resumable), 📊 saved records / Hall of Fame, an automatic highlights reel after each battle (saved as its own video while recording), 🖼 auto thumbnails, and 📱 Shorts mode (9:16 — the recording is cropped to the vertical frame in Chrome/Edge).
 - **6 arenas:** Pokémon Stadium, Viridian Forest, Mt. Chimney Crater, Sunny Beach, Ice Path Cavern and Lumiose Night Arena.
 
 ## Run it

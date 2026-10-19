@@ -162,6 +162,10 @@ async function startRecording() {
   } catch { toast('Recording cancelled.'); return; }
   Rec.mime = pickMime();
   Rec.stream.getVideoTracks()[0].addEventListener('ended', stopRecording);
+  if (prefs.shorts) {
+    try { await Rec.stream.getVideoTracks()[0].cropTo(await CropTarget.fromElement(document.getElementById('frame'))); }
+    catch (e) { toast('This browser cannot crop the recording to 9:16 — crop it in your editor.', 5000); }
+  }
   beginSegment();
   updateRecButtons();
   document.title = '● REC — Pokémon Arena';
@@ -216,6 +220,8 @@ addEventListener('keydown', e => {
 // =====================================================================
 const $ = id => document.getElementById(id);
 const PLAYER = ['Player 1', 'Player 2'];
+let prefs = {};
+try { prefs = JSON.parse(localStorage.getItem('pokemon-arena-prefs') || '{}'); } catch (e) {}
 const settings = { teamSize: 3, level: 50, auto: false, theme: 'random', outfits: ['red', 'blue'], hpMult: 1, pool: 'final' };
 const teams = [[], []];               // builder specs: { species, level, mega, moves }
 const controllers = ['human', 'cpu'];
@@ -244,11 +250,16 @@ function makeMon(spec, owner) {
 }
 
 function updateHud() {
+  if (state && state.started && battleActive) {
+    const pinch = [0, 1].some(p => { const m = active(p); return m && (m.hp / m.maxhp < 0.25 || state.players[p].team.filter(x => x.hp > 0).length === 1); });
+    AudioFX.Music.setLevel(pinch ? 2 : 1);
+  }
   for (const p of [0, 1]) {
     const m = active(p);
     if (!m) continue;
     World.setTint(p, m.status);
     World.setState(p, m.status, m.hp / m.maxhp);
+    Broadcast.setName(p, m.name);
     const pct = Math.max(0, m.hp / m.maxhp * 100);
     const color = pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444';
     const st = m.status ? STATUS_INFO[m.status] : null;
@@ -505,6 +516,9 @@ async function hurt(p, amount) {
 async function faint(p) {
   const m = active(p);
   playCry(m, 0.8);
+  SFX.faint();
+  Broadcast.pop(p, 'ko');
+  World.cheer(1);
   World.focusOne(p);
   World.trainers.dismay(p);
   if (World.actors[1 - p].visible) World.trainers.cheer(1 - p);
@@ -527,6 +541,7 @@ async function doSwitch(p, idx, forced) {
   m.turnsOut = 0;
   World.setSpeedStat(p, m.stats.spe);
   updateHud();
+  if (forced && state.started && pl.team.filter(x => x.hp > 0).length === 1) { Broadcast.bigText('LAST POKéMON!', 'last', 1400); World.cheer(0.9); }
   const out = World.sendOut(p, m);
   later(() => playCry(m), 550);
   await out;
@@ -538,8 +553,11 @@ async function megaEvolve(p) {
   state.players[p].usedMega = true;
   await say(`${lbl(u)}'s ${f.stone} is reacting to <b class="p${p}">${PLAYER[p]}</b>'s Key Stone!`, 1300);
   await World.trainers.mega(p);
-  World.focusOne(p);
+  Broadcast.banner('MEGA EVOLUTION!', f.types[0]);
+  World.focusOne(p, { elev: 0.2, dist: 0.85 });
+  later(() => Broadcast.captureThumb(6, `MEGA ${u.name.toUpperCase()}!`), 1500);
   await VFX.other('megaevo', p);
+  World.focusOne(p, { elev: 0.22, dist: 0.85 });
   u.modelKey = f.name;
   u.sprite = f.sprite;
   await World.megaSwap(p, u);
@@ -592,6 +610,7 @@ async function useMove(p, idx) {
 
   if (idx >= 0) m.ppLeft--;
   World.trainers.command(p);
+  Broadcast.banner(m.name, m.type || 'Normal');
   await say(`${lbl(u)} used <b>${m.name}</b>!`, 900);
 
   const selfTarget = SELF_TARGETS.has(m.target) || m.id === 'rest';
@@ -599,6 +618,7 @@ async function useMove(p, idx) {
   if (m.id === 'fake-out' && u.turnsOut > 0) { await say('But it failed!'); return; }
   if (!selfTarget && t.vol.protect) {
     await VFX.move(m.id, p, 1 - p, { blocked: true });
+    Broadcast.pop(1 - p, 'block');
     await say(`${lbl(t)} protected itself!`);
     return;
   }
@@ -606,6 +626,8 @@ async function useMove(p, idx) {
     const st = Math.max(-6, Math.min(6, u.stages.acc - t.stages.eva));
     if (rand() * 100 >= m.acc * accMult(st)) {
       await Promise.all([VFX.move(m.id, p, 1 - p, { miss: true }), wait(120).then(() => World.dodge(1 - p, p))]);
+      Broadcast.pop(1 - p, 'miss');
+      AudioFX.Crowd.gasp();
       await say(`${lbl(u)}'s attack missed!`);
       return;
     }
@@ -653,7 +675,7 @@ async function useMove(p, idx) {
   const eff = m.type ? effectiveness(m.type, t.types) : 1;
   if (['earthquake', 'magnitude', 'bulldoze'].includes(m.id)) World.shake(0.4);
   await VFX.move(m.id, p, 1 - p, { eff });
-  if (eff === 0) { await say(`It doesn't affect ${lbl(t)}...`); return; }
+  if (eff === 0) { Broadcast.pop(1 - p, 'immune'); AudioFX.Crowd.gasp(); await say(`It doesn't affect ${lbl(t)}...`); return; }
 
   let hits = 1;
   if (m.maxHits) {
@@ -670,10 +692,23 @@ async function useMove(p, idx) {
     if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
     t.hp -= dmg; total += dmg; landed++;
     if (crit) critHappened = true;
+    u.dmgDealt = (u.dmgDealt || 0) + dmg;
     updateHud();
+    Broadcast.damage(1 - p, dmg, { crit, eff });
+    if (crit || t.hp <= 0) World.slowmo(0.35, 900);
     await World.hit(1 - p, p, eff * (crit ? 1.5 : 1) * (m.power || 60) / 80, { eff, crit, ko: t.hp <= 0 });
     if (crit && hits > 1) await say('A critical hit!', 700);
   }
+  if (critHappened) Broadcast.pop(1 - p, 'crit'); else if (eff > 1) Broadcast.pop(1 - p, 'super'); else if (eff < 1) Broadcast.pop(1 - p, 'weak');
+  // remember big moments for the highlights reel and thumbnail
+  const ko = t.hp <= 0;
+  const score = (ko ? 3 : 0) + (critHappened ? 2 : 0) + (eff > 1 ? 1.5 : 0) + total / t.maxhp * 2;
+  if (score >= 2) {
+    Broadcast.addMoment({ score, side: p, moveId: m.id, type: m.type || 'Normal', label: `${u.name}'s ${m.name}`, damage: total, power: eff * (m.power || 60) / 80,
+      outcome: { eff, crit: critHappened, ko }, a: { modelKey: u.modelKey, sprite: u.sprite }, d: { modelKey: t.modelKey, sprite: t.sprite } });
+    Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : critHappened ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!');
+  }
+  if (ko) u.kos = (u.kos || 0) + 1;
   if (critHappened && hits === 1) await say('A critical hit!', 900);
   if (eff > 1 || critHappened) World.trainers.cheer(p);
   if (eff > 1) await say("It's super effective!", 900);
@@ -686,6 +721,16 @@ async function useMove(p, idx) {
     await say(`${lbl(t)} had its energy drained!`);
   }
 
+  if (t.hp <= 0 && prefs.replays !== false && !state.players[1 - p].team.some(x => x.hp > 0)) {
+    Broadcast.bigText('REPLAY', 'replay', 1100);
+    SFX.banner();
+    await wait(800);
+    const slow = World.slowmo(0.4, 2800);
+    await VFX.move(m.id, p, 1 - p, { eff });
+    World.focusOne(1 - p, { elev: 0.18, dist: 0.9 });
+    await World.hit(1 - p, p, 2, { eff, crit: critHappened, ko: true });
+    await slow;
+  }
   if (t.hp <= 0) await faint(1 - p);
   else {
     if (m.ailment !== 'none' && m.ailmentChance > 0 && rand() * 100 < m.ailmentChance) await inflict(t, m.ailment, m.name);
@@ -769,7 +814,7 @@ async function resolveTurn(actions) {
 // =====================================================================
 //  BATTLE FLOW
 // =====================================================================
-let lastSpecs = null, autoTimer = null;
+let lastSpecs = null, lastMeta = {}, autoTimer = null;
 
 function showIntro(players) {
   const side = p => `<div class="vsteam"><div class="vsname p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}${controllers[p] === 'cpu' ? ' (CPU)' : ''}</div>
@@ -779,12 +824,12 @@ function showIntro(players) {
   $('intro').classList.remove('hidden');
 }
 
-async function startBattle(specs) {
+async function startBattle(specs, meta = {}) {
   clearTimeout(autoTimer);
-  lastSpecs = specs;
+  lastSpecs = specs; lastMeta = meta;
   state = {
     players: [0, 1].map(p => ({ team: specs[p].map(s => makeMon(s, p)), active: 0, usedMega: false })),
-    token: ++battleToken
+    token: ++battleToken, meta, started: false
   };
   battleActive = true;
   setPaused(false);
@@ -804,9 +849,18 @@ async function runBattle() {
   $('panel0').innerHTML = $('panel1').innerHTML = $('msg').innerHTML = '';
   clearButtons();
   updateRecButtons();
-  showIntro(state.players);
-  await wait(2800);
-  $('intro').classList.add('hidden');
+  Broadcast.resetBattle();
+  $('bracket').classList.add('hidden');
+  const arena = World.themeName(state.theme);
+  await Broadcast.intro({
+    battleNo: Stats.battleNo(), names: [PLAYER[0], PLAYER[1]], arena,
+    subtitle: state.meta.subtitle ? `${state.meta.subtitle} · ${arena}` : arena,
+    records: [Stats.recordText(PLAYER[0]), Stats.recordText(PLAYER[1])],
+    teams: state.players.map(pl => pl.team.map(m => ({ name: m.name, sprite: m.sprite }))),
+    lines: state.meta.lines
+  });
+  guard();
+  state.started = true;
   $('hud').classList.remove('hidden');
 
   await say('The battle begins!', 900);
@@ -821,21 +875,43 @@ async function runBattle() {
   }
   if (!battleOver()) await say('The turn limit was reached! The side with more HP left wins.', 1600);
   const w = battleOver() ? (hasAlive(0) ? 0 : 1) : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
+  AudioFX.Music.victory();
+  World.cheer(1);
+  Broadcast.bigText(`${PLAYER[w]} WINS!`, 'start', 1800);
   await say(`<b class="p${w}">${PLAYER[w]}</b> wins the battle!`, 1800);
   World.trainers.celebrate(w);
   World.trainers.dismay(1 - w, 4);
   VFX.victory(World.trainers.list[w].root.position);
-  World.focusPoint(World.trainers.list[w].root.position.clone().setY(1.4), 9);
-  await wait(1800);
+  const endL = state.meta.endLines;
+  if (endL) { Broadcast.speech(w, endL[w] && endL[w].win, 2600); Broadcast.speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2600); }
+  const champ = World.actors[w].visible ? World.actors[w].root.position : World.trainers.list[w].root.position;
+  World.orbit(champ.clone().lerp(World.trainers.list[w].root.position, 0.5).setY(1.4), 11, 0.3, 0.35);
+  await wait(3600);
   guard();
+  Stats.saveBattle({
+    names: [PLAYER[0], PLAYER[1]], winner: w,
+    mons: state.players.flatMap((pl, side) => pl.team.map(m => ({ species: m.species, name: m.name, side, kos: m.kos || 0, dmg: m.dmgDealt || 0 })))
+  });
+  if (prefs.highlights !== false && Broadcast.hasMoments()) {
+    splitRecording('highlights');
+    await Broadcast.reel();
+    guard();
+    splitRecording('battle');
+  }
   battleActive = false;
   updateRecButtons();
+  if (Tour.onBattleEnd(w)) return;
   showEnd(w);
 }
 
 // cancel the running battle: stop its flow, timers, effects and menus
 function abortBattle() {
   battleToken++;
+  TIME_SCALE = 1;
+  AudioFX.Music.stop();
+  AudioFX.Crowd.stop();
+  Broadcast.resetBattle();
+  World.trainers.place();
   battleActive = false;
   for (const rej of pendingChoices) rej(new BattleAbort());
   pendingChoices.clear();
@@ -849,6 +925,9 @@ function abortBattle() {
 }
 function exitToBuilder() {
   abortBattle();
+  Tour.inMatch = false;
+  Tour.restore();
+  hideBracket();
   clearTimeout(autoTimer);
   $('endScreen').classList.add('hidden');
   $('intro').classList.add('hidden');
@@ -857,10 +936,12 @@ function exitToBuilder() {
   updateRecButtons();
   renderTeams();
 }
-function restartBattle() { abortBattle(); startBattle(lastSpecs); }
+function restartBattle() { abortBattle(); startBattle(lastSpecs, lastMeta); }
 function setPaused(v) {
   v = !!v && battleActive;
   PAUSED = v;
+  AudioFX.suspend(v);
+  document.body.classList.toggle('paused', v);
   $('pauseMenu').classList.toggle('hidden', !v);
   $('ctlPause').textContent = v ? '▶' : '⏸';
   // paused time is left out of recordings
@@ -890,7 +971,15 @@ function showEnd(w) {
   }
 }
 
-$('rematchBtn').onclick = () => startBattle(lastSpecs);
+$('rematchBtn').onclick = () => startBattle(lastSpecs, lastMeta);
+$('thumbBtn').onclick = async () => {
+  const url = await Broadcast.thumbnailURL([PLAYER[0], PLAYER[1]]);
+  if (!url) { toast('No big moment to capture yet — win with a crit, KO or Mega Evolution!'); return; }
+  const a = document.createElement('a'); a.href = url; a.download = `pokemon-thumbnail-${Date.now()}.png`; a.click();
+  toast('Thumbnail saved to your Downloads folder');
+};
+$('tourneyBtn').onclick = () => openTourneySetup();
+$('recordsBtn').onclick = () => openRecords();
 $('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s })))); };
 $('builderBtn').onclick = exitToBuilder;
 $('ctlPause').onclick = () => setPaused(!PAUSED);
@@ -1072,6 +1161,24 @@ $('setAuto').onchange = e => {
   if (settings.auto) { controllers[0] = controllers[1] = 'cpu'; renderTeams(); }
 };
 $('setMute').onchange = e => { muted = e.target.checked; };
+{ const visual = World.cheer; World.cheer = v => { visual(v); AudioFX.Crowd.cheer(v); }; }
+// broadcast preferences (saved in this browser)
+const savePrefs = () => { try { localStorage.setItem('pokemon-arena-prefs', JSON.stringify(prefs)); } catch (e) {} };
+const applyShorts = on => { document.body.classList.toggle('shorts', on); World.setShorts(on); World.trainers.place(); requestAnimationFrame(World.resize); };
+$('setMusic').value = prefs.music ?? 0.6; AudioFX.setVolume('music', +$('setMusic').value);
+$('setSfx').value = prefs.sfx ?? 0.85; AudioFX.setVolume('sfx', +$('setSfx').value);
+$('setHpBars').checked = prefs.hpBars !== false; Broadcast.opts.hpBars = $('setHpBars').checked;
+$('setHighlights').checked = prefs.highlights !== false;
+$('setReplays').checked = prefs.replays !== false;
+$('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
+$('setChannel').value = prefs.channel || ''; Broadcast.opts.channel = prefs.channel || '';
+$('setMusic').oninput = e => { prefs.music = +e.target.value; AudioFX.setVolume('music', prefs.music); savePrefs(); };
+$('setSfx').oninput = e => { prefs.sfx = +e.target.value; AudioFX.setVolume('sfx', prefs.sfx); savePrefs(); };
+$('setHpBars').onchange = e => { prefs.hpBars = e.target.checked; Broadcast.opts.hpBars = prefs.hpBars; savePrefs(); };
+$('setHighlights').onchange = e => { prefs.highlights = e.target.checked; savePrefs(); };
+$('setReplays').onchange = e => { prefs.replays = e.target.checked; savePrefs(); };
+$('setShorts').onchange = e => { prefs.shorts = e.target.checked; applyShorts(prefs.shorts); savePrefs(); };
+$('setChannel').oninput = e => { prefs.channel = e.target.value.trim(); Broadcast.opts.channel = prefs.channel; savePrefs(); };
 $('setLength').onchange = e => { settings.hpMult = +e.target.value; };
 $('setPool').onchange = e => { settings.pool = e.target.value; };
 World.themeKeys.forEach(k => $('setTheme').insertAdjacentHTML('beforeend', `<option value="${k}">${World.themeName(k)}</option>`));

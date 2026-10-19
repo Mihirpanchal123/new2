@@ -218,7 +218,9 @@ const VFX = (() => {
     }
     return pts;
   }
+  let lastZap = 0;
   function bolt(a, b, color, { dur = 0.5, width = 0.22, jag = 0.35 } = {}) {
+    if (performance.now() - lastZap > 140) { lastZap = performance.now(); SFX.zap(); }
     const core = new Ribbon(18, color, 4), glow = new Ribbon(18, color, 1.6);
     let t = 0, next = 0;
     run(dt => {
@@ -235,6 +237,7 @@ const VFX = (() => {
   function slash(center, color, { angle = 0, size = 1.6, dur = 0.28, width = 0.18, delay = 0, intensity = 3.5 } = {}) {
     const r = new Ribbon(20, color, intensity);
     r.mesh.visible = false;
+    later(() => SFX.slash(), delay * 1000);
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
     const ax = right.clone().multiplyScalar(Math.cos(angle)).addScaledVector(up, Math.sin(angle)), ay = right.clone().multiplyScalar(-Math.sin(angle)).addScaledVector(up, Math.cos(angle));
     let t = -delay;
@@ -390,18 +393,21 @@ const VFX = (() => {
   // outcome of the move being animated (set by move()): eff, miss, blocked
   let CUR = { eff: 1 };
   function fizzle(pos) {
+    SFX.fizzle();
     for (let i = 0; i < 14; i++) { const d = sphereDir(); ADD.spawn({ x: pos.x, y: pos.y, z: pos.z, vx: d.x * 3, vy: d.y * 3, vz: d.z * 3, drag: 5, life: 0.4, s0: 0.25, s1: 0.05, c0: C(0.7, 0.7, 0.75), intensity: 1.2, frame: TILE.spark }); }
     smoke(pos, 4, C(0.6, 0.6, 0.62), 0.8);
     airRing(pos, C(0.6, 0.6, 0.7), { to: 1.4, dur: 0.35, intensity: 1 });
     if (CUR.d !== undefined) World.shrug(CUR.d);
   }
   function blockFx(pos) {
+    SFX.block();
     const A = World.actors[CUR.d];
     shell(centerOf(CUR.d), C(0.35, 1, 0.6), { from: Math.max(A.height, A.radius * 2) * 0.7, to: Math.max(A.height, A.radius * 2) * 0.78, dur: 0.15, hold: 0.35, intensity: 2.5 });
     for (let i = 0; i < 24; i++) { const d = sphereDir(); ADD.spawn({ x: pos.x, y: pos.y, z: pos.z, vx: d.x * 7, vy: Math.abs(d.y) * 6, vz: d.z * 7, gy: -9, life: 0.5, s0: 0.3, s1: 0.05, c0: C(0.7, 1, 0.8), intensity: 2.4, frame: TILE.spark }); }
     flashLight(pos, C(0.4, 1, 0.6), { intensity: 40, dur: 0.3 });
   }
   function whiff(pos) {
+    SFX.whoosh();
     const g = v3(pos.x, 0, pos.z);
     dust(g, 8);
     groundRing(g, C(0.8, 0.8, 0.8), { to: 2, dur: 0.4, intensity: 0.8 });
@@ -490,6 +496,8 @@ const VFX = (() => {
     if (CUR.eff === 0) return fizzle(pos);
     if (CUR.eff > 1) { power *= 1.35; screenFlash(pal(type).c2, 0.18, 0.25, true); bloomKick(0.35); }
     else if (CUR.eff < 1) { power *= 0.55; ring = false; }
+    SFX.impact(type, power, CUR.eff);
+    if (CUR.eff > 1 || power >= 1.4) World.cheer(Math.min(1, 0.4 + power * 0.25));
     const P = pal(type);
     ADD.spawn({ x: pos.x, y: pos.y, z: pos.z, life: 0.22, s0: 1 * power, s1: 2.3 * power, c0: C(1, 1, 1), c1: P.c, intensity: 3, frame: TILE.glow, fadeIn: 0.01 });
     ADD.spawn({ x: pos.x, y: pos.y, z: pos.z, life: 0.3, s0: 1.6 * power, s1: 2.6 * power, c0: P.c2, intensity: 3, frame: TILE.spark, fadeIn: 0.01, rotV: 3 });
@@ -532,9 +540,11 @@ const VFX = (() => {
     const glow = ADD.spawn({ x: cur.x, y: cur.y, z: cur.z, life: 9, s0: 1.4 * size, s1: 1.4 * size, c0: P.c, intensity: 2.2, frame: TILE.glow, fadeIn: 0.02, follow: p => { p.x = cur.x; p.y = cur.y; p.z = cur.z; } });
     const light = flashLight(cur, P.c, { intensity: 35, dur: 0.1, hold: 5, follow: l => l.copy(cur) });
     const dist = from.distanceTo(to), dur = 0.35 + dist * 0.03;
+    SFX.cast(type);
     await tween(dur, k => {
       cur.lerpVectors(from, to, k); cur.y += Math.sin(k * Math.PI) * dist * 0.08;
       orb.position.copy(cur);
+      World.focusPoint(cur, 10 + dist * 0.25, 0.6);
       orb.rotation.y += 0.3;
       const P2 = pal(type);
       for (let i = 0; i < 3; i++) ADD.spawn({ x: cur.x + rnd(-0.15, 0.15) * size, y: cur.y + rnd(-0.15, 0.15) * size, z: cur.z + rnd(-0.15, 0.15) * size, vx: rnd(-0.5, 0.5), vy: rnd(-0.2, 0.6), vz: rnd(-0.5, 0.5), life: rnd(0.25, 0.5), s0: 0.45 * size, s1: 0.05, c0: P2.c2, c1: P2.c, intensity: 2.4, frame: TILE[P2.tex === 'rock' || P2.tex === 'leaf' ? 'glow' : P2.tex], rotV: rnd(-4, 4), align: P2.tex === 'flame', alignOff: -Math.PI / 2 });
@@ -549,6 +559,7 @@ const VFX = (() => {
     const { a, d, P, type, mv } = c;
     const from = mouthOf(a);
     World.cast(a);
+    SFX.beam(type, 0.75);
     charge(from, type, 0.4, 0.9);
     await wait(380);
     const to = centerOf(d), pw = power(mv);
@@ -582,6 +593,7 @@ const VFX = (() => {
     const speed = 11, life = dist / speed;
     flashLight(from, P.c, { intensity: 30, dur: 0.3, hold: 0.8 });
     flashLight(to, P.c, { intensity: 45, dur: 0.4, hold: 0.8 });
+    SFX.stream(type, 0.95);
     let t = 0;
     run(dt => {
       t += dt;
@@ -626,6 +638,7 @@ const VFX = (() => {
     const to = centerOf(d), top = to.clone().setY(16);
     screenFlash(C(0.05, 0.05, 0.12), 0.5, 0.9);
     await wait(250);
+    SFX.thunder();
     for (let i = 0; i < 3; i++) {
       bolt(top.clone().add(v3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5))), i === 2 ? to : to.clone().add(v3(rnd(-1.5, 1.5), -to.y + 0.1, rnd(-1.5, 1.5))), P.c, { dur: 0.35, width: 0.24, jag: 0.25 });
       flashLight(to, P.c, { intensity: 70, dur: 0.3 });
@@ -643,6 +656,7 @@ const VFX = (() => {
     const { a, d, mv } = c;
     const A = World.actors[a], from = A.root.position.clone(), to = World.actors[d].root.position.clone();
     await World.flex(a);
+    SFX.quake();
     World.shake(0.55);
     bloomKick(0.2);
     for (let i = 0; i < 3; i++) { groundRing(from, C(0.9, 0.7, 0.4), { to: 14, dur: 0.9, intensity: 1.5 }); dust(from, 14); await wait(140); }
@@ -657,6 +671,7 @@ const VFX = (() => {
     const { a, d, mv } = c;
     World.cast(a);
     const to = World.actors[d].root.position.clone();
+    SFX.rumble(1.3);
     for (let i = 0; i < 9; i++) {
       const start = to.clone().add(v3(rnd(-1.6, 1.6), rnd(7, 10), rnd(-1.6, 1.6)));
       debris('rock', start, v3(rnd(-0.5, 0.5), -6, rnd(-0.5, 0.5)), { color: 0x7d6e5a, life: 1.6, scale: rnd(1.4, 2.4) });
@@ -673,6 +688,7 @@ const VFX = (() => {
     World.cast(a);
     const from = World.actors[a].root.position.clone(), to = World.actors[d].root.position.clone(), dir = to.clone().sub(from);
     const ice = type === 'Ice';
+    SFX.rumble(0.9);
     for (let k = 0.25; k < 1; k += 0.15) spike(from.clone().addScaledVector(dir, k).add(v3(rnd(-0.3, 0.3), 0, rnd(-0.3, 0.3))), ice ? 0xbfefff : 0x8a7a66, { h: lerp(0.8, 1.6, k), delay: k * 0.35, kind: ice ? 'ice' : 'rock' });
     for (let i = 0; i < 5; i++) spike(to.clone().add(v3(Math.cos(i * 1.256) * 0.6, 0, Math.sin(i * 1.256) * 0.6)), ice ? 0xd8f6ff : 0x9a8a72, { h: rnd(2, 3), delay: 0.42, life: 1.1, kind: ice ? 'ice' : 'rock' });
     await wait(500);
@@ -685,6 +701,7 @@ const VFX = (() => {
     World.cast(a);
     const g = World.actors[d].root.position.clone();
     groundRing(g, P.c, { from: 2.5, to: 0.5, dur: 0.4 });
+    SFX.rumble(1.1);
     flashLight(g.clone().setY(0.5), P.c, { intensity: 40, dur: 0.3, hold: 0.9 });
     await wait(350);
     World.shake(0.3);
@@ -722,6 +739,7 @@ const VFX = (() => {
     wall.lookAt(wall.position.clone().add(dir));
     scene.add(wall);
     const start = wall.position.clone(), end = D.clone().addScaledVector(dir, 3).setY(1.6);
+    SFX.stream(water ? 'Water' : type, 1.3);
     let hit = false;
     await tween(1.25, k => {
       wall.position.lerpVectors(start, end, k);
@@ -740,6 +758,7 @@ const VFX = (() => {
     const { a, d, P, mv } = c;
     World.flex(a);
     const from = mouthOf(a), to = centerOf(d), dir = to.clone().sub(from);
+    SFX.sonic();
     for (let i = 0; i < 7; i++) {
       const s = airRing(from.clone(), P.c, { from: 0.4, to: 2.2, dur: 0.55, delay: i * 0.08, intensity: 2.2 });
       const start = from.clone();
@@ -755,6 +774,7 @@ const VFX = (() => {
     const { a, d, P, type, mv } = c;
     World.cast(a);
     const g = World.actors[d].root.position.clone();
+    SFX.stream('Flying', 1.0);
     let t = 0;
     run(dt => {
       t += dt;
@@ -775,6 +795,7 @@ const VFX = (() => {
     World.cast(a);
     await wait(150);
     const n = 6;
+    SFX.cast(type);
     for (let i = 0; i < n; i++) {
       const from = mouthOf(a), to = centerOf(d).add(rv(0.4)), cur = from.clone();
       const frame = TILE[{ Grass: 'leaf', Bug: 'spark', Ice: 'shard', Rock: 'rock', Normal: 'star', Water: 'drop', Steel: 'shard', Fire: 'flame', Fairy: 'star' }[type] || 'glow'];
@@ -791,6 +812,7 @@ const VFX = (() => {
     const { a, d, P, type } = c;
     World.cast(a);
     const g = World.actors[d].root.position.clone(), H = World.actors[d].height;
+    SFX.stream(type, 1.1);
     let t = 0;
     run(dt => {
       t += dt;
@@ -813,6 +835,7 @@ const VFX = (() => {
       aura = (dt) => { const p = centerOf(a); for (let i = 0; i < 4; i++) ADD.spawn({ x: p.x + rnd(-0.5, 0.5), y: p.y + rnd(-0.6, 0.6), z: p.z + rnd(-0.5, 0.5), vy: 1, life: 0.35, s0: 0.6, s1: 0.1, c0: P.c2, c1: P.c, intensity: 2.2, frame: TILE[fast ? 'streak' : (P.tex === 'rock' ? 'glow' : P.tex)], align: P.tex === 'flame' || fast, alignOff: fast ? 0 : -Math.PI / 2 }); return !!aura; };
       run(aura);
     }
+    SFX.whoosh();
     const from = await World.lungeTo(a, d, { speed: fast ? 1.8 : 1, jump: variant === 'kick' ? 0.8 : variant === 'charge' ? 0.25 : 0.45 });
     aura = null;
     const hit = centerOf(d), pw = power(mv);
@@ -836,7 +859,7 @@ const VFX = (() => {
         p.x = u * u * src.x + 2 * u * k * ctrl.x + k * k * dst.x; p.y = u * u * src.y + 2 * u * k * ctrl.y + k * k * dst.y; p.z = u * u * src.z + 2 * u * k * ctrl.z + k * k * dst.z;
       } });
     }
-    later(() => S.healSparkle(to, C(0.5, 1, 0.5)), 700);
+    later(() => { S.healSparkle(to, C(0.5, 1, 0.5)); SFX.heal(); }, 700);
   };
   S.drain = async (c) => {
     const { a, d, P, type, mv } = c;
@@ -859,6 +882,7 @@ const VFX = (() => {
     const { a, mv } = c;
     World.flex(a);
     const isRest = mv.id === 'rest';
+    SFX.heal();
     shell(centerOf(a), C(0.5, 1, 0.6), { from: 0.5, to: World.actors[a].height * 0.8, dur: 0.7, intensity: 1.5 });
     S.healSparkle(a, mv.id === 'moonlight' ? C(0.7, 0.75, 1) : C(0.5, 1, 0.6));
     if (isRest) for (let i = 0; i < 4; i++) ADD.spawn({ x: World.anchor(a, 'top').x, y: World.anchor(a, 'top').y, z: World.anchor(a, 'top').z, vx: rnd(0.2, 0.6), vy: 0.8, life: 1.2, delay: 0.5 + i * 0.25, s0: 0.3, s1: 0.6, c0: C(0.8, 0.9, 1), intensity: 1.8, frame: TILE.z });
@@ -871,6 +895,7 @@ const VFX = (() => {
     const main = (mv.stats.find(([, n]) => n > 0) || ['attack'])[0];
     const color = STAT_COLOR[main] || P.c;
     World.flex(a);
+    SFX.buff();
     if (mv.id === 'swords-dance') {
       for (let i = 0; i < 6; i++) { let ang = i / 6 * 6.28; ADD.spawn({ x: g.x, y: H * 0.6, z: g.z, life: 1.1, s0: 0.9, s1: 0.9, c0: C(1, 1, 1), c1: C(0.8, 0.85, 1), intensity: 2.6, frame: TILE.shard, follow: (p, dt) => { ang += dt * 6; const r = R * (1 - p.age / p.life * 0.8); p.x = g.x + Math.cos(ang) * r; p.z = g.z + Math.sin(ang) * r; p.y = H * 0.6 + Math.sin(ang * 2) * 0.2; p.rot = 0; } }); }
     } else if (mv.id === 'dragon-dance') {
@@ -891,6 +916,7 @@ const VFX = (() => {
   S.debuff = async (c) => {
     const { a, d, P, mv } = c;
     const tgt = centerOf(d), g = World.actors[d].root.position, H = World.actors[d].height;
+    SFX.debuff();
     if (c.variant === 'hearts') {
       const from = mouthOf(a);
       for (let i = 0; i < 12; i++) ADD.spawn({ x: from.x, y: from.y, z: from.z, life: 0.8, delay: i * 0.05, s0: 0.4, s1: 0.5, c0: C(1, 0.5, 0.75), intensity: 2.2, frame: TILE.heart, follow: (p) => { const k = p.age / p.life; p.x = lerp(from.x, tgt.x, k) + Math.sin(k * 9 + i) * 0.3; p.y = lerp(from.y, tgt.y, k) + Math.sin(k * Math.PI) * 0.8; p.z = lerp(from.z, tgt.z, k); } });
@@ -916,6 +942,7 @@ const VFX = (() => {
     const { a, d, mv } = c;
     const color = { 'sleep-powder': C(0.5, 1, 0.5), spore: C(0.75, 1, 0.4), 'stun-spore': C(1, 0.9, 0.3), 'poison-powder': C(0.75, 0.35, 1), 'cotton-spore': C(1, 1, 1) }[mv.id] || C(0.6, 1, 0.6);
     World.flex(a);
+    SFX.powder();
     const from = centerOf(a), to = centerOf(d);
     for (let i = 0; i < 70; i++) {
       const ctrl = from.clone().lerp(to, 0.5).add(v3(rnd(-1, 1), rnd(1, 2), rnd(-1, 1))), end = to.clone().add(rv(0.8));
@@ -928,6 +955,7 @@ const VFX = (() => {
     const color = mv.id === 'confuse-ray' ? C(1, 0.85, 0.3) : mv.type === 'Psychic' ? P.c : C(0.8, 0.5, 1);
     World.flex(a);
     const from = World.anchor(a, 'head'), to = World.anchor(d, 'head'), dir = to.clone().sub(from);
+    SFX.cast('Psychic');
     for (let i = 0; i < 8; i++) {
       const s = airRing(from.clone(), color, { from: 0.3, to: 1.6, dur: 0.7, delay: i * 0.09 });
       run((() => { let t = -i * 0.09; return dt => { t += dt; if (t < 0) return true; s.position.copy(from).addScaledVector(dir, Math.min(1, t / 0.7)); return t < 0.7; }; })());
@@ -939,6 +967,7 @@ const VFX = (() => {
   S.wisp = async (c) => {
     const { a, d } = c;
     World.cast(a);
+    SFX.cast('Ghost');
     const from = centerOf(a), to = centerOf(d);
     for (let i = 0; i < 4; i++) {
       let ang = i * 1.57;
@@ -966,6 +995,7 @@ const VFX = (() => {
     const { a, d } = c;
     World.cast(a);
     const from = mouthOf(a), to = World.actors[d].root.position.clone();
+    SFX.cast('Grass');
     for (let i = 0; i < 3; i++) {
       const end = to.clone().add(v3(rnd(-0.5, 0.5), 0.1, rnd(-0.5, 0.5)));
       NORM.spawn({ x: from.x, y: from.y, z: from.z, life: 0.5, delay: i * 0.08, s0: 0.25, s1: 0.25, c0: C(0.55, 0.4, 0.2), frame: TILE.drop, follow: (p) => { const k = p.age / p.life; p.x = lerp(from.x, end.x, k); p.y = lerp(from.y, end.y, k) + Math.sin(k * Math.PI) * 1.2; p.z = lerp(from.z, end.z, k); } });
@@ -979,6 +1009,7 @@ const VFX = (() => {
     const { a } = c;
     World.flex(a);
     const A = World.actors[a];
+    SFX.shield();
     shell(centerOf(a), C(0.35, 1, 0.6), { from: 0.4, to: Math.max(A.height, A.radius * 2) * 0.75, dur: 0.25, hold: 0.6, intensity: 2.2, follow: p => p.copy(centerOf(a)) });
     flashLight(centerOf(a), C(0.4, 1, 0.6), { intensity: 30, dur: 0.3, hold: 0.5 });
     await wait(900);
@@ -986,6 +1017,7 @@ const VFX = (() => {
   S.toxic = async (c) => {
     const { a, d } = c;
     World.cast(a);
+    SFX.status('psn');
     const from = mouthOf(a), to = centerOf(d);
     for (let i = 0; i < 20; i++) ADD.spawn({ x: from.x, y: from.y, z: from.z, life: 0.5, delay: i * 0.02, s0: 0.35, s1: 0.35, c0: C(0.7, 0.2, 0.95), intensity: 2, frame: TILE.bubble, follow: (p) => { const k = p.age / p.life; p.x = lerp(from.x, to.x, k); p.y = lerp(from.y, to.y, k) + Math.sin(k * Math.PI) * 1; p.z = lerp(from.z, to.z, k); } });
     await wait(600);
@@ -1062,7 +1094,8 @@ const VFX = (() => {
     if (!World.actors[d].visible) d = a;
     const [style, variant] = classify(mv).split(':');
     const c = { a, d, mv, type: mv.type || 'Normal', P: pal(mv.type), variant };
-    World.focusMove(a, d);
+    World.focusOne(a, { elev: 0.5, dist: 0.95 });
+    if (d !== a) later(() => { if (Cam.mode === 'one' && Cam.a === a) World.focusMove(a, d); }, 420);
     CUR = { eff: 1, ...outcome, d };
     try { await (S[style] || S.generic)(c); }
     catch (e) { console.warn('effect error', id, e); }
@@ -1076,6 +1109,7 @@ const VFX = (() => {
     const A = World.actors[p];
     if (!A.visible) return;
     const g = A.root.position, H = A.height, R = A.radius + 0.2, ctr = centerOf(p);
+    SFX.status(name);
     const ring = (n, fn) => { for (let i = 0; i < n; i++) { const an = Math.random() * 6.28, r = rnd(0.1, R); fn(g.x + Math.cos(an) * r, g.z + Math.sin(an) * r, i); } };
     switch (name) {
       case 'brn':
@@ -1118,6 +1152,8 @@ const VFX = (() => {
   async function mega(p) {
     const A = World.actors[p], ctr = centerOf(p), H = A.height;
     const rainbow = [C(1, 0.3, 0.4), C(1, 0.7, 0.2), C(0.4, 1, 0.4), C(0.3, 0.6, 1), C(0.8, 0.4, 1)];
+    SFX.mega();
+    World.cheer(1);
     screenFlash(C(0.15, 0.05, 0.25), 0.5, 1.6);
     for (let i = 0; i < 120; i++) {
       const d = sphereDir().multiplyScalar(rnd(3, 5)), col = rainbow[i % 5];
@@ -1177,10 +1213,12 @@ const VFX = (() => {
   return {
     move, status, other, classify, clear,
     sendOutBurst(pos) {
+      SFX.pop();
       for (let i = 0; i < 40; i++) { const d = sphereDir(); ADD.spawn({ x: pos.x, y: 0.8, z: pos.z, vx: d.x * 6, vy: d.y * 6 + 1, vz: d.z * 6, drag: 3, life: 0.6, s0: 0.35, s1: 0.05, c0: C(1, 1, 1), c1: C(0.6, 0.85, 1), intensity: 2.8, frame: i % 2 ? TILE.star : TILE.spark }); }
       groundRing(pos, C(0.7, 0.9, 1), { to: 4, dur: 0.5 });
     },
     keyStoneFlash(pos) {
+      SFX.buff();
       for (let i = 0; i < 30; i++) { const d = sphereDir(); ADD.spawn({ x: pos.x, y: pos.y, z: pos.z, vx: d.x * 4, vy: d.y * 4, vz: d.z * 4, drag: 3, life: 0.5, s0: 0.3, s1: 0.05, c0: C(1, 0.8, 1), intensity: 3, frame: TILE.spark }); }
       flashLight(pos, C(1, 0.6, 1), { intensity: 30, dur: 0.4 });
       beam(pos, pos.clone().add(v3(0, 8, 0)), C(1, 0.6, 1), { radius: 0.1, dur: 0.5, intensity: 3 });
