@@ -36,11 +36,27 @@ const effectiveness = (atk, defs) => defs.reduce((m, d) => m * (CHART[atk] && d 
 const AILMENT = { paralysis: 'par', burn: 'brn', poison: 'psn', sleep: 'slp', freeze: 'frz', confusion: 'conf', 'leech-seed': 'seed', trap: 'trap', protect: 'protect' };
 const MAJOR = ['par', 'brn', 'psn', 'slp', 'frz'];
 // two-turn, recharge, self-KO and other moves this engine doesn't model
-const BANNED = new Set(['solar-beam', 'solar-blade', 'sky-attack', 'skull-bash', 'razor-wind', 'fly', 'dig', 'dive', 'bounce',
-  'phantom-force', 'shadow-force', 'hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'meteor-beam',
+const BANNED = new Set(['solar-blade', 'sky-attack', 'skull-bash', 'razor-wind', 'dive', 'bounce',
+  'phantom-force', 'shadow-force', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'meteor-beam',
   'focus-punch', 'future-sight', 'self-destruct', 'explosion', 'dream-eater', 'belly-drum', 'curse', 'substitute', 'last-resort',
   'counter', 'mirror-coat', 'metal-burst', 'bide', 'synchronoise', 'swagger', 'flatter', 'mirror-move', 'sleep-talk', 'snore',
   'role-play', 'rock-wrecker', 'roar-of-time', 'prismatic-laser', 'eternabeam', 'steel-beam', 'mind-blown', 'memento']);
+// two-turn moves (charge, then strike; Fly/Dig hide the user in between) and moves that need a recharge turn
+const TWO_TURN = { 'solar-beam': { msg: 'took in sunlight!' }, fly: { msg: 'flew up high!', hide: 'fly' }, dig: { msg: 'burrowed its way under the ground!', hide: 'dig' } };
+const RECHARGE_MOVES = new Set(['hyper-beam', 'giga-impact']);
+// the few moves that can reach a Pokémon in the sky or underground (value = damage multiplier)
+const HITS_HIDDEN = { fly: { thunder: 1, hurricane: 1, gust: 2, twister: 2, 'sky-uppercut': 1, 'smack-down': 1 }, dig: { earthquake: 2, magnitude: 2, fissure: 1 } };
+const moveTiming = id => TWO_TURN[id] ? (TWO_TURN[id].hide ? 0.8 : 0.65) : RECHARGE_MOVES.has(id) ? 0.7 : 1;
+// classic TM moves, on top of the level-up learnsets
+const NO_FLY = new Set(['gyarados', 'butterfree', 'beautifly', 'scyther', 'yanma', 'ledyba', 'ledian', 'masquerain', 'mothim', 'vespiquen', 'combee']);
+function tmMoves(species) {
+  const sp = DEX.species[species], out = [];
+  if (sp.types.includes('Grass')) out.push('solar-beam');
+  if (sp.types.includes('Flying') && !NO_FLY.has(species)) out.push('fly');
+  if (sp.types.includes('Ground') || sp.types.includes('Rock')) out.push('dig');
+  if (!sp.evolvesTo.length) out.push('hyper-beam');
+  return out.filter(id => MOVES[id]);
+}
 const UNIQUE_OK = new Set(['rest', 'protect', 'detect', 'shell-smash', 'wave-crash', 'aqua-cutter']);
 const OK_META = new Set(['damage', 'ailment', 'net-good-stats', 'heal', 'damage-ailment', 'damage-raise', 'damage-lower', 'damage-heal', 'unique']);
 const FIXED_DAMAGE = { 'seismic-toss': 'level', 'night-shade': 'level', 'dragon-rage': 40, 'sonic-boom': 20 };
@@ -70,10 +86,11 @@ function moveSupported(id) {
   return true;
 }
 
-function learnable(species, level) {
+function learnable(species, level, withTMs = true) {
   const out = [];
   for (const [lvl, id] of DEX.species[species].learnset)
     if (lvl <= level && moveSupported(id) && !out.includes(id)) out.push(id);
+  if (withTMs) for (const id of tmMoves(species)) if (moveSupported(id) && !out.includes(id)) out.push(id);
   return out;
 }
 
@@ -96,9 +113,9 @@ function defaultMoves(species, level) {
     p *= (m.acc || 100) / 100;
     if (sp.types.includes(m.type)) p *= 1.5;
     if (m.drain < 0) p *= 0.9;
-    return p;
+    return p * moveTiming(id);
   };
-  const pool = learnable(species, level).map(id => ({ id, s: score(id) }));
+  const pool = learnable(species, level, false).map(id => ({ id, s: score(id) }));
   const chosen = [];
   while (chosen.length < 4 && pool.length) {
     const statusCount = chosen.filter(c => MOVES[c].cat === 'status').length;
@@ -376,7 +393,7 @@ function scoreMove(u, t, m) {
     if (m.maxHits) d *= m.minHits === m.maxHits ? m.minHits : 3;
     let s = Math.min(1.25, d / t.hp * (d >= t.hp ? 1.2 : 1));
     if (m.id === 'fake-out' && u.turnsOut > 0) s = 0;
-    return s * (m.acc || 100) / 100 + (m.priority > 0 && d >= t.hp ? 0.3 : 0);
+    return s * (m.acc || 100) / 100 * moveTiming(m.id) + (m.priority > 0 && d >= t.hp ? 0.3 : 0);
   }
   if (m.id === 'rest') return u.hp < u.maxhp * 0.35 && !u.status ? 0.7 : 0;
   if (m.ailment === 'protect') return u.vol.protectCount ? 0 : 0.08;
@@ -425,7 +442,32 @@ async function chooseActionCPU(p) {
   return { type: 'move', idx: u.moves.every(m => m.ppLeft <= 0) ? -1 : idx, mega: !!canMega(p) };
 }
 
-const chooseAction = p => controllers[p] === 'cpu' ? chooseActionCPU(p) : chooseActionHuman(p);
+const chooseAction = p => {
+  const v = active(p).vol;
+  if (v.charging) return Promise.resolve({ type: 'move', idx: v.charging.idx, mega: false });
+  if (v.recharge) return Promise.resolve({ type: 'recharge' });
+  return controllers[p] === 'cpu' ? chooseActionCPU(p) : chooseActionHuman(p);
+};
+// 3D: Fly / Dig take the Pokémon off the field until its next turn
+async function hideMon(p, kind) {
+  const A = World.actors[p];
+  if (!A.visible) return;
+  SFX.whoosh();
+  World.focusOne(p);
+  if (kind === 'fly') await tween(0.6, k => { A.lift = easeIn(k) * 8; A.opacity = 1 - k * k; });
+  else { World.shake(0.25); SFX.rumble(0.6); await tween(0.55, k => { A.lift = -k * 1.4; A.opacity = 1 - k; }); }
+  A.visible = false; A.lift = 0; A.opacity = 1; A.hidden = kind;
+  World.overview();
+}
+async function unhideMon(p) {
+  const A = World.actors[p];
+  if (!A.hidden) return;
+  const kind = A.hidden;
+  A.hidden = null; A.visible = true;
+  if (kind === 'fly') await tween(0.28, k => { A.lift = (1 - easeOut(k)) * 8; });
+  else { World.shake(0.3); SFX.rumble(0.4); await tween(0.25, k => { A.lift = -(1 - k) * 1.4; }); }
+  A.lift = 0;
+}
 
 function chooseReplacement(p) {
   if (controllers[p] === 'cpu') return wait(400).then(() => bestMatchupIdx(p));
@@ -515,6 +557,7 @@ async function hurt(p, amount) {
 }
 async function faint(p) {
   const m = active(p);
+  if (World.actors[p].hidden) { World.actors[p].hidden = null; World.actors[p].visible = true; }
   playCry(m, 0.8);
   SFX.faint();
   Broadcast.pop(p, 'ko');
@@ -578,6 +621,8 @@ async function useMove(p, idx) {
   const u = active(p), t = active(1 - p);
   const m = idx < 0 ? STRUGGLE : u.moves[idx];
   if (m.ailment !== 'protect') u.vol.protectCount = 0;
+  const charged = !!(u.vol.charging && u.vol.charging.id === m.id);
+  if (u.vol.charging) { delete u.vol.charging; await unhideMon(p); }
 
   // --- can the user act? ---
   if (u.status === 'slp') {
@@ -608,14 +653,27 @@ async function useMove(p, idx) {
   }
   if (u.status === 'par' && rand() < 0.25) { await VFX.status('par', p); await say(`${lbl(u)} is paralyzed! It can't move!`); return; }
 
-  if (idx >= 0) m.ppLeft--;
+  if (idx >= 0 && !charged) m.ppLeft--;
   World.trainers.command(p);
   Broadcast.banner(m.name, m.type || 'Normal');
   await say(`${lbl(u)} used <b>${m.name}</b>!`, 900);
+  if (TWO_TURN[m.id] && !charged) {
+    u.vol.charging = { id: m.id, idx };
+    if (TWO_TURN[m.id].hide) await hideMon(p, TWO_TURN[m.id].hide);
+    else { World.focusOne(p, { elev: 0.3, dist: 0.9 }); World.flex(p); SFX.buff(); await VFX.status('charge', p).catch(() => {}); await wait(500); World.overview(); }
+    await say(`${lbl(u)} ${TWO_TURN[m.id].msg}`);
+    return;
+  }
 
   const selfTarget = SELF_TARGETS.has(m.target) || m.id === 'rest';
   if (!selfTarget && t.hp <= 0) { await say('But there was no target...'); return; }
   if (m.id === 'fake-out' && u.turnsOut > 0) { await say('But it failed!'); return; }
+  let hiddenMult = 1;
+  if (!selfTarget && t.vol.charging && TWO_TURN[t.vol.charging.id] && TWO_TURN[t.vol.charging.id].hide) {
+    const k = HITS_HIDDEN[TWO_TURN[t.vol.charging.id].hide][m.id];
+    if (!k) { Broadcast.pop(1 - p, 'miss'); await say(`${lbl(u)}'s attack missed! ${lbl(t)} is ${TWO_TURN[t.vol.charging.id].hide === 'fly' ? 'up in the sky' : 'underground'}!`); return; }
+    hiddenMult = k;
+  }
   if (!selfTarget && t.vol.protect) {
     await VFX.move(m.id, p, 1 - p, { blocked: true });
     Broadcast.pop(1 - p, 'block');
@@ -688,6 +746,7 @@ async function useMove(p, idx) {
     const critStage = (m.crit || 0) + (m.id === 'aqua-cutter' ? 1 : 0);
     const crit = FIXED_DAMAGE[m.id] === undefined && rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
     let dmg = calcDamage(u, t, m, crit, (85 + Math.floor(rand() * 16)) / 100);
+    if (hiddenMult > 1) dmg = Math.floor(dmg * hiddenMult);
     dmg = Math.min(t.hp, Math.max(1, dmg));
     if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
     t.hp -= dmg; total += dmg; landed++;
@@ -743,6 +802,7 @@ async function useMove(p, idx) {
       else if (m.metaCat === 'damage-lower' && t.hp > 0) await changeStats(t, m.stats);
     }
   }
+  if (RECHARGE_MOVES.has(m.id) && landed > 0 && u.hp > 0) u.vol.recharge = true;
   if (m.drain < 0 && u.hp > 0) {
     const recoil = m.id === 'struggle' ? Math.floor(u.maxhp / 4) : Math.floor(total * -m.drain / 100);
     await hurt(p, Math.max(1, recoil));
@@ -796,11 +856,12 @@ async function resolveTurn(actions) {
   for (const p of megas) await megaEvolve(p);
 
   const prio = p => actions[p].idx >= 0 ? (active(p).moves[actions[p].idx].priority || 0) : 0;
-  const order = [0, 1].filter(p => actions[p].type === 'move').sort((a, b) =>
+  const order = [0, 1].filter(p => actions[p].type === 'move' || actions[p].type === 'recharge').sort((a, b) =>
     (prio(b) - prio(a)) || (speedOf(active(b)) - speedOf(active(a))) || (rand() - 0.5));
 
   for (const p of order) {
     if (active(p).hp <= 0) continue;
+    if (actions[p].type === 'recharge') { delete active(p).vol.recharge; World.blink(p); await say(`${lbl(active(p))} must recharge!`); continue; }
     await useMove(p, actions[p].idx);
     World.overview();
     if (battleOver()) return;
@@ -863,6 +924,7 @@ async function runBattle() {
   if (prefs.mode === 'retro') return runRetroBattle();
   Retro.stop();
   World.reset();
+  World.actors.forEach(a => { a.hidden = null; });
   World.trainers.reset();
   state.theme = World.setTheme(settings.theme);
   [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));

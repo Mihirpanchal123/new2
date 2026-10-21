@@ -1112,6 +1112,9 @@ const VFX = (() => {
     SFX.status(name);
     const ring = (n, fn) => { for (let i = 0; i < n; i++) { const an = Math.random() * 6.28, r = rnd(0.1, R); fn(g.x + Math.cos(an) * r, g.z + Math.sin(an) * r, i); } };
     switch (name) {
+      case 'charge':   // Solar Beam: sunlight pours down and gathers into the user
+        for (let i = 0; i < 60; i++) { const an = Math.random() * 6.28, r = rnd(1.2, 3.2), sx = g.x + Math.cos(an) * r, sz = g.z + Math.sin(an) * r, sy = rnd(3, 7); ADD.spawn({ x: sx, y: sy, z: sz, life: 0.75, delay: i * 0.012, s0: 0.4, s1: 0.15, c0: C(1, 1, 0.6), c1: C(0.75, 1, 0.3), intensity: 2.4, frame: TILE.glow, follow: (q) => { const k = q.age / q.life; q.x = lerp(sx, ctr.x, k); q.y = lerp(sy, ctr.y, k); q.z = lerp(sz, ctr.z, k); } }); }
+        flashLight(ctr, C(1, 1, 0.6), { intensity: 34, dur: 0.9 }); break;
       case 'brn':
         ring(40, (x, z) => ADD.spawn({ x, y: rnd(0, H * 0.6), z, vy: rnd(1.5, 3), life: rnd(0.4, 0.8), delay: Math.random() * 0.4, s0: 0.6, s1: 0.1, c0: C(1, 0.85, 0.3), c1: C(1, 0.3, 0.05), intensity: 2.6, frame: TILE.flame }));
         smoke(ctr, 5); flashLight(ctr, C(1, 0.4, 0.1), { intensity: 30, dur: 0.6 }); break;

@@ -733,6 +733,7 @@ const Retro = (() => {
     if (m.status === 'par' && Math.random() < dt * 0.8) { f.shiver = 0.25; for (let i = 0; i < 3; i++) sparkP(f.x + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 3, f.h / 3), R(0, 6.28), R(60, 140), '#fff59a', 0.2); }
     if (m.status === 'brn' && Math.random() < dt * 5) flameP(f.x + R(-f.w / 3, f.w / 3), f.cy + R(0, f.h / 3), R(-10, 10), -55, 2, 0.5);
     if (m.status === 'psn' && Math.random() < dt * 3) spawn({ kind: 'blob', c: ['#d68cf5', '#a54ad8'], x: f.x + R(-f.w / 3, f.w / 3), y: f.cy, vy: -35, life: 0.7, s0: 1, s1: 2, pop: true });
+    if (f.rechargeUntil > T && Math.random() < dt * 7) smokeP(f.x + R(-f.w / 3, f.w / 3), f.top + 8, 2, 0.8, ['#ffffff', '#e8e8f0', '#c8c8d8'], { vy: -45, a: 0.55 });
     if (m.status === 'frz' && Math.random() < dt * 3) spawn({ kind: 'mote', c: ['#e2f8ff'], x: f.x + R(-f.w / 2, f.w / 2), y: f.cy + R(-f.h / 2, f.h / 3), vy: -10, life: 0.8, s0: 1, s1: 1 });
   }
   function statusTick(f) {
@@ -888,6 +889,8 @@ const Retro = (() => {
     Normal: { glow: '#ffffff', light: '#fff6e0', main: 'star', lines: '#ffffff', dust: true, ring: '#ffffff' }
   };
   function impactAt(type, x, y, gy, pw = 1, o = {}) {
+    const pw0 = pw;
+    pw *= 1.25;                                        // everything a bit bigger and wider
     const K = IMP[type] || IMP.Normal, P = tp(type), n = pw;
     const h = Math.max(4, gy - y);                     // height of the hit above the ground
     glowP(x, y, 8, 34 * pw, '#ffffff', 0.12, 1);
@@ -919,8 +922,8 @@ const Retro = (() => {
     if (K.dust) dust(x, gy, 1.2 * pw);
     if (!o.quiet) {
       ringFx(x, gy, 8, 34 + 40 * pw, K.ring, 0.38);
-      if (K.decal && pw > 0.8) addDecal(K.decal, x, gy, 0.6 + pw * 0.35);
-      scarGround(type, x, gy, pw);
+      if (K.decal && pw0 > 0.8) addDecal(K.decal, x, gy, 0.6 + pw0 * 0.35);
+      scarGround(type, x, gy, pw0);
     }
   }
 
@@ -1818,7 +1821,7 @@ const Retro = (() => {
   }
   // ---- projectiles per type ----
   function projFor(m, big) {
-    const t = m.type || 'Normal', P = tp(t), r = big ? 19 : 12;
+    const t = m.type || 'Normal', P = tp(t), r = big ? 24 : 15;
     const base = { r, c: P.c, speed: big ? 660 : 820, seed: Math.random() * 9 };
     switch (t) {
       case 'Fire': return { ...base, draw: (o, x, y) => { glow(x, y, o.r * 3.4, '#ff9a3a', 0.95); const f = 1 + Math.sin(T * 40) * 0.1; drawDisc(x, y, o.r / PX * f, '#d9381e'); drawDisc(x, y - PX * 0.5, o.r / PX * 0.72 * f, '#ff8c1a'); drawDisc(x, y - PX, o.r / PX * 0.42, '#ffd23f'); drawDisc(x, y - PX, Math.max(1, o.r / PX * 0.18), '#fff7c2'); },
@@ -1870,7 +1873,7 @@ const Retro = (() => {
     if (big) { camPunch(d.cx, d.cy, 0.07, 0.35); shakeIt(9); smoke(center(d), 7); }
   };
   function streamEmit(m, x, y, ux, uy, L, pw) {
-    const t = m.type || 'Normal', sp = R(560, 690), s = R(-0.12, 0.12), vx = (ux - uy * s) * sp, vy = (uy + ux * s) * sp, life = L / sp * R(0.95, 1.12);
+    const t = m.type || 'Normal', sp = R(560, 690), s = R(-0.17, 0.17), vx = (ux - uy * s) * sp, vy = (uy + ux * s) * sp, life = L / sp * R(0.95, 1.12);
     switch (t) {
       case 'Fire': flameP(x, y, vx, vy, R(3, 5.5) * pw, life, { drag: 0.25 }); if (Math.random() < 0.15) smokeP(x + vx * life * 0.8, y + vy * life * 0.8, 3, 0.9, undefined, { delay: life * 0.7 }); break;
       case 'Dragon': flameP(x, y, vx, vy, R(3, 5) * pw, life, { drag: 0.25, c: TP.Dragon.c }); break;
@@ -1892,7 +1895,7 @@ const Retro = (() => {
     let hitDone = false;
     while (T - t0 < 0.85 && on) {
       const mo = f.mouth(), tx = d.cx, ty = d.cy + offY, dx = tx - mo.x, dy = ty - mo.y, L = Math.hypot(dx, dy) || 1;
-      for (let i = 0; i < 4; i++) streamEmit(m, mo.x, mo.y, dx / L, dy / L, L, pw);
+      for (let i = 0; i < 5; i++) streamEmit(m, mo.x, mo.y, dx / L, dy / L, L, pw * 1.15);
       f.kx -= f.face * 8;
       if (!hitDone && T - t0 > 0.3) { hitDone = true; hit(); }
       if (hitDone && !o.miss && Math.random() < 0.5) impactAt(m.type || 'Normal', tx + R(-10, 10), ty + R(-10, 10), d.y, 0.35, { quiet: true });
@@ -1954,7 +1957,7 @@ const Retro = (() => {
     if (!on || f.state !== 'idle') return;
     SFX.beam(m.type, 0.6);
     const mo = f.mouth(), mOff = side();
-    const b = beamFx({ from: f, to: o.miss ? null : d, owner: f, m, ax: mo.x, ay: mo.y, bx: d.cx + (o.miss ? 90 : 0), by: d.cy + (o.miss ? 60 * mOff : 0), w: B.w, c: B.c, life: 0.85, deco: B.deco });
+    const b = beamFx({ from: f, to: o.miss ? null : d, owner: f, m, ax: mo.x, ay: mo.y, bx: d.cx + (o.miss ? 90 : 0), by: d.cy + (o.miss ? 60 * mOff : 0), w: B.w * 1.2, c: B.c, life: 0.85, deco: B.deco });
     if (B.shake) { shakeIt(B.shake); later(() => shakeIt(B.shake), 300); }
     const other = beams.find(x => x !== b && x.owner === d && x.to === f && b.to === d && !x.reached && !x.clash && x.age < x.life);
     if (other) startClash(b, other);
@@ -2078,8 +2081,8 @@ const Retro = (() => {
     let done = false;
     while (T - t0 < dur && on) {
       const k = (T - t0) / dur * 1.35, cx = ax + dx * k, cy = ay + dy * k;
-      for (let i = -5; i <= 5; i++) {
-        const px = cx + nx * i * 18 + R(-6, 6), py = cy + ny * i * 18;
+      for (let i = -6; i <= 6; i++) {
+        const px = cx + nx * i * 21 + R(-6, 6), py = cy + ny * i * 21;
         if (t === 'Water' || t === 'Ground') {
           const col = t === 'Water' ? ['#3a8ae6', '#5ab4ff', '#8fd0ff'] : ['#5a3e22', '#7a5432', '#946a3a'];
           spawn({ kind: 'blob', c: [pick(col), '#ffffff'], x: px, y: py, z: R(10, 70), vz: R(-40, 60), g: 300, vx: ux * 120, vy: uy * 120, life: 0.45, s0: R(3, 5), s1: 2 });
@@ -3211,6 +3214,218 @@ const Retro = (() => {
   for (const [id, fn] of Object.entries(STATUS_SIG)) SIG[id] = fn;
 
   // ---------------------------------------------------------------------
+  //  Fly, Dig, Solar Beam, Hyper Beam
+  // ---------------------------------------------------------------------
+  Object.assign(SHAPE2, {
+    // the dirt mound that travels under the field while a Pokémon digs
+    mound: (s, k) => {
+      const f = s.f; if (!f || f.invuln !== 'dig') return;
+      const w = Math.max(26, f.w * 0.5), x = f.x, y = f.y, bob = Math.sin(T * 30) * 1.5;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x, y + 3, w * 1.1, w * 0.36, 0, 0, 6.28); ctx.fill();
+      ctx.fillStyle = '#6e4a26'; ctx.beginPath(); ctx.ellipse(x, y - 4 + bob, w, w * 0.42, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#a8773e'; ctx.beginPath(); ctx.ellipse(x - w * 0.1, y - 6 + bob, w * 0.7, w * 0.28, 0, Math.PI, 0); ctx.fill();
+      for (let i = 0; i < 4; i++) { const a = T * 9 + i * 1.6; drawBm('rock', ['#7a5432', '#a8773e', '#3b2814'], x + Math.cos(a) * w * 0.6, y - 8 - Math.abs(Math.sin(a)) * 10, 2, false, a); }
+    },
+    // sunlight pouring down onto the user (Solar Beam charge)
+    sunpour: (s, k) => {
+      const f = s.f; if (!f || f.state !== 'idle') return;
+      const a = k < 0.2 ? k / 0.2 : k > 0.85 ? (1 - k) / 0.15 : 1, w = f.w * 0.9;
+      ctx.globalCompositeOperation = 'lighter';
+      const gr = ctx.createLinearGradient(f.cx - w, 0, f.cx + w, 0);
+      gr.addColorStop(0, 'rgba(255,240,150,0)'); gr.addColorStop(0.5, `rgba(255,240,150,${0.55 * a})`); gr.addColorStop(1, 'rgba(255,240,150,0)');
+      ctx.fillStyle = gr; ctx.fillRect(f.cx - w, -60, w * 2, f.y + 60);
+      ctx.globalCompositeOperation = 'source-over';
+      glow(f.cx, f.cy, w * 1.8, '#fff3a0', 0.6 * a);
+    }
+  });
+  SIG['fly'] = async (f, d, m, o, hit) => {
+    const dir = Math.sign(d.x - f.x) || f.face;
+    f.dashing = true;
+    text(f, 'FLEW UP HIGH!', 'info');
+    f.crouchT = 1; await wait(140 / tempo(f)); f.crouchT = 0; f.bump(-9);
+    SFX.whoosh(); dust(f.x, f.y, 2.4);
+    for (let i = 0; i < 10; i++) spawn({ bm: 'gust', c: ['#ffffff', '#e6f1ff', '#b8c8dc'], x: f.x + R(-30, 30), y: f.y - R(0, 20), vx: R(-160, 160), vy: R(-60, 10), drag: 3, life: 0.6, s0: 2, s1: 3, fade: true });
+    await tw(0.5, k => { f.jz = easeIn(k) * 560; f.after = 0.08; f.afterCol = '#ffffff'; });
+    f.invuln = 'fly';
+    // up in the sky: only its shadow is visible, gliding over to the target
+    const sx = f.x, sy = f.y, t0 = T, hold = 1.0;
+    while (T - t0 < hold && on) {
+      const k = (T - t0) / hold, tx = d.state === 'idle' ? d.x - dir * (f.r + d.r) * 0.5 : sx, ty = d.state === 'idle' ? d.y : sy;
+      f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
+      await wait(16);
+    }
+    // the dive
+    f.invuln = null;
+    SFX.beam('Flying', 0.3);
+    await tw(0.2, k => { f.jz = 560 * (1 - easeIn(k)); f.after = 0.1; for (let i = 0; i < 2; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: f.x + R(-f.w / 2, f.w / 2), y: f.y - f.jz - R(0, f.h), vx: 0, vy: -900, life: 0.2, len: 80, ang: Math.PI / 2 }); });
+    f.jz = 0; f.bump(10);
+    hit();
+    shakeIt(10); camPunch(f.x, f.y - 30, 0.08, 0.35);
+    ringFx(f.x, f.y, 10, 170, '#ffffff', 0.5, { w: 2 }); dust(f.x, f.y, 3); crater(f.x + dir * 20, f.y, 14);
+    for (let i = 0; i < 14; i++) { const an = i / 14 * 6.28; spawn({ kind: 'streak', c: ['#ffffff'], x: f.x, y: f.y - 10, vx: Math.cos(an) * 500, vy: Math.sin(an) * 250, life: 0.3, len: 40, ang: an }); }
+    await wait(150);
+    await recover(f, { sx, sy }, true);
+  };
+  SIG['dig'] = async (f, d, m, o, hit) => {
+    f.dashing = true;
+    text(f, 'DUG UNDERGROUND!', 'info');
+    // burrow: dirt flies everywhere while it sinks out of sight
+    SFX.rumble(0.8);
+    const t0 = T;
+    await tw(0.55 / tempo(f), k => {
+      f.sink = Math.min(1, k * 1.3); f.alpha = 1 - k; f.rotA = Math.sin(k * 40) * 0.1; f.shiver = 0.1;
+      if (Math.random() < 0.7) spawn({ kind: 'debris', c: ['#7a5432', '#a8773e', '#3b2814'], x: f.x + R(-14, 14), y: f.y, z: 4, vx: R(-200, 200), vy: R(-60, 40), vz: R(150, 320), g: 1000, life: 0.8, s0: pick([2, 2, 3]), rot: R(0, 6), spin: 10, bounce: true });
+      if (Math.random() < 0.4) dust(f.x, f.y, 0.8);
+    });
+    f.alpha = 0; f.rotA = 0;
+    crater(f.x, f.y, 16);
+    f.invuln = 'dig';
+    shapes.push({ kind: 'mound', f, life: 9, age: 0 });
+    // the mound races under the field toward the target
+    const sx = f.x, sy = f.y, run = 0.85;
+    while (T - t0 < 0.55 + run && on) {
+      const k = clamp((T - t0 - 0.55) / run, 0, 1), tx = d.state === 'idle' ? d.x : sx, ty = d.state === 'idle' ? d.y + 4 : sy;
+      f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
+      if (Math.random() < 0.5) dust(f.x, f.y, 0.7, ['#a8773e', '#8a6a44', '#6e4a26']);
+      if (Math.random() < 0.25) addDecal('crack', f.x, f.y, 0.5);
+      shake = Math.max(shake, 2);
+      await wait(16);
+    }
+    // erupt right under the target
+    f.invuln = null; f.sink = 0; f.alpha = 1;
+    SFX.quake(); shakeIt(12); camPunch(f.x, f.y - 30, 0.07, 0.35);
+    crater(f.x, f.y, 20); fissure(f.x - 40, f.y, f.x + 40, f.y + 6);
+    for (let i = 0; i < 26; i++) spawn({ kind: 'debris', c: ['#7a5432', '#a8773e', '#3b2814'], x: f.x + R(-24, 24), y: f.y, z: 6, vx: R(-260, 260), vy: R(-80, 80), vz: R(260, 520), g: 1100, life: 1.1, s0: pick([2, 3, 3]), rot: R(0, 6), spin: 12, bounce: true, must: true });
+    dust(f.x, f.y, 3.5);
+    await tw(0.3, k => { f.jz = Math.sin(k * Math.PI) * 90; f.pop = 0.6 + 0.4 * easeOut(k); });
+    hit();
+    f.jz = 0; f.bump(10);
+    await wait(120);
+    const away = { sx: clamp(f.x - (Math.sign(d.x - sx) || 1) * 200, field.x0, field.x1), sy: clamp(f.y + R(-60, 60), field.y0, field.y1) };
+    await recover(f, away, true);
+  };
+  SIG['solar-beam'] = async (f, d, m, o, hit) => {
+    shapes.push({ kind: 'sunpour', f, life: 1.3, age: 0 });
+    lightAt(f.x, f.y, 200, '#fff3a0', 1.3, 0.9);
+    text(f, 'TOOK IN SUNLIGHT!', 'info');
+    for (let i = 0; i < 40; i++) { const sx = f.cx + R(-90, 90), sy = R(-40, f.top - 40); moteP(0, 0, '#fff8a0', { life: 0.7, delay: i * 0.02, s: 1.5, path: k => ({ x: sx + (f.cx - sx) * easeIn(k), y: sy + (f.cy - sy) * easeIn(k) }) }); }
+    await wait(450);
+    return S.beam(f, d, m, o, hit);
+  };
+  // invulnerable while flying / digging: only a few moves can reach it
+  function hiddenCheck(d, m) {
+    if (!d.invuln) return 1;
+    const k = HITS_HIDDEN[d.invuln] && HITS_HIDDEN[d.invuln][m.id];
+    return k || 0;
+  }
+
+  // ---------------------------------------------------------------------
+  //  Own animations for the moves that used to share a generic one
+  // ---------------------------------------------------------------------
+  Object.assign(CT, {
+    'tackle': { v: 'charge', c: C_WHITE },
+    'take-down': { v: 'charge', c: ['#ffffff', '#fff1d6', '#e0b070', '#7a5020'], size: 1.25, aura: true },
+    'headbutt': { v: 'charge', c: ['#ffffff', '#fff3c0', '#ffc850', '#8a5a10'], size: 1.15, head: true },
+    'covet': { v: 'charge', c: ['#ffffff', '#ffd6ef', '#ff8ed0', '#a03070'], hearts: true }
+  });
+  Object.assign(SHAPE2, {
+    // a coil of rope/scales squeezing the target (Wrap)
+    coil: (s, k) => {
+      const d = s.d; if (!d || d.state !== 'idle') return;
+      const tight = k < 0.3 ? 1.6 - easeOut(k / 0.3) * 0.6 : 1 + Math.sin(T * 20) * 0.04, a = k > 0.8 ? (1 - k) / 0.2 : 1;
+      ctx.globalAlpha = a;
+      for (let i = 0; i < 3; i++) {
+        const y = d.cy - d.h * 0.3 + i * d.h * 0.28, rx = d.w * 0.5 * tight, ry = rx * 0.32;
+        ctx.lineWidth = PX * 3; ctx.strokeStyle = '#6a5040'; ctx.beginPath(); ctx.ellipse(d.cx, y, rx, ry, -0.15, 0, 6.28); ctx.stroke();
+        ctx.lineWidth = PX * 1.6; ctx.strokeStyle = '#c8a070'; ctx.beginPath(); ctx.ellipse(d.cx, y - 1, rx, ry, -0.15, Math.PI, 6.28); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    },
+    // a floating question mark (Amnesia)
+    qmark: (s, k) => {
+      const f = s.f; if (!f || f.state !== 'idle') return;
+      const a = k < 0.15 ? k / 0.15 : k > 0.8 ? (1 - k) / 0.2 : 1;
+      ctx.save(); ctx.translate(f.cx + f.face * f.w * 0.3, f.top - 18 - k * 20); ctx.rotate(Math.sin(T * 6) * 0.2); ctx.globalAlpha = a;
+      ctx.font = "40px Tiny5, sans-serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 7; ctx.strokeStyle = '#1b1530'; ctx.strokeText('?', 0, 0); ctx.fillStyle = '#ffd6ef'; ctx.fillText('?', 0, 0);
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // ghostly afterimage clones fanning out around the user (Double Team)
+    clones: (s, k) => {
+      const f = s.f; if (!f || f.state !== 'idle') return;
+      const n = 4, spread = Math.sin(Math.min(1, k * 1.4) * Math.PI) * f.w * 1.1, sc = f.scale;
+      for (let i = 0; i < n; i++) { const an = i / n * 6.28 + T * 4; drawSprite(f.anim, T, f.x + Math.cos(an) * spread, f.y - f.z + Math.sin(an) * spread * 0.3, sc, false, { sx: -f.faceVis, alpha: 0.45 * (1 - k * 0.6), white: 0.5, whiteCol: '#cfe6ff' }); }
+    }
+  });
+  // Strength: heave a boulder overhead and hurl it
+  SIG['strength'] = async (f, d, m, o, hit) => {
+    const lift = { x: f.cx, y: f.top - 30 };
+    f.crouchT = 1; dust(f.x, f.y, 1.5); addDecal('crack', f.x + f.face * 20, f.y, 0.7);
+    const rock = { x: f.x + f.face * 30, y: f.y };
+    await tw(0.45 / tempo(f), k => { rock.x = lerp(f.x + f.face * 30, lift.x, easeOut(k)); rock.y = lerp(f.y, lift.y, easeOut(k)); f.shiver = 0.05; });
+    const holder = spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: rock.x, y: rock.y, life: 0.25, s0: 8, rot: 0.3, must: true, path: () => ({ x: lift.x, y: f.top - 30 }) });
+    f.crouchT = 0; f.bump(-8);
+    await wait(250);
+    holder.life = 0;
+    SFX.whoosh();
+    const q = await shoot({ x: lift.x, y: lift.y, to: d, miss: o.miss, missOff: 80 * side(), speed: 560, arc: 70, shadow: true, groundOff: 50, draw: (q, x, y) => drawBm('rock', ['#8a7a62', '#bcae90', '#4a4032'], x, y, 8, false, q.age * 6) });
+    hit();
+    SFX.impact('Rock', 1.3, 1); shakeIt(10); camPunch(q.x, q.y, 0.07, 0.3);
+    crater(q.x, q.y + 30, 18); dust(q.x, q.y + 30, 2.5);
+    for (let i = 0; i < 12; i++) spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: q.x, y: q.y + 30, z: 20, vx: R(-240, 240), vy: R(-70, 70), vz: R(150, 320), g: 1000, life: 0.9, s0: pick([2, 3]), rot: R(0, 6), spin: 10, bounce: true });
+  };
+  SIG['leafage'] = async (f, d, m, o, hit) => S.multi(f, d, m, o, hit);
+  SIG['wrap'] = async (f, d, m, o, hit) => {
+    const s = await lunge(f, d, { v: 'charge', c: C_WHITE }, false);
+    shapes.push({ kind: 'coil', d, life: 1.1, age: 0 });
+    for (let i = 0; i < 3; i++) later(() => { if (d.state === 'idle') { d.white = 0.7; d.shiver = 0.15; d.bump(3); SFX.impact('Normal', 0.4, 1); } }, 150 + i * 220);
+    await wait(150); hit(); await wait(450);
+    await recover(f, s, false);
+  };
+  // extra flavour layered on top of the shared buff / heal / debuff animations
+  const BUFF_X = {
+    'calm-mind': f => { for (let i = 0; i < 4; i++) ringP(f.cx, f.top + 10, 6, 50 + i * 12, '#ff9ccf', 0.6, { flat: 0.4, delay: i * 0.12 }); const e = eyeOf(f); shapes.push({ kind: 'glint', x: e.x, y: f.top + 4, r: 22, col: '#ff9ccf', life: 0.6, age: 0 }); },
+    'nasty-plot': f => { for (let i = 0; i < 18; i++) smokeP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h * 0.6), R(3, 5), 1.1, IMP.Dark.mist, { vy: -50, a: 0.7, delay: i * 0.02 }); const e = eyeOf(f); shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 26, col: '#ff4a4a', life: 0.6, age: 0 }); },
+    'bulk-up': f => { for (let i = 0; i < 3; i++) later(() => { if (f.state === 'idle') { f.bump(-6); f.white = 0.6; f.whiteCol = '#ff8a6a'; ringP(f.x, f.y, 8, f.r * 2.2, '#ff6a4a', 0.35); } }, i * 170); },
+    'amnesia': f => { shapes.push({ kind: 'qmark', f, life: 1.1, age: 0 }); },
+    'growth': f => { tw(0.5, k => { f.pop = 1 + Math.sin(k * Math.PI) * 0.18; }).then(() => { f.pop = 1; }); for (let i = 0; i < 16; i++) spawn({ bm: 'leaf', c: TP.Grass.c.slice(1), x: f.x + R(-f.w / 2, f.w / 2), y: f.y, vy: R(-160, -80), drag: 1, life: 0.9, delay: i * 0.03, s0: 2, s1: 2, rot: R(0, 6), spin: 6, fade: true }); },
+    'charge': f => { for (let i = 0; i < 5; i++) later(() => { if (f.state === 'idle') boltFx({ ax: f.cx + R(-f.w, f.w) * 0.6, ay: f.cy + R(-f.h, f.h) * 0.5, bx: f.cx + R(-f.w, f.w) * 0.6, by: f.cy + R(-f.h, f.h) * 0.5, jag: 10, c: TP.Electric.c, life: 0.25, w: 0.7 }); }, i * 90); lightAt(f.x, f.y, 150, '#ffe94a', 0.8, 0.8); },
+    'double-team': f => { shapes.push({ kind: 'clones', f, life: 0.9, age: 0 }); },
+    'work-up': f => { for (let i = 0; i < 2; i++) later(() => { if (f.state === 'idle') { f.bump(-5); shapes.push({ kind: 'lines', x: f.cx, y: f.cy, r0: 20, r1: 70, col: '#ffd59a', n: 12, life: 0.3, age: 0 }); } }, i * 200); },
+    'hone-claws': f => { for (let i = 0; i < 3; i++) later(() => { if (f.state === 'idle') { SFX.slash(); shapes.push({ kind: 'cut', x0: f.cx - 30, y0: f.cy - 30 + i * 8, x1: f.cx + 30, y1: f.cy - 20 + i * 8, w: 8, c: C_DARK, life: 0.3, age: 0 }); } }, i * 120); },
+    'howl': f => { SFX.sonic(); f.bump(-8); for (let i = 0; i < 4; i++) later(() => { if (f.state === 'idle') ringP(f.cx, f.top + 6, 8, 90, '#ffd59a', 0.5, { flat: 0.5, w: 2 }); }, i * 100); },
+    'magnetic-flux': f => { for (let i = 0; i < 3; i++) ringP(f.cx, f.cy, 10, f.w, i % 2 ? '#ff5a5a' : '#5a8aff', 0.6, { flat: 0.4, w: 2, delay: i * 0.12 }); }
+  };
+  const HEAL_X = {
+    'rest': f => { for (let i = 0; i < 5; i++) spawn({ bm: 'zzz', c: ['#ffffff', '#cfe3ff', '#8fb3ff'], x: f.x + f.face * f.w * 0.2, y: f.top, vx: R(10, 30) * f.face, vy: -40, life: 1.4, delay: i * 0.2, s0: 2, s1: 3, fade: true }); },
+    'roost': f => { tw(0.5, k => { f.jz = Math.sin(k * Math.PI) * -6; }); for (let i = 0; i < 14; i++) spawn({ bm: 'gust', c: ['#ffffff', '#f0e6d6', '#c8b8a0'], x: f.cx + R(-60, 60), y: f.top - R(20, 80), vx: R(-20, 20), vy: R(30, 60), sway: 80, life: 1.2, delay: i * 0.04, s0: 2, s1: 2, rot: R(0, 6), spin: 3, fade: true }); },
+    'heal-pulse': f => { for (let i = 0; i < 4; i++) ringP(f.cx, f.cy, 10, 90, '#ff9ccf', 0.6, { flat: 1, w: 2, delay: i * 0.12 }); },
+    'life-dew': f => { for (let i = 0; i < 20; i++) spawn({ kind: 'drop', c: ['#8fd0ff'], x: f.x + R(-f.w / 2, f.w / 2), y: f.y + R(-6, 6), z: R(140, 220), vz: -60, g: 600, life: 1.2, delay: i * 0.03, s0: R(1, 2), splash: true }); },
+    'moonlight': f => { shapes.push({ kind: 'moon', x: f.cx, y: f.top - 50, r: 20, life: 0.9, age: 0 }); dimTo(0.3, 1); },
+    'swallow': f => { f.bump(6); glowP(f.cx, f.cy, 10, 80, '#ffe0a0', 0.6, 0.8); }
+  };
+  const DEBUFF_X = {
+    'kinesis': (f, d) => { for (let i = 0; i < 4; i++) later(() => shapes.push({ kind: 'wave2', x: f.mouth().x, y: f.mouth().y, a: Math.atan2(d.cy - f.cy, d.cx - f.cx), vx: (d.cx - f.cx) * 1.2, vy: (d.cy - f.cy) * 1.2, col: '#ff9ccf', span: 0.6, life: 0.7, age: 0 }), i * 100); },
+    'play-nice': (f, d) => { for (let i = 0; i < 6; i++) spawn({ bm: 'heart', c: ['#ff5aa8', '#ffd6ef', '#c0307e'], x: f.cx, y: f.cy, vx: (d.cx - f.cx) * 1.3 + R(-30, 30), vy: (d.cy - f.cy) * 1.3 - 60, life: 0.8, delay: i * 0.08, s0: 3, s1: 3, fade: true }); },
+    'howl': f => BUFF_X['howl'](f), 'magnetic-flux': f => BUFF_X['magnetic-flux'](f)
+  };
+  {
+    const baseBuff = S.buff, baseHeal = S.heal, baseDebuff = S.debuff;
+    S.buff = async (f, d, m, o, hit) => { if (BUFF_X[m.id]) BUFF_X[m.id](f); return baseBuff(f, d, m, o, hit); };
+    S.heal = async (f, d, m, o, hit) => { if (HEAL_X[m.id]) HEAL_X[m.id](f); return baseHeal(f, d, m, o, hit); };
+    S.debuff = async (f, d, m, o, hit, v) => { if (DEBUFF_X[m.id]) DEBUFF_X[m.id](f, d); return baseDebuff(f, d, m, o, hit, v); };
+  }
+  // contact flavours: Headbutt leads with the head, Covet trails hearts
+  {
+    const baseStrike = STRIKE.charge;
+    STRIKE.charge = async (f, d, spec, h, landed) => {
+      if (spec.head) { f.rotA = f.face * 0.45; shapes.push({ kind: 'dizzy', f: d, life: 0.8, age: 0 }); }
+      if (spec.hearts) for (let i = 0; i < 8; i++) spawn({ bm: 'heart', c: ['#ff5aa8', '#ffd6ef', '#c0307e'], x: d.cx, y: d.cy, vx: R(-160, 160), vy: R(-180, 40), drag: 2, life: 0.7, s0: 2, s1: 2, fade: true });
+      return baseStrike(f, d, spec, h, landed);
+    };
+  }
+
+  // ---------------------------------------------------------------------
   //  Hit reactions
   // ---------------------------------------------------------------------
   function impactFx(d, m, eff, crit, frac = 0.2) {
@@ -3325,6 +3540,7 @@ const Retro = (() => {
     if (f.state !== 'idle' && m.cat === 'status') return;
     if (!selfT && d.state !== 'idle') return;
     if (!selfT && d.protectUntil > T) { text(d, 'BLOCKED!', 'info'); SFX.block(); ringFx(d.cx, d.cy, d.r, d.r * 2.2, '#b6ffd9', 0.3, { flat: 1 }); return; }
+    if (!selfT) { const hk = hiddenCheck(d, m); if (!hk) { text(d, d.invuln === 'fly' ? 'UP IN THE SKY!' : 'UNDERGROUND!', 'miss'); return; } if (hk > 1) mult *= hk; }
     if (!selfT && miss) { dodge(d, f); text(d, 'MISSED!', 'miss'); AudioFX.Crowd.gasp(); return; }
     if (m.cat === 'status') return statusMove(f, selfT ? f : d, m);
     const eff = m.type ? effectiveness(m.type, t.types) : 1;
@@ -3373,7 +3589,7 @@ const Retro = (() => {
       u.hp = Math.max(0, u.hp - recoil); f.white = 0.8; number(f, recoil, 0, 'burn'); hud(p);
       if (u.hp <= 0) koFighter(f);
     }
-    if (RECHARGE.has(m.id) && u.hp > 0) { text(f, 'MUST RECHARGE', 'info'); f.extraCd = (f.extraCd || 0) + 2.2; }
+    if (RECHARGE.has(m.id) && u.hp > 0) { text(f, 'MUST RECHARGE', 'info'); f.extraCd = (f.extraCd || 0) + 2.2; f.rechargeUntil = T + 2.6; }
   }
   function chooseMove(f, d) {
     const u = f.mon, t = d.mon;
@@ -3426,6 +3642,7 @@ const Retro = (() => {
     catch (e) { if (e instanceof BattleAbort) throw e; console.warn('retro fx', m.id, e); }
     chk(tk);
     f.dashing = false; f.crouchT = 0; f.jz = 0;
+    if (f.state === 'idle') { f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; }
     if (r !== 'nohit') hit();
     if (controllers[p] === 'human') humanRow(p);
   }
@@ -3500,9 +3717,10 @@ const Retro = (() => {
     if (cpu && f.plan == null) f.plan = chooseMove(f, foe);
     f.cd -= dt;
     // telegraph: a short ready crouch just before it acts
-    f.crouchT = f.cd > 0 && f.cd < 0.3 ? 0.55 : 0;
+    f.crouchT = f.rechargeUntil > T ? 0.75 : f.cd > 0 && f.cd < 0.3 ? 0.55 : 0;
     if (f.cd > 0) return;
     f.crouchT = 0;
+    if (cpu && foe.invuln && !(f.plan >= 0 && hiddenCheck(foe, f.mon.moves[f.plan]))) { f.cd = 0.2; return; }
     if (cpu && f.forceMove == null) {
       const swi = considerSwitch(f, foe);
       if (swi >= 0) { f.busy = true; switchOut(f, swi, token).catch(swallow); return; }
@@ -3580,6 +3798,7 @@ const Retro = (() => {
   }
   function koFighter(f) {
     if (f.state !== 'idle') return;
+    f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
     f.state = 'faint';
     const p = f.p, mon = f.mon, tk = token;
     playCry(mon, 0.8); SFX.faint();
@@ -3810,6 +4029,7 @@ const Retro = (() => {
   }
   return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field, SW, cam: { x: camX, y: camY, z: camZ } }),
     // test hook: play one move's effect (no damage) with the battle paused
-    _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; } }); parts.length = 0; shapes.length = 0; },
-    _testMove: async (id, visual) => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { if (hit) return; hit = true; if (visual && m.cat !== 'status') { const pw = impactFx(d, m, 1, false); knock(d, f, pw * 0.4); } }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
+    _fxMap: () => Object.keys(MOVES).filter(moveSupported).map(id => { const m = { id, ...MOVES[id] }; const [st, v] = classify(m).split(':'); return [id, SIG[id] ? 'sig' : st === 'contact' ? 'ct:' + (CT[id] ? CT[id].v : 'default-' + (v || '')) : st, m.type, m.cat]; }),
+    _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
+    _testMove: async (id, visual) => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { if (hit) return; hit = true; if (visual && m.cat !== 'status') { const pw = impactFx(d, m, 1, false); knock(d, f, pw * 0.4); } }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
 })();
