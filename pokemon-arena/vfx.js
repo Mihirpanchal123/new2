@@ -533,6 +533,8 @@ const VFX = (() => {
   S.orb = async (c) => {
     const { a, d, P, type, mv } = c;
     await World.cast(a);
+    charge(mouthOf(a), type, 0.55, c.variant === 'big' ? 1.4 : 1);
+    await wait(520);
     const from = mouthOf(a), to = centerOf(d), pw = power(mv), big = c.variant === 'big';
     const size = (big ? 1.4 : 1) * (0.7 + pw * 0.35);
     const cur = from.clone();
@@ -560,12 +562,12 @@ const VFX = (() => {
     const from = mouthOf(a);
     World.cast(a);
     SFX.beam(type, 0.75);
-    charge(from, type, 0.4, 0.9);
-    await wait(380);
+    charge(from, type, 0.65, 1.1);
+    await wait(620);
     const to = centerOf(d), pw = power(mv);
-    beam(from, to, P.c, { radius: 0.16 + pw * 0.08, dur: 0.75, intensity: 3 });
-    flashLight(from, P.c, { intensity: 40, dur: 0.3, hold: 0.6 });
-    flashLight(to, P.c, { intensity: 40, dur: 0.3, hold: 0.6 });
+    beam(from, to, P.c, { radius: 0.16 + pw * 0.08, dur: 1.3, intensity: 3 });
+    flashLight(from, P.c, { intensity: 40, dur: 0.3, hold: 1.1 });
+    flashLight(to, P.c, { intensity: 40, dur: 0.3, hold: 1.1 });
     bloomKick(0.25);
     const dir = to.clone().sub(from);
     let t = 0;
@@ -577,9 +579,9 @@ const VFX = (() => {
       }
       if (type === 'Psychic' || type === 'Dragon' || type === 'Dark') { if (Math.random() < 0.25) airRing(from.clone().addScaledVector(dir, Math.random()), P.c, { from: 0.4, to: 1.2, dur: 0.3 }); }
       typeBurst(to, type, 0.12);
-      return t < 0.75;
+      return t < 1.3;
     });
-    await wait(750);
+    await wait(1300);
     impact(to, type, 1.2 * pw);
     if (type === 'Ice') { decal('frost', to, 3); for (let i = 0; i < 6; i++) debris('ice', to.clone(), sphereDir().multiplyScalar(4).setY(rnd(2, 5)), { color: 0xbfefff, life: 1.2 }); }
     await wait(150);
@@ -591,9 +593,9 @@ const VFX = (() => {
     const from = mouthOf(a), to = centerOf(d), dir = to.clone().sub(from), dist = dir.length();
     dir.normalize();
     const speed = 11, life = dist / speed;
-    flashLight(from, P.c, { intensity: 30, dur: 0.3, hold: 0.8 });
-    flashLight(to, P.c, { intensity: 45, dur: 0.4, hold: 0.8 });
-    SFX.stream(type, 0.95);
+    flashLight(from, P.c, { intensity: 30, dur: 0.3, hold: 1.4 });
+    flashLight(to, P.c, { intensity: 45, dur: 0.4, hold: 1.4 });
+    SFX.stream(type, 1.5);
     let t = 0;
     run(dt => {
       t += dt;
@@ -611,9 +613,9 @@ const VFX = (() => {
       }
       if (type === 'Fire' && Math.random() < 0.4) smoke(to, 1);
       typeBurst(to, type, 0.08);
-      return t < 0.9;
+      return t < 1.5;
     });
-    await wait(900 + life * 600);
+    await wait(1500 + life * 600);
     impact(to, type, 1.1 * power(mv), { ring: false });
     if (type === 'Fire') decal('scorch', to, 3);
     if (type === 'Water') decal('puddle', to, 3);
@@ -623,9 +625,9 @@ const VFX = (() => {
     const { a, d, P, mv } = c;
     const A = World.actors[a];
     World.cast(a);
-    for (let i = 0; i < 18; i++) { const o = centerOf(a).add(sphereDir().multiplyScalar(A.height * 0.6)); bolt(centerOf(a), o, P.c, { dur: 0.15, width: 0.06, jag: 0.6 }); await wait(15); }
+    for (let i = 0; i < 30; i++) { const o = centerOf(a).add(sphereDir().multiplyScalar(A.height * 0.6)); bolt(centerOf(a), o, P.c, { dur: 0.15, width: 0.06, jag: 0.6 }); await wait(18); }
     const from = World.anchor(a, 'top'), to = centerOf(d);
-    for (let i = 0; i < 3; i++) { bolt(from, to.clone().add(rv(0.3)), P.c, { dur: 0.45, width: 0.2 }); await wait(60); }
+    for (let i = 0; i < 6; i++) { bolt(from, to.clone().add(rv(0.3)), P.c, { dur: 0.45, width: 0.2 }); await wait(90); }
     flashLight(to, P.c, { intensity: 80, dur: 0.4, hold: 0.3 });
     screenFlash(C(1, 1, 0.7), 0.25, 0.2, true);
     bloomKick(0.6);
@@ -741,7 +743,7 @@ const VFX = (() => {
     const start = wall.position.clone(), end = D.clone().addScaledVector(dir, 3).setY(1.6);
     SFX.stream(water ? 'Water' : type, 1.3);
     let hit = false;
-    await tween(1.25, k => {
+    await tween(1.8, k => {
       wall.position.lerpVectors(start, end, k);
       wall.scale.set(1, Math.sin(Math.min(1, k * 1.3) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.85) * 4), 1);
       mat.opacity = 0.82 * (1 - Math.max(0, k - 0.8) * 5);
@@ -1097,9 +1099,7 @@ const VFX = (() => {
     World.focusOne(a, { elev: 0.5, dist: 0.95 });
     if (d !== a) later(() => { if (Cam.mode === 'one' && Cam.a === a) World.focusMove(a, d); }, 420);
     CUR = { eff: 1, ...outcome, d };
-    // every 3D move animation plays 1.6x longer (the whole scene slows while it plays; one move at a time)
     const prevFx = FX_TIME;
-    FX_TIME = 1 / 1.6;
     try { await (S[style] || S.generic)(c); }
     catch (e) { console.warn('effect error', id, e); }
     finally { CUR = { eff: 1 }; FX_TIME = prevFx; }

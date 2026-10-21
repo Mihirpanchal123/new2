@@ -37,7 +37,7 @@ const Retro = (() => {
   // Move animations play FX_SLOW times longer than their base timing: every visual effect
   // (particles, projectiles, beams, shapes, lights) runs on the slowed effect clock FT, and
   // the timing helpers below wait proportionally longer, so impacts stay in sync.
-  const FX_SLOW = 1.6;
+  const FX_SLOW = 1;                                   // 1 = full speed (animations are long by design, not slowed)
   let FT = 0;
   const wait = ms => RAW_TIME.wait(ms * FX_SLOW);
   const later = (fn, ms) => RAW_TIME.later(fn, ms * FX_SLOW);
@@ -919,6 +919,8 @@ const Retro = (() => {
     const h = Math.max(4, gy - y);                     // height of the hit above the ground
     glowP(x, y, 8, 34 * pw, '#ffffff', 0.12, 1);
     glowP(x, y, 14, 95 * pw, K.glow, 0.42, 0.95);
+    glowP(x, y, 10, 70 * pw, K.glow, 0.9, 0.45, 0.12);                 // lingering afterglow
+    if (pw > 0.7) for (let i = 0; i < 6 * pw; i++) moteP(x + R(-20, 20) * pw, y + R(-16, 16) * pw, K.glow, { vy: R(-50, -15), life: R(0.6, 1.1), delay: R(0.15, 0.45), drag: 1 });
     if (!o.quiet) lightAt(x, gy, 150 * pw, K.light, 0.55, 0.9);
     switch (K.main) {
       case 'flame': for (let i = 0; i < 14 * n; i++) { const an = R(0, 6.28), sp = R(70, 260) * pw; flameP(x, y, Math.cos(an) * sp, Math.sin(an) * sp * 0.7 - 50, R(3, 6) * Math.min(1.4, pw), R(0.35, 0.75), { c: K.fc }); } break;
@@ -936,7 +938,7 @@ const Retro = (() => {
       case 'heart': for (let i = 0; i < 9 * n; i++) spawn({ bm: i % 3 ? 'star' : 'heart', c: ['#ffffff', '#ffd6ef', '#ff8ed0'], x, y, vx: R(-180, 180), vy: R(-200, 80), drag: 2.5, life: R(0.5, 0.9), s0: 2, s1: 2, fade: true }); break;
     }
     if (K.mist) for (let i = 0; i < 4 * n; i++) smokeP(x + R(-12, 12), y + R(-10, 10), R(2, 4), R(0.5, 0.9), K.mist, { a: 0.5 });
-    if (K.smoke) for (let i = 0; i < 4 * n; i++) smokeP(x + R(-14, 14), y + R(-10, 6), R(3, 5), R(0.9, 1.5), undefined, { delay: 0.12 + i * 0.03 });
+    if (K.smoke) for (let i = 0; i < 6 * n; i++) smokeP(x + R(-14, 14), y + R(-10, 6), R(3, 5), R(1.2, 2.0), undefined, { delay: 0.12 + i * 0.05 });
     if (K.sparks && K.main !== 'spark') for (let i = 0; i < 10 * n; i++) sparkP(x, y, R(0, 6.28), R(140, 380) * pw, K.sparks, R(0.25, 0.5));
     if (K.motes && K.main !== 'mote') for (let i = 0; i < 8 * n; i++) moteP(x, y, K.motes, { vx: R(-160, 160), vy: R(-160, 80), drag: 3, life: 0.7 });
     if (K.bolts) for (let i = 0; i < 3; i++) { const an = R(0, 6.28), L = R(40, 80) * pw; boltFx({ ax: x, ay: y, bx: x + Math.cos(an) * L, by: y + Math.sin(an) * L * 0.8, jag: 14, c: TP.Electric.c, life: 0.22, w: 0.6 }); }
@@ -1791,13 +1793,13 @@ const Retro = (() => {
   const AURA_C = ['#ffffff', '#bfe6ff', '#4aa8ff', '#1e5ad6', '#0c2a7a'];
   // anticipation: crouch, an aura and energy gathering at the mouth, then a recoil on release
   async function charge(f, m, sec = 0.3, o = {}) {
-    sec = Math.max(0.12, sec / tempo(f));
+    sec = Math.max(0.2, sec * 1.6 / tempo(f));
     const P = PAL(m), col = o.col || P.c[1];
     f.crouchT = 1; f.aura = col; f.auraT = FT + sec + 0.15;
     if (o.dim) dimTo(o.dim, sec + (o.hold ?? 0.7));
-    for (let i = 0; i < (o.motes || 18); i++) {
+    for (let i = 0; i < (o.motes || 18) * 1.6; i++) {
       const an = R(0, 6.28), r = R(30, 80);
-      moteP(0, 0, o.moteCol || col, { life: sec, delay: i * sec / 24, s: 1, path: k => { const mo = f.mouth(); return { x: mo.x + Math.cos(an) * r * (1 - k), y: mo.y + Math.sin(an) * r * (1 - k) }; } });
+      moteP(0, 0, o.moteCol || col, { life: sec * 0.7, delay: i * sec / 40, s: 1, path: k => { const mo = f.mouth(); return { x: mo.x + Math.cos(an) * r * (1 - k), y: mo.y + Math.sin(an) * r * (1 - k) }; } });
     }
     spawn({ kind: 'glow', c: [col], x: 0, y: 0, s0: 4, s1: o.size || 36, life: sec + 0.06, a: 0.9, must: true, path: () => f.mouth() });
     await wait(sec * 1000);
@@ -1889,7 +1891,7 @@ const Retro = (() => {
   }
   const S = {};
   S.orb = async (f, d, m, o, hit, big = false) => {
-    await charge(f, m, big ? 0.5 : 0.28, { dim: big ? 0.28 : 0, size: big ? 50 : 34 });
+    await charge(f, m, big ? 0.75 : 0.5, { dim: big ? 0.28 : 0.12, size: big ? 60 : 42, motes: 26 });
     if (!on) return;
     SFX.whoosh();
     const q = await fire(f, d, m, o, { big });
@@ -1918,12 +1920,12 @@ const Retro = (() => {
     const t0 = FT, K = IMP[m.type] || IMP.Normal;
     lightAt(f.x, f.y, 140, K.light, 1.0, 0.7, () => { const mo = f.mouth(); return { x: (mo.x + d.cx) / 2, y: (f.y + d.y) / 2 }; });
     let hitDone = false;
-    while (FT - t0 < 0.85 && on) {
+    while (FT - t0 < 1.45 && on) {
       const mo = f.mouth(), tx = d.cx, ty = d.cy + offY, dx = tx - mo.x, dy = ty - mo.y, L = Math.hypot(dx, dy) || 1;
       for (let i = 0; i < 5; i++) streamEmit(m, mo.x, mo.y, dx / L, dy / L, L, pw * 1.15);
       f.kx -= f.face * 8;
       if (!hitDone && FT - t0 > 0.3) { hitDone = true; hit(); }
-      if (hitDone && !o.miss && Math.random() < 0.5) impactAt(m.type || 'Normal', tx + R(-10, 10), ty + R(-10, 10), d.y, 0.35, { quiet: true });
+      if (hitDone && !o.miss && Math.random() < 0.4) impactAt(m.type || 'Normal', tx + R(-10, 10), ty + R(-10, 10), d.y, 0.35, { quiet: true });
       await wait(30);
     }
     if (!hitDone) hit();
@@ -1982,7 +1984,7 @@ const Retro = (() => {
     if (!on || f.state !== 'idle') return;
     SFX.beam(m.type, 0.6);
     const mo = f.mouth(), mOff = side();
-    const b = beamFx({ from: f, to: o.miss ? null : d, owner: f, m, ax: mo.x, ay: mo.y, bx: d.cx + (o.miss ? 90 : 0), by: d.cy + (o.miss ? 60 * mOff : 0), w: B.w * 1.2, c: B.c, life: 0.85, deco: B.deco });
+    const b = beamFx({ from: f, to: o.miss ? null : d, owner: f, m, ax: mo.x, ay: mo.y, bx: d.cx + (o.miss ? 90 : 0), by: d.cy + (o.miss ? 60 * mOff : 0), w: B.w * 1.2, c: B.c, life: 1.45, deco: B.deco });
     if (B.shake) { shakeIt(B.shake); later(() => shakeIt(B.shake), 300); }
     const other = beams.find(x => x !== b && x.owner === d && x.to === f && b.to === d && !x.reached && !x.clash && x.age < x.life);
     if (other) startClash(b, other);
@@ -2004,13 +2006,13 @@ const Retro = (() => {
     await charge(f, m, 0.22, { col: '#fff59a', motes: 10, size: 26, recoil: 40 });
     SFX.zap(); SFX.thunder && pw >= 1 && SFX.zap();
     const off = o.miss ? 80 * side() : 0;
-    for (let i = 0; i < (pw >= 1 ? 3 : 1); i++) later(() => boltFx({ from: f, to: o.miss ? null : d, off, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx + off, by: d.cy + (o.miss ? 30 : 0), jag: 30 * pw, c: TP.Electric.c, life: 0.42, w: pw }), i * 90);
+    for (let i = 0; i < (pw >= 1 ? 6 : 3); i++) later(() => boltFx({ from: f, to: o.miss ? null : d, off, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx + off, by: d.cy + (o.miss ? 30 : 0), jag: 30 * pw, c: TP.Electric.c, life: 0.42, w: pw }), i * 120);
     lightAt(d.x + off, d.y, 200 * pw, '#ffe94a', 0.6, 0.9);
     flash('#fffbe0', 0.12 * pw);
     await wait(90);
     hit();
-    if (!o.miss) { const fz = d; for (let i = 0; i < 8; i++) later(() => { if (fz.state === 'idle') { fz.white = 0.8; fz.whiteCol = '#fff59a'; sparkP(fz.x + R(-fz.w / 2, fz.w / 2), fz.cy + R(-fz.h / 2, fz.h / 2), R(0, 6.28), R(60, 160), '#fff27a', 0.2); } }, i * 50); }
-    await wait(380);
+    if (!o.miss) { const fz = d; for (let i = 0; i < 16; i++) later(() => { if (fz.state === 'idle') { fz.white = 0.8; fz.whiteCol = '#fff59a'; sparkP(fz.x + R(-fz.w / 2, fz.w / 2), fz.cy + R(-fz.h / 2, fz.h / 2), R(0, 6.28), R(60, 160), '#fff27a', 0.2); } }, i * 50); }
+    await wait(700);
   };
   S.sky = async (f, d, m, o, hit) => {
     await charge(f, m, 0.4, { col: '#fff59a', dim: 0.5, hold: 0.9, size: 30 });
@@ -2045,7 +2047,8 @@ const Retro = (() => {
     await wait(260);
     hit();
     dust(d.x, d.y, 2.2);
-    await wait(500);
+    later(() => { if (!on) return; shakeIt(7); SFX.rumble(0.6); ringFx(f.x, f.y, 20, Math.max(VW, VH) * 0.35, '#c8a070', 0.7, { w: 2 }); dust(d.x, d.y, 1.5); }, 420);
+    await wait(900);
   };
   S.rockslide = async (f, d, m, o, hit) => {
     SFX.rumble(0.9);
@@ -2102,7 +2105,7 @@ const Retro = (() => {
     SFX.stream(t, 1.1);
     if (t !== 'Water') dimTo(0.2, 1.2);
     const ax = f.x, ay = f.y, dx = d.x - ax, dy = d.y - ay, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-    const t0 = FT, dur = 1.0;
+    const t0 = FT, dur = 1.5;
     let done = false;
     while (FT - t0 < dur && on) {
       const k = (FT - t0) / dur * 1.35, cx = ax + dx * k, cy = ay + dy * k;
@@ -2155,7 +2158,7 @@ const Retro = (() => {
     if (m.id === 'hurricane' || m.id === 'twister') {
       await charge(f, m, 0.25, { col: '#ffffff', dim: 0.2 });
       const tx = d.x + (o.miss ? 80 * side() : 0), ty = d.y;
-      tornado(tx, ty, m, 1.1);
+      tornado(tx, ty, m, 1.8);
       await wait(300); hit(); if (!o.miss) { d.jz = 0; tw(0.6, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 50; }).then(() => { d.jz = 0; }); }
       await wait(700);
       return;
@@ -2183,7 +2186,7 @@ const Retro = (() => {
   const MULTI_BM = { Grass: 'leaf', Bug: 'needle', Ice: 'shard', Water: 'bubble', Steel: 'shard', Normal: 'star', Rock: 'rock', Dragon: 'shard', Fairy: 'heart', Psychic: 'star', Fire: 'flame', Ground: 'rock' };
   S.multi = async (f, d, m, o, hit) => {
     const P = PAL(m), bm = MULTI_BM[m.type] || P.bm, homing = m.id === 'magical-leaf' || m.id === 'swift';
-    const n = m.id === 'leaf-storm' || m.id === 'petal-dance' || m.id === 'petal-blizzard' ? 14 : 6;
+    const n = m.id === 'leaf-storm' || m.id === 'petal-dance' || m.id === 'petal-blizzard' ? 14 : 9;
     if (n > 6) return storm(f, d, m, o, hit);
     await charge(f, m, 0.15, { motes: 8, size: 22, recoil: 30 });
     let first = null;
@@ -2222,11 +2225,11 @@ const Retro = (() => {
     const col = t === 'Fire' ? TP.Fire.c : t === 'Water' ? ['#ffffff', '#bfe9ff', '#5ab4ff', '#2b6fd6'] : t === 'Ground' ? ['#f6e2b4', '#d9ad6a', '#a8773e', '#6e4a26'] : tp(t).c;
     for (let i = 0; i < 90; i++) {
       const ph = i / 90 * 6.28 * 4, hh = (i % 12) * 8;
-      spawn({ kind: t === 'Fire' ? 'flame' : 'blob', c: t === 'Fire' ? TP.Fire.c : [col[i % 3 + 1], col[0]], x: tx, y: ty, life: 1.0, delay: i * 0.008, s0: 3, s1: 1.5,
+      spawn({ kind: t === 'Fire' ? 'flame' : 'blob', c: t === 'Fire' ? TP.Fire.c : [col[i % 3 + 1], col[0]], x: tx, y: ty, life: 1.0, delay: i * 0.014, s0: 3, s1: 1.5,
         path: k => ({ x: tx + Math.cos(ph + k * 12) * (d.r + 14 - k * 6), y: ty - hh * (0.4 + k * 0.6) - 6 + Math.sin(ph + k * 12) * 12 }) });
     }
     lightAt(tx, ty, 120, (IMP[t] || IMP.Normal).light, 1.1, 0.8);
-    await wait(160); hit(); await wait(850);
+    await wait(160); hit(); await wait(1400);
   };
   S.drain = async (f, d, m, o, hit) => {
     await charge(f, m, 0.2, { col: '#a6ff7a', motes: 10 });
@@ -2515,7 +2518,7 @@ const Retro = (() => {
   async function windup2(f, d, spec, big) {
     const dir = Math.sign(d.x - f.x) || f.face, x0 = f.x;
     f.face = dir; f.crouchT = 1;
-    await tw((big ? 0.2 : 0.14) / tempo(f), k => { const e = easeOut(k); f.x = x0 - dir * (big ? 26 : 18) * e; f.rotA = -dir * 0.14 * e; });
+    await tw((big ? 0.3 : 0.22) / tempo(f), k => { const e = easeOut(k); f.x = x0 - dir * (big ? 30 : 22) * e; f.rotA = -dir * 0.16 * e; f.crouchT = 1; });
     f.crouchT = 0;
   }
   async function lunge(f, d, spec, big) {
@@ -2706,7 +2709,7 @@ const Retro = (() => {
       if (n > 1 && h < n - 1) await wait(70);
     }
     if (big) camPunch(d.cx, d.cy, 0.06, 0.3);
-    await wait(big ? 150 : 90);
+    await wait(big ? 300 : 200);                                  // hold the impact pose a beat
     await recover(f, s, big);
   };
   // ---- signature moves ----
@@ -2966,8 +2969,9 @@ const Retro = (() => {
     if (id === 'iron-defense' || id === 'harden' || id === 'defense-curl' || id === 'acid-armor' || id === 'withdraw' || id === 'cotton-guard' || id === 'stockpile') { for (let i = 0; i < 4; i++) later(() => { f.white = 0.9; f.whiteCol = col; }, i * 120); shapes.push({ kind: 'slash', x: f.cx, y: f.cy, a: -0.8, len: f.h, bend: 0, col: '#ffffff', life: 0.4, age: 0 }); }
     if (id === 'shell-smash') { for (let i = 0; i < 14; i++) spawn({ kind: 'debris', c: ['#e8dcc0', '#c8b890', '#8a7a5a'], x: f.x, y: f.y, z: f.h * 0.5, vz: R(150, 300), g: 900, vx: R(-200, 200), vy: R(-80, 80), life: 0.9, s0: 2, rot: R(0, 6), spin: 10, bounce: true }); SFX.impact('Rock', 0.8, 1); }
     ringFx(f.x, f.y, 10, f.r * 2.2, col, 0.55); ringFx(f.x, f.y, 10, f.r * 1.5, '#ffffff', 0.5, { delay: 0.12 });
-    rise(f, col);
-    await wait(450); hit(); await wait(200);
+    rise(f, col, 24);
+    for (let i = 1; i < 4; i++) later(() => { if (f.state === 'idle') { ringFx(f.x, f.y, 10, f.r * (1.6 + i * 0.4), i % 2 ? col : '#ffffff', 0.5); f.bump(-3); } }, i * 220);
+    await wait(850); hit(); await wait(350);
   };
   S.debuff = async (f, d, m, o, hit, variant) => {
     SFX.debuff();
@@ -3273,7 +3277,7 @@ const Retro = (() => {
     await tw(0.5, k => { f.jz = easeIn(k) * 560; f.after = 0.08; f.afterCol = '#ffffff'; });
     f.invuln = 'fly';
     // up in the sky: only its shadow is visible, gliding over to the target
-    const sx = f.x, sy = f.y, t0 = FT, hold = 1.0;
+    const sx = f.x, sy = f.y, t0 = FT, hold = 1.4;
     while (FT - t0 < hold && on) {
       const k = (FT - t0) / hold, tx = d.state === 'idle' ? d.x - dir * (f.r + d.r) * 0.5 : sx, ty = d.state === 'idle' ? d.y : sy;
       f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
@@ -3307,7 +3311,7 @@ const Retro = (() => {
     f.invuln = 'dig';
     shapes.push({ kind: 'mound', f, life: 9, age: 0 });
     // the mound races under the field toward the target
-    const sx = f.x, sy = f.y, run = 0.85;
+    const sx = f.x, sy = f.y, run = 1.15;
     while (FT - t0 < 0.55 + run && on) {
       const k = clamp((FT - t0 - 0.55) / run, 0, 1), tx = d.state === 'idle' ? d.x : sx, ty = d.state === 'idle' ? d.y + 4 : sy;
       f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
@@ -3673,7 +3677,7 @@ const Retro = (() => {
   }
   let cinemaUntil = 0;
   async function doMega(f, tk) {
-    cinemaUntil = T + 3.7 * FX_SLOW;
+    cinemaUntil = T + 3.9;
     const p = f.p, u = f.mon, fm = u.megaForm;
     state.players[p].usedMega = true;
     const tr = TR[p], ks = { x: tr.x + (p ? -12 : 12), y: tr.y - 84 };
