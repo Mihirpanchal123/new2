@@ -1,8 +1,8 @@
 # Pokémon Arena
 
-3D arena battles with 81 Pokémon (full evolution lines) and 33 Mega Evolutions, real stats, level-up movesets and the official damage formula.
+Pokémon battles in Retro 2D pixel art or 3D with 299 Pokémon from all nine generations (full evolution lines, starters of every generation and the major legendaries) and 55 Mega Evolutions, real stats, level-up movesets plus classic TM / tutor moves, 340 usable moves and the official damage formula.
 
-- **Real 3D Pokémon:** animated 3D models (111 of 114 forms, incl. Megas) with a procedural rig — breathing, walking, lunging, recoiling, roaring, fainting. Models with full game animations use them.
+- **Real 3D Pokémon:** animated 3D models for the original 111 forms (Pokémon added later appear as their animated sprite in 3D until a model is downloaded) with a procedural rig — breathing, walking, lunging, recoiling, roaring, fainting. Models with full game animations use them.
 - **Trainers:** a 3D trainer per player (outfits: Red, Blue, Leaf, May, Dawn, Ethan; custom names). They throw the Poké Ball, point to command, raise their Key Stone for Mega Evolution, cheer and despair.
 - **3D move effects:** GPU particles, energy beams, lightning, shockwaves, debris, ground scorch/crack/frost marks, dynamic lights and bloom. Every move has an effect styled by its type (beam, stream, orb, bolt, sky strike, quake, rock slide, slash, bite, punch, buff, heal, drain, powder, shield...).
 - **Broadcast camera:** high-angle view with close-ups on attacks, throws, Mega Evolutions and faints.

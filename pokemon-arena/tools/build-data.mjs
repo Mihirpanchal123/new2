@@ -14,9 +14,33 @@ const ROOTS = [
   'bulbasaur', 'charmander', 'squirtle', 'pichu', 'pidgey', 'abra', 'machop', 'gastly',
   'magikarp', 'dratini', 'eevee', 'scyther', 'kangaskhan', 'mewtwo', 'mareep', 'houndour',
   'larvitar', 'treecko', 'torchic', 'mudkip', 'ralts', 'aron', 'absol', 'bagon', 'beldum',
-  'rayquaza', 'munchlax', 'riolu', 'gible'
+  'rayquaza', 'munchlax', 'riolu', 'gible',
+  // Gen 1
+  'caterpie', 'weedle', 'nidoran-f', 'nidoran-m', 'vulpix', 'igglybuff', 'zubat', 'oddish', 'growlithe', 'poliwag',
+  'geodude', 'ponyta', 'slowpoke', 'magnemite', 'onix', 'cubone', 'rhyhorn', 'horsea', 'staryu', 'lapras',
+  'aerodactyl', 'articuno', 'zapdos', 'moltres', 'mew', 'porygon', 'tyrogue', 'elekid', 'magby',
+  // Gen 2
+  'chikorita', 'cyndaquil', 'totodile', 'togepi', 'heracross', 'sneasel', 'skarmory', 'raikou', 'entei', 'suicune',
+  'lugia', 'ho-oh', 'phanpy', 'wooper',
+  // Gen 3
+  'wingull', 'shroomish', 'slakoth', 'trapinch', 'swablu', 'feebas', 'duskull', 'snorunt', 'spheal',
+  'kyogre', 'groudon', 'latias', 'latios',
+  // Gen 4
+  'turtwig', 'chimchar', 'piplup', 'shinx', 'starly', 'buneary', 'dialga', 'palkia', 'giratina', 'darkrai',
+  // Gen 5
+  'snivy', 'tepig', 'oshawott', 'zorua', 'axew', 'deino', 'litwick',
+  // Gen 6
+  'froakie', 'fennekin', 'chespin', 'honedge', 'goomy',
+  // Gen 7
+  'rowlet', 'litten', 'popplio', 'rockruff', 'mimikyu',
+  // Gen 8
+  'grookey', 'scorbunny', 'sobble', 'dreepy',
+  // Gen 9
+  'sprigatito', 'fuecoco', 'quaxly', 'tinkatink'
 ];
 const EXCLUDE = new Set(['kleavor']);
+// moves taught by TM / move tutor (game.js tmMoves) that no level-up learnset includes
+const EXTRA_MOVES = ['solar-beam', 'fly', 'dig', 'hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'dive', 'bounce'];
 
 const MEGA_STONES = {
   'venusaur-mega': 'Venusaurite', 'charizard-mega-x': 'Charizardite X', 'charizard-mega-y': 'Charizardite Y',
@@ -30,7 +54,13 @@ const MEGA_STONES = {
   'rayquaza-mega': 'Dragon Ascent', 'lucario-mega': 'Lucarionite', 'garchomp-mega': 'Garchompite',
   // Legends: Z-A
   'raichu-mega-x': 'Raichunite X', 'raichu-mega-y': 'Raichunite Y', 'dragonite-mega': 'Dragoninite',
-  'absol-mega-z': 'Absolite Z', 'lucario-mega-z': 'Lucarionite Z', 'garchomp-mega-z': 'Garchompite Z'
+  'absol-mega-z': 'Absolite Z', 'lucario-mega-z': 'Lucarionite Z', 'garchomp-mega-z': 'Garchompite Z',
+  'beedrill-mega': 'Beedrillite', 'slowbro-mega': 'Slowbronite', 'steelix-mega': 'Steelixite', 'aerodactyl-mega': 'Aerodactylite',
+  'heracross-mega': 'Heracronite', 'altaria-mega': 'Altarianite', 'glalie-mega': 'Glalitite', 'latias-mega': 'Latiasite',
+  'latios-mega': 'Latiosite', 'lopunny-mega': 'Lopunnite', 'starmie-mega': 'Starminite', 'skarmory-mega': 'Skarmorite',
+  'feraligatr-mega': 'Feraligite', 'staraptor-mega': 'Staraptite', 'darkrai-mega': 'Darkranite', 'meganium-mega': 'Meganiumite',
+  'emboar-mega': 'Emboarite', 'froslass-mega': 'Froslassite', 'chandelure-mega': 'Chandelurite', 'greninja-mega': 'Greninjite',
+  'delphox-mega': 'Delphoxite', 'chesnaught-mega': 'Chesnaughtite'
 };
 
 const VERSION_PREF = ['scarlet-violet', 'sword-shield', 'ultra-sun-ultra-moon', 'sun-moon',
@@ -159,7 +189,7 @@ async function main() {
       const mp = await getJSON(`${API}/pokemon/${vn}`);
       const suffix = vn.endsWith('-x') ? ' X' : vn.endsWith('-y') ? ' Y' : vn.endsWith('-z') ? ' Z' : '';
       const mega = { name: vn, display: `Mega ${display}${suffix}`, types: typesOf(mp), base: statsOf(mp),
-        stone: MEGA_STONES[vn] || cap(vn) + ' Stone', sprite: null, cry: null };
+        stone: MEGA_STONES[vn] || display.replace(/[^A-Za-z]/g, '').replace(/[aeiou]$/i, '') + 'ite' + suffix, sprite: null, cry: null };
       entry.megas.push(mega);
       sprites.push([mega, mp]);
     }
@@ -184,6 +214,7 @@ async function main() {
   });
 
   // 4. moves
+  EXTRA_MOVES.forEach(m => allMoves.add(m));
   console.log(`Reading ${allMoves.size} moves...`);
   const moves = {};
   await pool([...allMoves], 10, async name => {

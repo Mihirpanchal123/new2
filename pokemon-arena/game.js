@@ -36,25 +36,40 @@ const effectiveness = (atk, defs) => defs.reduce((m, d) => m * (CHART[atk] && d 
 const AILMENT = { paralysis: 'par', burn: 'brn', poison: 'psn', sleep: 'slp', freeze: 'frz', confusion: 'conf', 'leech-seed': 'seed', trap: 'trap', protect: 'protect' };
 const MAJOR = ['par', 'brn', 'psn', 'slp', 'frz'];
 // two-turn, recharge, self-KO and other moves this engine doesn't model
-const BANNED = new Set(['solar-blade', 'sky-attack', 'skull-bash', 'razor-wind', 'dive', 'bounce',
-  'phantom-force', 'shadow-force', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'meteor-beam',
+const BANNED = new Set(['skull-bash', 'razor-wind',
   'focus-punch', 'future-sight', 'self-destruct', 'explosion', 'dream-eater', 'belly-drum', 'curse', 'substitute', 'last-resort',
   'counter', 'mirror-coat', 'metal-burst', 'bide', 'synchronoise', 'swagger', 'flatter', 'mirror-move', 'sleep-talk', 'snore',
-  'role-play', 'rock-wrecker', 'roar-of-time', 'prismatic-laser', 'eternabeam', 'steel-beam', 'mind-blown', 'memento']);
+  'role-play', 'steel-beam', 'mind-blown', 'memento']);
 // two-turn moves (charge, then strike; Fly/Dig hide the user in between) and moves that need a recharge turn
-const TWO_TURN = { 'solar-beam': { msg: 'took in sunlight!' }, fly: { msg: 'flew up high!', hide: 'fly' }, dig: { msg: 'burrowed its way under the ground!', hide: 'dig' } };
-const RECHARGE_MOVES = new Set(['hyper-beam', 'giga-impact']);
+const TWO_TURN = {
+  'solar-beam': { msg: 'took in sunlight!' }, 'solar-blade': { msg: 'absorbed light!' }, 'sky-attack': { msg: 'became cloaked in a harsh light!' },
+  'meteor-beam': { msg: 'is overflowing with space power!' },
+  fly: { msg: 'flew up high!', hide: 'fly' }, bounce: { msg: 'sprang up!', hide: 'fly' },
+  dig: { msg: 'burrowed its way under the ground!', hide: 'dig' }, dive: { msg: 'hid underwater!', hide: 'dive' },
+  'phantom-force': { msg: 'vanished instantly!', hide: 'vanish' }, 'shadow-force': { msg: 'vanished instantly!', hide: 'vanish' }
+};
+const RECHARGE_MOVES = new Set(['hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'roar-of-time', 'rock-wrecker', 'prismatic-laser', 'eternabeam']);
 // the few moves that can reach a Pokémon in the sky or underground (value = damage multiplier)
-const HITS_HIDDEN = { fly: { thunder: 1, hurricane: 1, gust: 2, twister: 2, 'sky-uppercut': 1, 'smack-down': 1 }, dig: { earthquake: 2, magnitude: 2, fissure: 1 } };
+const HITS_HIDDEN = { fly: { thunder: 1, hurricane: 1, gust: 2, twister: 2, 'sky-uppercut': 1, 'smack-down': 1 }, dig: { earthquake: 2, magnitude: 2, fissure: 1 }, dive: { surf: 2, whirlpool: 2 }, vanish: {} };
 const moveTiming = id => TWO_TURN[id] ? (TWO_TURN[id].hide ? 0.8 : 0.65) : RECHARGE_MOVES.has(id) ? 0.7 : 1;
 // classic TM moves, on top of the level-up learnsets
 const NO_FLY = new Set(['gyarados', 'butterfree', 'beautifly', 'scyther', 'yanma', 'ledyba', 'ledian', 'masquerain', 'mothim', 'vespiquen', 'combee']);
+const STARTERS = {
+  grass: ['venusaur', 'meganium', 'sceptile', 'torterra', 'serperior', 'chesnaught', 'decidueye', 'rillaboom', 'meowscarada'],
+  fire: ['charizard', 'typhlosion', 'blaziken', 'infernape', 'emboar', 'delphox', 'incineroar', 'cinderace', 'skeledirge'],
+  water: ['blastoise', 'feraligatr', 'swampert', 'empoleon', 'samurott', 'greninja', 'primarina', 'inteleon', 'quaquaval']
+};
 function tmMoves(species) {
   const sp = DEX.species[species], out = [];
   if (sp.types.includes('Grass')) out.push('solar-beam');
   if (sp.types.includes('Flying') && !NO_FLY.has(species)) out.push('fly');
   if (sp.types.includes('Ground') || sp.types.includes('Rock')) out.push('dig');
   if (!sp.evolvesTo.length) out.push('hyper-beam');
+  if (sp.types.includes('Water')) out.push('dive');
+  // the ultimate moves taught to fully evolved starters
+  if (STARTERS.grass.includes(species)) out.push('frenzy-plant');
+  if (STARTERS.fire.includes(species)) out.push('blast-burn');
+  if (STARTERS.water.includes(species)) out.push('hydro-cannon');
   return out.filter(id => MOVES[id]);
 }
 const UNIQUE_OK = new Set(['rest', 'protect', 'detect', 'shell-smash', 'wave-crash', 'aqua-cutter']);
@@ -455,6 +470,7 @@ async function hideMon(p, kind) {
   SFX.whoosh();
   World.focusOne(p);
   if (kind === 'fly') await tween(0.6, k => { A.lift = easeIn(k) * 8; A.opacity = 1 - k * k; });
+  else if (kind === 'vanish') await tween(0.5, k => { A.opacity = 1 - k; });
   else { World.shake(0.25); SFX.rumble(0.6); await tween(0.55, k => { A.lift = -k * 1.4; A.opacity = 1 - k; }); }
   A.visible = false; A.lift = 0; A.opacity = 1; A.hidden = kind;
   World.overview();
@@ -1090,7 +1106,7 @@ function makeSpec(species, level) {
 }
 
 function randomTeam() {
-  const LEGENDARY = ['mewtwo', 'rayquaza'];
+  const LEGENDARY = ['mewtwo', 'rayquaza', 'articuno', 'zapdos', 'moltres', 'mew', 'raikou', 'entei', 'suicune', 'lugia', 'ho-oh', 'kyogre', 'groudon', 'latias', 'latios', 'dialga', 'palkia', 'giratina', 'darkrai'];
   // balanced pool: fully evolved, non-legendary Pokémon only
   const pool = DEX.order.filter(n => DEX.species[n].minLevel <= settings.level &&
     (settings.pool === 'any' || (!DEX.species[n].evolvesTo.length && !LEGENDARY.includes(n))));
