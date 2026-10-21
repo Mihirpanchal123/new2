@@ -893,11 +893,183 @@ const Retro = (() => {
     if (!o.quiet) {
       ringFx(x, gy, 8, 34 + 40 * pw, K.ring, 0.38);
       if (K.decal && pw > 0.8) addDecal(K.decal, x, gy, 0.6 + pw * 0.35);
+      scarGround(type, x, gy, pw);
     }
+  }
+
+  // ---------------------------------------------------------------------
+  //  Arena damage: craters, loose stones, fissures, and lingering terrain
+  //  (fires, puddles, ice, toxic pools, lava, boulders). Marks pile up
+  //  over the battle so the field tells the story of the fight.
+  // ---------------------------------------------------------------------
+  const terrain = [];
+  const mix = (rgb, k) => rgb.map(v => clamp(Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)), 0, 255));
+  const rgbStr = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  function groundRGB() { return rgbOf(TH && TH.pal ? TH.pal[0] : '#b98a68'); }
+  // pixel-art crater baked into the decal layer (art-pixel coordinates)
+  function crater(x, y, r) {
+    if (!decal) return;
+    const g = decal.getContext('2d'), ax = Math.round(x / PX), ay = Math.round(y / PX), R2 = Math.max(3, Math.round(r / PX));
+    const base = groundRGB(), pit = mix(base, -0.62), pit2 = mix(base, -0.45), rim = mix(base, 0.22), rimS = mix(base, -0.2);
+    for (let yy = -R2; yy <= R2; yy++) for (let xx = -Math.round(R2 * 1.45); xx <= Math.round(R2 * 1.45); xx++) {
+      const d = Math.hypot(xx / 1.45, yy) / R2 + (hash(ax + xx, ay + yy, 4) - 0.5) * 0.12;
+      if (d > 1.05) continue;
+      let c;
+      if (d < 0.62) c = (xx + yy < 0 ? pit : pit2);                // the pit, shaded toward the light
+      else if (d < 0.78) c = yy < 0 ? pit2 : rimS;                 // inner wall
+      else c = yy < 0 ? rimS : rim;                                // raised rim catching the light below
+      g.fillStyle = rgbStr(c); g.fillRect(ax + xx, ay + yy, 1, 1);
+    }
+    // cobbles knocked loose and pebbles thrown around
+    for (let i = 0; i < 6 + R2; i++) {
+      const an = R(0, 6.28), dd = R(1.1, 2.1) * R2, px2 = Math.round(ax + Math.cos(an) * dd * 1.4), py2 = Math.round(ay + Math.sin(an) * dd);
+      const w = Math.random() < 0.4 ? 3 : 2, h = 2;
+      g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(px2 + 1, py2 + 1, w, h);
+      g.fillStyle = rgbStr(mix(base, R(-0.15, 0.2))); g.fillRect(px2, py2, w, h);
+      g.fillStyle = rgbStr(mix(base, 0.35)); g.fillRect(px2, py2, w, 1);
+    }
+  }
+  // a long jagged fissure (Earthquake)
+  function fissure(x0, y0, x1, y1) {
+    if (!decal) return;
+    const g = decal.getContext('2d'), base = groundRGB(), dark = rgbStr(mix(base, -0.7)), edge = rgbStr(mix(base, 0.25));
+    let px2 = x0 / PX, py2 = y0 / PX;
+    const tx = x1 / PX, ty = y1 / PX, n = Math.ceil(Math.hypot(tx - px2, ty - py2) / 2);
+    for (let i = 0; i < n; i++) {
+      const k = i / n, w = 1 + Math.round(Math.sin(k * Math.PI) * 2);
+      px2 += (tx - px2) / (n - i) + R(-1.2, 1.2); py2 += (ty - py2) / (n - i) + R(-0.8, 0.8);
+      g.fillStyle = edge; g.fillRect(Math.round(px2), Math.round(py2) + w, w + 1, 1);
+      g.fillStyle = dark; g.fillRect(Math.round(px2), Math.round(py2), w, w);
+      if (Math.random() < 0.12) { let bx = px2, by = py2, an = R(0, 6.28); g.fillStyle = dark; for (let j = 0; j < 6; j++) { bx += Math.cos(an) * 1.5; by += Math.sin(an); g.fillRect(Math.round(bx), Math.round(by), 1, 1); an += R(-0.6, 0.6); } }
+    }
+  }
+  function sprout(x, y) {
+    if (!decal) return;
+    const g = decal.getContext('2d'), ax = x / PX, ay = y / PX;
+    for (let i = 0; i < 7; i++) { const tx = ax + R(-7, 7), ty = ay + R(-4, 4); g.fillStyle = '#2f7a2a'; g.fillRect(tx, ty, 1, 2); g.fillRect(tx + 2, ty, 1, 2); g.fillStyle = '#6ccf4a'; g.fillRect(tx + 1, ty - 1, 1, 2); }
+  }
+  function terrainAdd(kind, x, y, r, sec) {
+    x = clamp(x, field.x0 - 30, field.x1 + 30); y = clamp(y, field.y0 - 10, field.y1 + 20);
+    // merge with a nearby patch of the same kind instead of stacking dozens
+    const near = terrain.find(t => t.kind === kind && Math.hypot(t.x - x, t.y - y) < (t.r + r) * 0.95);
+    if (near) { near.r = Math.min(near.r * 1.15, 70); near.until = sec ? Math.max(near.until, T + sec) : Infinity; return near; }
+    const same = terrain.filter(t => t.kind === kind);
+    if (same.length >= 7) terrain.splice(terrain.indexOf(same[0]), 1);
+    if (terrain.length > 50) terrain.splice(terrain.findIndex(t => t.until !== Infinity) >= 0 ? terrain.findIndex(t => t.until !== Infinity) : 0, 1);
+    const t = { kind, x, y, r, t0: T, until: sec ? T + sec : Infinity, seed: Math.random() * 9, spawnT: 0 };
+    terrain.push(t);
+    return t;
+  }
+  // what an impact does to the ground
+  function scarGround(type, x, gy, pw, o = {}) {
+    if (!field) return;
+    if (pw >= 1.25) { crater(x, gy, 10 + pw * 9); terrainAdd('smoke', x, gy, 20, 2.5); }
+    switch (type) {
+      case 'Fire': if (pw > 0.8) terrainAdd('fire', x, gy, 16 + pw * 10, R(3, 5)); break;
+      case 'Water': terrainAdd('puddle', x, gy, 18 + pw * 12); break;
+      case 'Ice': terrainAdd('ice', x, gy, 18 + pw * 12); break;
+      case 'Poison': terrainAdd('toxic', x, gy, 16 + pw * 10, 9); break;
+      case 'Electric': terrainAdd('sparks', x, gy, 18, 1.8); break;
+      case 'Grass': sprout(x, gy); break;
+      case 'Ground': case 'Rock': case 'Fighting': if (pw > 1 && pw < 1.25) crater(x, gy, 8 + pw * 5); break;
+    }
+  }
+  function stepTerrain(dt) {
+    for (let i = terrain.length - 1; i >= 0; i--) {
+      const t = terrain[i];
+      if (T > t.until) {
+        if (t.kind === 'fire') addDecal('scorch', t.x, t.y, t.r / 16);
+        if (t.kind === 'toxic') addDecal('goo', t.x, t.y, t.r / 18);
+        if (t.kind === 'lava') { crater(t.x, t.y, t.r * 0.8); addDecal('scorch', t.x, t.y, t.r / 14); }
+        terrain.splice(i, 1); continue;
+      }
+      t.spawnT -= dt;
+      if (t.spawnT > 0) continue;
+      if (t.kind === 'fire') { t.spawnT = 0.06; flameP(t.x + R(-t.r, t.r), t.y + R(-t.r * 0.35, t.r * 0.35), R(-8, 8), R(-70, -35), R(2, 3.5), R(0.4, 0.7)); if (Math.random() < 0.15) smokeP(t.x + R(-t.r, t.r), t.y - 20, 3, 1.2); }
+      else if (t.kind === 'smoke') { t.spawnT = 0.15; smokeP(t.x + R(-t.r, t.r) * 0.6, t.y - 4, R(2, 4), 1.4, ['#6a5e5c', '#4a4240', '#3a3230'], { vy: R(-40, -20), a: 0.45 }); }
+      else if (t.kind === 'sparks') { t.spawnT = 0.12; sparkP(t.x + R(-t.r, t.r), t.y + R(-6, 6), R(3.5, 6), R(60, 150), '#fff27a', 0.2); }
+      else if (t.kind === 'toxic') { t.spawnT = 0.35; spawn({ kind: 'blob', c: ['#c56bf0', '#f0c8ff'], x: t.x + R(-t.r, t.r) * 0.8, y: t.y + R(-t.r, t.r) * 0.3, vy: -14, life: 0.7, s0: 1, s1: 2.2 }); }
+      else if (t.kind === 'lava') { t.spawnT = 0.25; if (T - t.t0 < (t.until - t.t0) * 0.6) spawn({ kind: 'blob', c: ['#ffb347', '#fff0a0'], x: t.x + R(-t.r, t.r) * 0.7, y: t.y + R(-t.r, t.r) * 0.3, vy: -18, life: 0.5, s0: 1, s1: 2 }); }
+      else t.spawnT = 0.5;
+    }
+    // Pokémon splash through puddles and kick up sparkles on ice
+    for (const f of F) {
+      if (!f || f.state !== 'idle' || f.hover || f.speed < 50 || Math.random() > dt * 10) continue;
+      for (const t of terrain) {
+        if (Math.hypot((f.x - t.x) / 1.4, f.y - t.y) > t.r) continue;
+        if (t.kind === 'puddle') for (let i = 0; i < 3; i++) spawn({ kind: 'drop', c: ['#bfe9ff'], x: f.x, y: f.y, z: 2, vx: R(-60, 60), vy: R(-20, 20), vz: R(60, 140), g: 700, life: 0.8, s0: 1, splash: true });
+        else if (t.kind === 'ice') moteP(f.x + R(-10, 10), f.y - 4, '#ffffff', { vy: -20, life: 0.4 });
+        else if (t.kind === 'fire') flameP(f.x, f.y, 0, -50, 2, 0.4);
+      }
+    }
+  }
+  // a patch drawn as 3 overlapping, seeded ellipses so no two look alike
+  function blobs(t, rx, ry, col, a, k) {
+    ctx.globalAlpha = a; ctx.fillStyle = col;
+    for (let i = 0; i < 3; i++) {
+      const an = t.seed * 2 + i * 2.1, ox = Math.cos(an) * rx * 0.28 * k, oy = Math.sin(an) * ry * 0.3 * k, sc = 0.62 + ((t.seed * (i + 3)) % 1) * 0.3;
+      ctx.beginPath(); ctx.ellipse(ox, oy, rx * sc * k, ry * sc * k, 0, 0, 6.28); ctx.fill();
+    }
+  }
+  function drawTerrain() {
+    for (const t of terrain) {
+      const age = T - t.t0, grow = Math.min(1, age / 0.25), fade = t.until === Infinity ? 1 : clamp((t.until - T) / 0.8, 0, 1);
+      const rx = t.r * 1.45 * grow, ry = t.r * 0.62 * grow;
+      ctx.save(); ctx.translate(t.x, t.y);
+      switch (t.kind) {
+        case 'puddle': {
+          blobs(t, rx, ry, '#1e4f8a', 0.4, 1);
+          blobs(t, rx, ry, '#6ab4f0', 0.35, 0.78);
+          ctx.globalAlpha = 0.8; ctx.fillStyle = '#e8f8ff'; ctx.fillRect(sn(-rx * 0.4), sn(-ry * 0.35), PX * 3, PX); ctx.fillRect(sn(rx * 0.15), sn(-ry * 0.1), PX * 2, PX);
+          const rp = (age * 0.6 + t.seed) % 1;
+          ctx.globalAlpha = 0.5 * (1 - rp); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(rx * 0.1, 0, rx * 0.7 * rp, ry * 0.7 * rp, 0, 0, 6.28); ctx.stroke();
+          break;
+        }
+        case 'ice': {
+          blobs(t, rx, ry, '#9fd8f5', 0.42, 1);
+          blobs(t, rx, ry, '#ffffff', 0.3, 0.55);
+          ctx.globalAlpha = 0.6; ctx.strokeStyle = '#7ac4f0'; ctx.lineWidth = 1;
+          for (let i = 0; i < 3; i++) { const a = t.seed + i * 2.1; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * rx * 0.8, Math.sin(a) * ry * 0.8); ctx.stroke(); }
+          ctx.globalAlpha = 1;
+          for (let i = 0; i < 3; i++) { const tw2 = Math.sin(T * 3 + t.seed * 3 + i * 2); if (tw2 > 0.6) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sn(Math.cos(t.seed + i * 2.5) * rx * 0.6) - PX, sn(Math.sin(t.seed + i * 2.5) * ry * 0.6), PX * 2, PX); } }
+          break;
+        }
+        case 'toxic': {
+          ctx.globalAlpha = 0.65 * fade; ctx.fillStyle = '#4e1a70'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 6.28); ctx.fill();
+          ctx.globalAlpha = 0.6 * fade; ctx.fillStyle = '#a54ad8'; ctx.beginPath(); ctx.ellipse(-rx * 0.05, -ry * 0.1, rx * 0.78, ry * 0.68, 0, 0, 6.28); ctx.fill();
+          break;
+        }
+        case 'fire': {
+          ctx.restore(); ctx.save();
+          ctx.translate(t.x, t.y); ctx.scale(1, 0.5); glow(0, 0, t.r * 3, '#ff6a1a', 0.55 * fade); ctx.restore(); ctx.save(); ctx.translate(t.x, t.y);
+          ctx.globalAlpha = 0.5 * fade; ctx.fillStyle = '#3a1a10'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 6.28); ctx.fill();
+          ctx.globalAlpha = fade;
+          for (let i = 0; i < 6; i++) { const a = t.seed + i * 1.05, px2 = Math.cos(a) * rx * 0.6, py2 = Math.sin(a) * ry * 0.5, h = (6 + Math.abs(Math.sin(T * 12 + i * 1.7 + t.seed)) * 10) * grow; drawDisc(px2, py2 - h * 0.3, 2.2, '#d9381e'); drawDisc(px2, py2 - h * 0.6, 1.5, '#ff8c1a'); drawDisc(px2, py2 - h * 0.85, 1, '#ffd23f'); }
+          break;
+        }
+        case 'lava': {
+          const cool = clamp(age / Math.max(0.1, t.until - t.t0), 0, 1);
+          ctx.restore(); ctx.save(); ctx.translate(t.x, t.y); ctx.scale(1, 0.5); glow(0, 0, t.r * 3, '#ff6a1a', 0.7 * (1 - cool)); ctx.restore(); ctx.save(); ctx.translate(t.x, t.y);
+          ctx.globalAlpha = 0.95; ctx.fillStyle = cool > 0.7 ? '#2a1e1c' : '#7a1e0e'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 6.28); ctx.fill();
+          ctx.globalAlpha = 1 - cool; ctx.fillStyle = '#ff7a1a'; ctx.beginPath(); ctx.ellipse(0, 0, rx * 0.8, ry * 0.75, 0, 0, 6.28); ctx.fill();
+          ctx.fillStyle = '#ffd060'; ctx.beginPath(); ctx.ellipse(-rx * 0.1, -ry * 0.1, rx * 0.45 * (0.8 + Math.sin(T * 4 + t.seed) * 0.2), ry * 0.38, 0, 0, 6.28); ctx.fill();
+          break;
+        }
+        case 'boulder': {
+          const s2 = t.r / 12;
+          ctx.globalAlpha = 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(4, 2, t.r * 1.1, t.r * 0.42, 0, 0, 6.28); ctx.fill();
+          ctx.globalAlpha = 1; drawBm('rock', ['#8a7a62', '#bcae90', '#4a4032'], 0, -t.r * 0.45, Math.max(3, Math.round(4 * s2)), false, t.seed);
+          break;
+        }
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ---- update ----
   function stepFx(dt) {
+    stepTerrain(dt);
     for (let i = parts.length - 1; i >= 0; i--) {
       const q = parts[i];
       q.age += dt;
@@ -1298,6 +1470,7 @@ const Retro = (() => {
     const BW = bg.width * PX, BH = bg.height * PX;
     ctx.drawImage(bg, 0, 0, BW, BH);
     ctx.drawImage(decal, 0, 0, BW, BH);
+    drawTerrain();
     for (const r of rings) {
       if (r.age < 0) continue;
       const k = r.age / r.life, rr = r.r0 + (r.r1 - r.r0) * easeOut(k);
@@ -1681,7 +1854,9 @@ const Retro = (() => {
       await wait(30);
     }
     if (!hitDone) hit();
-    if (m.type === 'Fire' && !o.miss) for (let k = 0.35; k < 1; k += 0.3) addDecal('scorch', f.x + (d.x - f.x) * k, f.y + (d.y - f.y) * k, 0.6);
+    if (m.type === 'Fire' && !o.miss) for (let k = 0.35; k < 1; k += 0.3) { addDecal('scorch', f.x + (d.x - f.x) * k, f.y + (d.y - f.y) * k, 0.6); if (pw >= 1) terrainAdd('fire', f.x + (d.x - f.x) * k, f.y + (d.y - f.y) * k, 14, R(2, 3.5)); }
+    if (m.type === 'Water' && !o.miss) terrainAdd('puddle', d.x, d.y, 20 + pw * 8);
+    if (m.type === 'Ice' && !o.miss) terrainAdd('ice', d.x, d.y, 20 + pw * 8);
   };
   function maybeClash(r, attacker) {
     if (!r || r.state !== 'idle' || r.busy || r.stuck || controllers[r.p] !== 'cpu' || canMega(r.p)) return;
@@ -1776,7 +1951,7 @@ const Retro = (() => {
     lightAt(tx, ty, 300, '#ffe94a', 0.8, 1);
     await wait(80);
     hit();
-    addDecal('scorch', tx, ty, 1.5); ringP(tx, ty, 10, 110, '#fff59a', 0.5); shakeIt(10); camPunch(tx, ty - 40, 0.08, 0.4);
+    addDecal('scorch', tx, ty, 1.5); crater(tx, ty, 20); terrainAdd('sparks', tx, ty, 26, 2.5); ringP(tx, ty, 10, 110, '#fff59a', 0.5); shakeIt(10); camPunch(tx, ty - 40, 0.08, 0.4);
     for (let i = 0; i < 20; i++) sparkP(tx, ty - 10, R(3.3, 6.1), R(200, 480), '#fff27a', R(0.3, 0.6));
     await wait(450);
   };
@@ -1788,6 +1963,8 @@ const Retro = (() => {
     SFX.quake(); shakeIt(big ? 16 : 10); camPunch(f.x, f.y - 30, 0.05, 0.5);
     for (let i = 0; i < 3; i++) ringFx(f.x, f.y, 20, Math.max(VW, VH) * 0.5, i ? '#8a6a44' : '#f0d4a0', 0.9, { delay: i * 0.14, w: 2 });
     dust(f.x, f.y, 3);
+    if (big) { crater(f.x, f.y, 16); fissure(f.x, f.y, clamp(d.x + (d.x - f.x) * 0.5, field.x0, field.x1), clamp(d.y + (d.y - f.y) * 0.5, field.y0, field.y1)); for (let i = 0; i < 2; i++) { const an = R(0, 6.28); fissure(f.x, f.y, clamp(f.x + Math.cos(an) * 220, field.x0, field.x1), clamp(f.y + Math.sin(an) * 110, field.y0, field.y1)); } }
+    else fissure(f.x, f.y, d.x, d.y);
     // cracks race across the ground toward the target, rocks pop up everywhere
     const steps = 7;
     for (let s = 0; s <= steps; s++) later(() => { const k = s / steps; addDecal('crack', f.x + (d.x - f.x) * k + R(-14, 14), f.y + (d.y - f.y) * k + R(-8, 8), 0.8 + k * 0.4); }, s * 28);
@@ -1803,7 +1980,7 @@ const Retro = (() => {
     for (let i = 0; i < (big ? 7 : 4); i++) {
       const tx = d.x + R(-55, 55) + (o.miss ? 100 * side() : 0), ty = d.y + R(-20, 20);
       spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: tx, y: ty, z: 520, vz: -260, g: 1600, life: 1.15, delay: i * 0.08, s0: pick([5, 6, 7]), rot: R(0, 6), spin: R(-4, 4), must: true,
-        land: q => { dust(q.x, q.y, 1.6, ['#cdb89a', '#b39c7e', '#8a7454']); shakeIt(5); addDecal('crack', q.x, q.y, 0.8); for (let j = 0; j < 5; j++) spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: q.x, y: q.y, z: 4, vz: R(120, 260), g: 1000, vx: R(-150, 150), vy: R(-60, 60), life: 0.7, s0: 2, rot: R(0, 6), spin: 10 }); SFX.impact('Rock', 0.8, 1); } });
+        land: q => { dust(q.x, q.y, 1.6, ['#cdb89a', '#b39c7e', '#8a7454']); shakeIt(5); crater(q.x, q.y, 10 + q.s0 * 1.5); if (Math.random() < 0.45 && terrain.filter(t => t.kind === 'boulder').length < 6) terrainAdd('boulder', q.x + R(-20, 20), q.y + R(-8, 8), 10 + q.s0); for (let j = 0; j < 5; j++) spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: q.x, y: q.y, z: 4, vz: R(120, 260), g: 1000, vx: R(-150, 150), vy: R(-60, 60), life: 0.7, s0: 2, rot: R(0, 6), spin: 10 }); SFX.impact('Rock', 0.8, 1); } });
     }
     await wait(560);
     hit();
@@ -1819,6 +1996,7 @@ const Retro = (() => {
         shapes.push({ kind: 'spike', x, y, c: P.c, h: last ? 110 : 26 + k * 40, wide: last ? 40 : 18, life: last ? 0.8 : 0.6, age: 0 });
         if (last) shapes.push({ kind: 'spike', x: x - 22, y: y + 4, c: P.c, h: 70, wide: 26, life: 0.75, age: 0 }, { kind: 'spike', x: x + 22, y: y + 6, c: P.c, h: 64, wide: 24, life: 0.75, age: 0 });
         dust(x, y, last ? 2 : 0.8); addDecal('crack', x, y, 0.6);
+        if (last) later(() => { if (terrain.filter(t => t.kind === 'boulder').length < 6) terrainAdd('boulder', x + 20, y + 6, 11); crater(x, y, 14); }, 600);
         if (i % 2) SFX.slash();
       }, i * 42);
     }
@@ -1843,6 +2021,7 @@ const Retro = (() => {
     SFX.impact(m.type, 1.4, 1);
     hit();
     addDecal(fire ? 'scorch' : 'crack', tx, ty, 1.6); shakeIt(9); camPunch(tx, ty - 60, 0.06, 0.45);
+    if (m.id === 'lava-plume' || m.id === 'eruption') terrainAdd('lava', tx, ty, 30, 9); else crater(tx, ty, 22);
     await wait(750);
   };
   S.wave = async (f, d, m, o, hit) => {
@@ -1870,8 +2049,9 @@ const Retro = (() => {
       await wait(30);
     }
     if (!done) hit();
-    if (t === 'Water') addDecal('wet', d.x, d.y, 1.6);
-    if (t === 'Ice') addDecal('frost', d.x, d.y, 1.6);
+    if (t === 'Water') { addDecal('wet', d.x, d.y, 1.6); for (let k = 0.3; k <= 1; k += 0.35) terrainAdd('puddle', ax + dx * k + R(-20, 20), ay + dy * k + R(-10, 10), R(22, 34)); }
+    if (t === 'Ice') { addDecal('frost', d.x, d.y, 1.6); for (let k = 0.5; k <= 1; k += 0.5) terrainAdd('ice', ax + dx * k + R(-20, 20), ay + dy * k + R(-10, 10), R(22, 32)); }
+    if (t === 'Fire') for (let k = 0.4; k <= 1; k += 0.3) terrainAdd('fire', ax + dx * k, ay + dy * k, 18, R(2.5, 4));
   };
   S.sound = async (f, d, m, o, hit) => {
     SFX.sonic();
@@ -2651,7 +2831,7 @@ const Retro = (() => {
     f.jz = 0; f.bump(10);
     hit();
     SFX.quake(); shakeIt(13); camPunch(tx, ty - 30, 0.07, 0.35);
-    ringFx(tx, ty, 10, 160, '#ffffff', 0.5, { w: 2 }); dust(tx, ty, 3); addDecal('crack', tx, ty, 1.4);
+    ringFx(tx, ty, 10, 160, '#ffffff', 0.5, { w: 2 }); dust(tx, ty, 3); addDecal('crack', tx, ty, 1.4); crater(tx, ty, 18);
     await wait(180);
     await bounceBack(f, { sx, sy }, 30);
   };
@@ -3541,7 +3721,7 @@ const Retro = (() => {
     const rj = rejectBattle;
     resolveBattle = rejectBattle = null;
     on = false; running = false; ended = true; token++;
-    parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = 0;
+    parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = terrain.length = 0;
     F[0] = F[1] = null;
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
     camT = null; camZ = 1; dimA = dimTarget = 0;
