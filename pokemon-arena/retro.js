@@ -621,11 +621,10 @@ const Retro = (() => {
     return clamp(80 + spd(m) * 0.6, 90, 240) * (m.hp / m.maxhp < 0.25 ? 0.85 : 1);
   }
   const isContact = mv => !!mv && classify({ id: mv.id, ...mv }).startsWith('contact');
+  // keep a real fighting distance: physical moves lunge across the gap, so nobody needs to walk up close
+  const space = (f, foe) => (portrait ? 190 : 250) + (f.r + foe.r) * 0.5;      // personal space (in 0.6-squashed ground units)
   function wantDist(f, foe) {
-    const plan = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
-    if (isContact(plan) && f.cd < 1.6) return f.r + foe.r + 46;         // close in before a physical hit
-    const physical = f.mon.stats.atk > f.mon.stats.spa * 1.15;
-    return (portrait ? 250 : 330) - (physical ? 60 : 0) + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
+    return (portrait ? 290 : 400) + (f.r + foe.r) * 0.4 + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
   }
   // each new goal comes from a tactic: sweep around the foe, cross to its other side,
   // reposition far across the field, retreat when hurt, or press in for a physical hit
@@ -638,13 +637,12 @@ const Retro = (() => {
     const r = Math.random();
     let mode = low && r < 0.4 ? 'retreat' : r < (fast ? 0.34 : 0.2) ? 'flank' : r < 0.62 ? 'arc' : 'roam';
     if (f.hitRun) { mode = Math.random() < 0.5 ? 'roam' : 'flank'; f.hitRun = false; }
-    else if (isContact(plan) && f.cd < 1.3) mode = 'press';
     f.mode = mode;
-    if (Math.random() < 0.25) f.orbit *= -1;
+    if (mode !== 'flank' && Math.random() < 0.25) f.orbit *= -1;
     let best = null, bs = -1e9;
     for (let i = 0; i < 14; i++) {
       let g;
-      if (mode === 'flank') { const ang = Math.atan2(f.y - foe.y, f.x - foe.x) + Math.PI + R(-0.8, 0.8); g = { x: foe.x + Math.cos(ang) * want, y: foe.y + Math.sin(ang) * want * 0.6 }; }
+      if (mode === 'flank') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(1.3, 1.7); g = { x: foe.x + Math.cos(ang) * want * 1.1, y: foe.y + Math.sin(ang) * want * 0.66 }; }   // circle round the foe a quarter-turn at a time (never cut through it)
       else if (mode === 'arc') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(0.8, 1.7); g = { x: foe.x + Math.cos(ang) * want * R(0.9, 1.3), y: foe.y + Math.sin(ang) * want * 0.6 * R(0.9, 1.3) }; }
       else if (mode === 'press') g = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40) + R(-20, 20), y: foe.y + R(-24, 24) };
       else g = { x: R(field.x0, field.x1), y: R(field.y0, field.y1) };
@@ -655,6 +653,7 @@ const Retro = (() => {
       if (mode === 'retreat') sc = df * 0.8 - (edge < 24 ? 60 : 0) + R(0, 40);
       else if (mode === 'press') sc = -travel * 0.2 + R(0, 20);
       else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - (edge < 30 ? 70 : 0) + R(0, 50);
+      if (df < space(f, foe)) sc -= 600;                                // never pick a spot right next to the foe
       if (sc > bs) { bs = sc; best = g; }
     }
     return best;
@@ -700,6 +699,21 @@ const Retro = (() => {
       if (d > 260 && f.speed > 180 && !f.hover && Math.random() < dt * 12) dust(f.x, f.y, 0.7);
       tvx = dx / d * sp; tvy = dy / d * sp;
       if (m.vol.conf) { tvx += Math.sin(T * 5 + f.p) * 70; tvy += Math.cos(T * 4.3) * 45; }
+      { const fo = foeOf(f);
+        if (fo && fo.state === 'idle' && !fo.dashing) {
+          const ax = f.x - fo.x, ay = (f.y - fo.y) / 0.6, L = Math.hypot(ax, ay) || 1, sp2 = space(f, fo);
+          if (L < sp2) {
+            // push apart, and steer around the foe instead of walking through it
+            const k = 1 - L / sp2, ux = ax / L, uy = ay / L, side2 = (-ay * tvx + ax * tvy) >= 0 ? 1 : -1;
+            let vy2 = tvy / 0.6;
+            const toward = -(tvx * ux + vy2 * uy);                       // cancel any movement toward the foe
+            if (toward > 0) { tvx += ux * toward; vy2 += uy * toward; }
+            const push = Math.pow(k, 0.7) * maxSpeed(f) * 3;
+            tvx += ux * push - uy * push * 0.6 * side2;
+            vy2 += uy * push + ux * push * 0.6 * side2;
+            tvy = vy2 * 0.6;
+          }
+        } }
       if (!f.hover && m.stats.spe * stageMult(m.stages.spe) > 95 && (f.hopT = (f.hopT ?? R(1.5, 3)) - dt) <= 0) {
         f.hopT = R(2, 3.5);
         const fo = foeOf(f);
@@ -1193,7 +1207,7 @@ const Retro = (() => {
     for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
     let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     if (camFocus && T < camFocus.until) { cx += (camFocus.x - cx) * 0.4; cy += (camFocus.y - cy) * 0.4; }
-    const z = clamp(Math.min(VW / (x1 - x0 + 520), VH / (y1 - y0 + 420)), 1.04, 1.24);
+    const z = clamp(Math.min(VW / (x1 - x0 + 620), VH / (y1 - y0 + 480)), 1.0, 1.12);
     // keep the action a little below centre (the HUD sits on top)
     cy -= VH * 0.07 / z;
     return { x: cx + Math.sin(T * 0.37) * 7, y: cy + Math.sin(T * 0.29 + 1) * 5, z: z + Math.sin(T * 0.21) * 0.01 };
@@ -2525,7 +2539,7 @@ const Retro = (() => {
     return { sx, sy };
   }
   async function recover(f, s, big) {
-    const x0 = f.x, y0 = f.y, z0 = f.jz, bx = x0 + (s.sx - x0) * 0.62, by = y0 + (s.sy - y0) * 0.62, r0 = f.rotA;
+    const x0 = f.x, y0 = f.y, z0 = f.jz, bx = s.sx, by = s.sy, r0 = f.rotA;
     await tw((big ? 0.38 : 0.32) / tempo(f), k => { const e = easeOut(k); f.x = x0 + (bx - x0) * e; f.y = y0 + (by - y0) * e; f.jz = z0 * (1 - e) + Math.sin(k * Math.PI) * (big ? 26 : 18); f.rotA = r0 * (1 - e); });
     f.jz = 0; f.rotA = 0; f.dashing = false; f.bump(4);
     if (!f.hover) dust(f.x, f.y, 0.8);
@@ -3742,11 +3756,7 @@ const Retro = (() => {
       if (!f.ready) { f.ready = true; document.getElementById('rrow' + f.p)?.classList.add('ready'); }
       return;
     }
-    // physical attackers close the distance before they swing
-    if (cpu && f.forceMove == null && f.plan >= 0 && isContact(f.mon.moves[f.plan])) {
-      const dd = Math.hypot(foe.x - f.x, foe.y - f.y);
-      if (dd > f.r + foe.r + 150 && (f.approach = (f.approach || 0) + dt) < 2.0) { f.goal = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40), y: foe.y + R(-10, 10) }; f.goalT = 0.3; return; }
-    }
+
     f.approach = 0;
     f.ready = false;
     document.getElementById('rrow' + f.p)?.classList.remove('ready');
