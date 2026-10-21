@@ -2,14 +2,7 @@
 // =====================================================================
 //  TRAINERS — stylised 3D trainers (procedural meshes + animation)
 // =====================================================================
-const OUTFITS = {
-  red:   { label: 'Red',   hat: 'cap',     hatColor: 0xd62828, hatFront: 0xffffff, hair: 0x2b1d14, hairStyle: 'short',    top: 0xd62828, sleeves: 'short', inner: 0x222222, legs: 0x2f4b8f, legStyle: 'pants',  shoes: 0xd62828, bag: 0xe9b949 },
-  blue:  { label: 'Blue',  hat: null,      hair: 0x9a6430, hairStyle: 'spiky',    top: 0x5b3a8e, sleeves: 'long',  inner: 0x2b2b2b, legs: 0x6b5a45, legStyle: 'pants',  shoes: 0x333333, bag: null, necklace: 0xcfd8dc },
-  leaf:  { label: 'Leaf',  hat: 'sunhat',  hatColor: 0xffffff, hatBand: 0xd62828, hair: 0x6b3d1f, hairStyle: 'long', top: 0x31b3c9, sleeves: 'none', inner: 0x31b3c9, legs: 0xd62828, legStyle: 'skirt', shoes: 0xffffff, bag: 0xe9b949 },
-  may:   { label: 'May',   hat: 'bandana', hatColor: 0xd62828, hair: 0x7a4a26, hairStyle: 'pigtails', top: 0xd62828, sleeves: 'short', inner: 0xd62828, legs: 0x262626, legStyle: 'shorts', shoes: 0xd62828, bag: 0x46b04a },
-  dawn:  { label: 'Dawn',  hat: 'beanie',  hatColor: 0xffffff, hatFront: 0xe85aa0, hair: 0x24365e, hairStyle: 'long', top: 0x1e1e2a, sleeves: 'none', inner: 0x1e1e2a, legs: 0x1e1e2a, legStyle: 'skirt', shoes: 0xe85aa0, scarf: 0xe85aa0, bag: 0xe9b949 },
-  ethan: { label: 'Ethan', hat: 'capback', hatColor: 0x222222, hatFront: 0xe9b949, hair: 0x2b1d14, hairStyle: 'short', top: 0xd62828, sleeves: 'short', inner: 0xe9b949, legs: 0x2f3e5f, legStyle: 'shorts', shoes: 0xd62828, bag: 0xe9b949 }
-};
+// OUTFITS lives in base.js (Retro mode uses it too)
 const SKIN = 0xf6cfa8;
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.BackSide });
 

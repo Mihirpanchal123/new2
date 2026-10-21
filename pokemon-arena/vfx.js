@@ -1097,9 +1097,12 @@ const VFX = (() => {
     World.focusOne(a, { elev: 0.5, dist: 0.95 });
     if (d !== a) later(() => { if (Cam.mode === 'one' && Cam.a === a) World.focusMove(a, d); }, 420);
     CUR = { eff: 1, ...outcome, d };
+    // every 3D move animation plays 1.6x longer (the whole scene slows while it plays; one move at a time)
+    const prevFx = FX_TIME;
+    FX_TIME = 1 / 1.6;
     try { await (S[style] || S.generic)(c); }
     catch (e) { console.warn('effect error', id, e); }
-    finally { CUR = { eff: 1 }; }
+    finally { CUR = { eff: 1 }; FX_TIME = prevFx; }
   }
 
   // ---------------------------------------------------------------

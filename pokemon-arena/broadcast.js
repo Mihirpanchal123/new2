@@ -8,13 +8,16 @@ const Broadcast = (() => {
   const $id = id => document.getElementById(id);
   const layer = $id('fxLayer');
   const opts = { hpBars: true, highlights: true, channel: '' };
-  const v = new THREE.Vector3(), tmp = new THREE.Vector3();
+  // 3D helpers are created once the 3D engine has loaded (see base.js)
+  let v = null, tmp = null;
+  const vecs = () => { if (!v) { v = new THREE.Vector3(); tmp = new THREE.Vector3(); } };
   const TYPE_BG = {
     Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Electric: '#e8c020', Grass: '#58b848', Ice: '#68c8d8',
     Fighting: '#c03028', Poison: '#a040a0', Ground: '#c8a048', Flying: '#8878e0', Psychic: '#f85888', Bug: '#98a818',
     Rock: '#b8a038', Ghost: '#705898', Dragon: '#7038f8', Dark: '#5a4838', Steel: '#9898b8', Fairy: '#e888a8'
   };
   const toScreen = pos => {
+    vecs();
     v.copy(pos).project(camera);
     const [w, h] = frameSize();
     return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h, v.z < 1];
@@ -27,6 +30,8 @@ const Broadcast = (() => {
   function floater(node, anchor, life, update) { layer.append(node); floaters.push({ node, anchor, life, age: 0, update }); }
   const hpBars = [0, 1].map(p => { const b = el(`ohp ohp${p}`, '<div class="ohp-name"></div><div class="ohp-bar"><div class="ohp-fill"></div></div>'); layer.append(b); return b; });
   updaters.push(dt => {
+    if (!World.has3D) return;
+    vecs();
     const sdt = dt / SPEED;
     for (let i = floaters.length - 1; i >= 0; i--) {
       const f = floaters[i];

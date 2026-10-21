@@ -6,6 +6,8 @@
 //  pixel move effects and a broadcast-style HUD. Both Pokémon move and
 //  attack at the same time (each on its own cooldown), so beams can clash.
 // =====================================================================
+// the game clock's timers, captured before Retro shadows them with slowed versions
+const RAW_TIME = { wait, later, tween };
 const Retro = (() => {
   const root = document.getElementById('retro');
   const cv = document.getElementById('rcv');
@@ -32,7 +34,15 @@ const Retro = (() => {
   const hash = (a, b, c = 0) => { let h = (a * 374761393 + b * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   const chk = tk => { if (tk !== token || !on) throw new BattleAbort(); };
   const swallow = e => { if (!(e instanceof BattleAbort)) console.warn('retro', e); };
-  const tw = (sec, fn) => tween(sec, fn);
+  // Move animations play FX_SLOW times longer than their base timing: every visual effect
+  // (particles, projectiles, beams, shapes, lights) runs on the slowed effect clock FT, and
+  // the timing helpers below wait proportionally longer, so impacts stay in sync.
+  const FX_SLOW = 1.6;
+  let FT = 0;
+  const wait = ms => RAW_TIME.wait(ms * FX_SLOW);
+  const later = (fn, ms) => RAW_TIME.later(fn, ms * FX_SLOW);
+  const tw = (sec, fn) => RAW_TIME.tween(sec * FX_SLOW, fn);
+  const waitN = RAW_TIME.wait;                         // normal speed (UI: intro, banners)
   const foeOf = f => F[1 - f.p];
 
   // ---------------------------------------------------------------------
@@ -654,7 +664,7 @@ const Retro = (() => {
   }
   function stepFighter(f, dt) {
     const m = f.mon;
-    f.white = Math.max(0, f.white - dt * 5);
+    f.white = Math.max(0, f.white - dt * 5 / FX_SLOW);
     f.sqv += (-f.sq * 240 - f.sqv * 12) * dt;
     f.sq = clamp(f.sq + f.sqv * dt, -0.45, 0.45);
     f.crouch += (f.crouchT - f.crouch) * Math.min(1, dt * 14);
@@ -663,10 +673,10 @@ const Retro = (() => {
     f.rotSV += (-f.rotS * 200 - f.rotSV * 11) * dt; f.rotS = clamp(f.rotS + f.rotSV * dt, -0.45, 0.45);
     if (!f.busy && !f.dashing) f.rotA *= Math.exp(-dt * 8);
     if (f.after > 0) {
-      f.after -= dt;
+      f.after -= dt / FX_SLOW;
       if ((f.afterT -= dt) <= 0) { f.afterT = 0.03; f.trail.push({ x: f.x, y: f.y - f.z, a: 0.6, sx: f.faceVis, t: T, rot: f.tilt + f.rotA }); }
     }
-    for (const g of f.trail) g.a -= dt * 2.8;
+    for (const g of f.trail) g.a -= dt * 2.8 / FX_SLOW;
     while (f.trail.length && f.trail[0].a <= 0) f.trail.shift();
     const bob = f.hover ? f.hover + Math.sin(T * 2.6 + f.p * 2) * 5 : 0;
     if (f.state !== 'idle') { f.z = bob * (1 - f.sink) + f.jz; return; }
@@ -820,8 +830,8 @@ const Retro = (() => {
     if (add) ctx.globalCompositeOperation = 'source-over';
   }
   function lightAt(x, y, r, col, life = 0.4, a = 0.8, follow = null) { lightsFx.push({ x, y, r, col, life, a, age: 0, follow }); }
-  function camPunch(x, y, amt = 0.06, dur = 0.35) { camT = { x, y, z: 1 + amt, until: T + dur }; }
-  function dimTo(a, sec) { dimTarget = a; dimUntil = T + sec; }
+  function camPunch(x, y, amt = 0.06, dur = 0.35) { camT = { x, y, z: 1 + amt, until: T + dur * FX_SLOW }; }
+  function dimTo(a, sec) { dimTarget = a; dimUntil = FT + sec; }
   function hitStop(ms) {
     if (TIME_SCALE < 0.2) return;
     const prev = TIME_SCALE;
@@ -1099,6 +1109,7 @@ const Retro = (() => {
 
   // ---- update ----
   function stepFx(dt) {
+    FT += dt;
     stepTerrain(dt);
     for (let i = parts.length - 1; i >= 0; i--) {
       const q = parts[i];
@@ -1162,7 +1173,7 @@ const Retro = (() => {
     for (let i = lightsFx.length - 1; i >= 0; i--) { const l = lightsFx[i]; l.age += dt; if (l.follow) { const p = l.follow(); if (p) { l.x = p.x; l.y = p.y; } } if (l.age > l.life) lightsFx.splice(i, 1); }
     shake = Math.max(0, shake - dt * 30);
     flashA = Math.max(0, flashA - dt * 2.5);
-    dimA += ((T < dimUntil ? dimTarget : 0) - dimA) * Math.min(1, dt * (T < dimUntil ? 8 : 3));
+    dimA += ((FT < dimUntil ? dimTarget : 0) - dimA) * Math.min(1, dt * (FT < dimUntil ? 8 : 3));
     // camera: punch toward the action, then settle back
     const punch = camT && T < camT.until, want = punch ? camT : directorView();
     const kc = Math.min(1, dt * (punch ? (want.z > camZ ? 10 : 3.2) : 2.2));
@@ -1503,7 +1514,7 @@ const Retro = (() => {
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
     for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * f.alpha, white: 1, whiteCol: f.afterCol });
-    if (f.aura && T < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
+    if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
       { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: f.alpha, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
@@ -1768,7 +1779,7 @@ const Retro = (() => {
   async function charge(f, m, sec = 0.3, o = {}) {
     sec = Math.max(0.12, sec / tempo(f));
     const P = PAL(m), col = o.col || P.c[1];
-    f.crouchT = 1; f.aura = col; f.auraT = T + sec + 0.15;
+    f.crouchT = 1; f.aura = col; f.auraT = FT + sec + 0.15;
     if (o.dim) dimTo(o.dim, sec + (o.hold ?? 0.7));
     for (let i = 0; i < (o.motes || 18); i++) {
       const an = R(0, 6.28), r = R(30, 80);
@@ -1890,14 +1901,14 @@ const Retro = (() => {
     const offY = o.miss ? R(45, 65) * side() : 0;
     await charge(f, m, 0.16, { motes: 8, size: 24, recoil: 30 });
     SFX.stream(m.type, 0.85);
-    const t0 = T, K = IMP[m.type] || IMP.Normal;
+    const t0 = FT, K = IMP[m.type] || IMP.Normal;
     lightAt(f.x, f.y, 140, K.light, 1.0, 0.7, () => { const mo = f.mouth(); return { x: (mo.x + d.cx) / 2, y: (f.y + d.y) / 2 }; });
     let hitDone = false;
-    while (T - t0 < 0.85 && on) {
+    while (FT - t0 < 0.85 && on) {
       const mo = f.mouth(), tx = d.cx, ty = d.cy + offY, dx = tx - mo.x, dy = ty - mo.y, L = Math.hypot(dx, dy) || 1;
       for (let i = 0; i < 5; i++) streamEmit(m, mo.x, mo.y, dx / L, dy / L, L, pw * 1.15);
       f.kx -= f.face * 8;
-      if (!hitDone && T - t0 > 0.3) { hitDone = true; hit(); }
+      if (!hitDone && FT - t0 > 0.3) { hitDone = true; hit(); }
       if (hitDone && !o.miss && Math.random() < 0.5) impactAt(m.type || 'Normal', tx + R(-10, 10), ty + R(-10, 10), d.y, 0.35, { quiet: true });
       await wait(30);
     }
@@ -2077,10 +2088,10 @@ const Retro = (() => {
     SFX.stream(t, 1.1);
     if (t !== 'Water') dimTo(0.2, 1.2);
     const ax = f.x, ay = f.y, dx = d.x - ax, dy = d.y - ay, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-    const t0 = T, dur = 1.0;
+    const t0 = FT, dur = 1.0;
     let done = false;
-    while (T - t0 < dur && on) {
-      const k = (T - t0) / dur * 1.35, cx = ax + dx * k, cy = ay + dy * k;
+    while (FT - t0 < dur && on) {
+      const k = (FT - t0) / dur * 1.35, cx = ax + dx * k, cy = ay + dy * k;
       for (let i = -6; i <= 6; i++) {
         const px = cx + nx * i * 21 + R(-6, 6), py = cy + ny * i * 21;
         if (t === 'Water' || t === 'Ground') {
@@ -2663,7 +2674,7 @@ const Retro = (() => {
     const t = m.type || 'Normal';
     const spec = CT[m.id] || { v: { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail' }[variant] || 'charge', c: TYPE_CT[t] || C_WHITE, el: t !== 'Normal' ? t : null };
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
-    if (spec.aura || big) { f.aura = c[1]; f.auraT = T + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
+    if (spec.aura || big) { f.aura = c[1]; f.auraT = FT + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
     if (!spec.fast) await windup2(f, d, spec, big);
     const s = await lunge(f, d, spec, big);
     if (!on) return;
@@ -2813,7 +2824,7 @@ const Retro = (() => {
     hit(); await wait(350);
   };
   SIG['meteor-mash'] = SIG['dynamic-punch'] = SIG['hammer-arm'] = async (f, d, m, o, hit) => {
-    if (m.id === 'meteor-mash') { f.aura = '#dfe6f0'; f.auraT = T + 0.6; }
+    if (m.id === 'meteor-mash') { f.aura = '#dfe6f0'; f.auraT = FT + 0.6; }
     await S.contact(f, d, { ...m, power: Math.max(100, m.power || 0) }, o, hit, 'fist');
   };
   SIG['bullet-punch'] = async (f, d, m, o, hit) => {
@@ -2831,7 +2842,7 @@ const Retro = (() => {
   SIG['close-combat'] = SIG['outrage'] = SIG['thrash'] = async (f, d, m, o, hit) => {
     // a furious flurry: several dashes and blows from different sides
     const rage = m.id !== 'close-combat';
-    if (rage) { f.aura = '#ff4a4a'; f.auraT = T + 1.4; }
+    if (rage) { f.aura = '#ff4a4a'; f.auraT = FT + 1.4; }
     const s = await dashTo(f, d, 0.14, { afterCol: rage ? '#ff8a8a' : '#ffd59a' });
     for (let i = 0; i < 6; i++) {
       if (!on || d.state !== 'idle') break;
@@ -2914,7 +2925,7 @@ const Retro = (() => {
   };
   SIG['giga-impact'] = SIG['double-edge'] = SIG['brave-bird'] = SIG['wave-crash'] = SIG['dragon-rush'] = SIG['zen-headbutt'] = SIG['iron-head'] = async (f, d, m, o, hit) => {
     const t = m.type || 'Normal', col = PAL(m).c[1];
-    f.aura = m.id === 'brave-bird' ? '#8fd0ff' : col; f.auraT = T + 0.9;
+    f.aura = m.id === 'brave-bird' ? '#8fd0ff' : col; f.auraT = FT + 0.9;
     dimTo(0.3, 0.9);
     for (let i = 0; i < 18; i++) moteP(f.cx + R(-f.w, f.w), f.cy + R(-f.h, f.h), f.aura, { vy: -60, life: 0.5, delay: i * 0.015 });
     await wait(200);
@@ -2933,7 +2944,7 @@ const Retro = (() => {
   S.buff = async (f, d, m, o, hit) => {
     const id = m.id, col = id === 'dragon-dance' ? '#9f8cff' : id === 'bulk-up' || id === 'belly-drum' ? '#ff6a4a' : id === 'nasty-plot' ? '#a070c8' : id === 'calm-mind' ? '#ff9ccf' : id === 'growth' ? '#a6eb6a' : id === 'iron-defense' || id === 'harden' || id === 'acid-armor' || id === 'autotomize' ? '#e6ebf2' : '#ffb36a';
     SFX.buff();
-    f.aura = col; f.auraT = T + 0.9; f.bump(-6);
+    f.aura = col; f.auraT = FT + 0.9; f.bump(-6);
     lightAt(f.x, f.y, 140, col, 0.9, 0.8);
     if (id === 'swords-dance') shapes.push({ kind: 'swords', f, life: 0.9, age: 0 });
     if (id === 'dragon-dance') for (let i = 0; i < 30; i++) flameP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h * 0.6), R(-15, 15), R(-150, -70), R(3, 4), 0.6, { c: id === 'dragon-dance' ? ['#ffe0d0', '#ff8a6a', '#9f5aff', '#3a22a8', '#1c1058'] : undefined, delay: i * 0.02 });
@@ -3145,7 +3156,7 @@ const Retro = (() => {
   STATUS_SIG['disable'] = STATUS_SIG['spite'] = STATUS_SIG['curse'] = STATUS_SIG['destiny-bond'] = STATUS_SIG['imprison'] = STATUS_SIG['perish-song'] = async (f, d, m, o, hit) => {
     const ghost = m.id !== 'disable', col = ghost ? '#8a5af0' : '#ff9ccf';
     dimTo(0.4, 1.3);
-    f.aura = col; f.auraT = T + 1.1;
+    f.aura = col; f.auraT = FT + 1.1;
     for (let i = 0; i < 16; i++) smokeP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h * 0.5), R(3, 5), 1, ghost ? IMP.Ghost.mist : ['#ffc8e8', '#ff9ccf', '#c0307e'], { vy: -60, a: 0.7, delay: i * 0.03 });
     await wait(400);
     for (let i = 0; i < 10; i++) { const a = center(f), b = center(d), ox = R(-20, 20); moteP(0, 0, col, { life: 0.6, delay: i * 0.04, s: 1.5, path: k => ({ x: a.x + (b.x - a.x) * k + ox * Math.sin(k * 6), y: a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 40 }) }); }
@@ -3248,9 +3259,9 @@ const Retro = (() => {
     await tw(0.5, k => { f.jz = easeIn(k) * 560; f.after = 0.08; f.afterCol = '#ffffff'; });
     f.invuln = 'fly';
     // up in the sky: only its shadow is visible, gliding over to the target
-    const sx = f.x, sy = f.y, t0 = T, hold = 1.0;
-    while (T - t0 < hold && on) {
-      const k = (T - t0) / hold, tx = d.state === 'idle' ? d.x - dir * (f.r + d.r) * 0.5 : sx, ty = d.state === 'idle' ? d.y : sy;
+    const sx = f.x, sy = f.y, t0 = FT, hold = 1.0;
+    while (FT - t0 < hold && on) {
+      const k = (FT - t0) / hold, tx = d.state === 'idle' ? d.x - dir * (f.r + d.r) * 0.5 : sx, ty = d.state === 'idle' ? d.y : sy;
       f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
       await wait(16);
     }
@@ -3271,7 +3282,7 @@ const Retro = (() => {
     text(f, 'DUG UNDERGROUND!', 'info');
     // burrow: dirt flies everywhere while it sinks out of sight
     SFX.rumble(0.8);
-    const t0 = T;
+    const t0 = FT;
     await tw(0.55 / tempo(f), k => {
       f.sink = Math.min(1, k * 1.3); f.alpha = 1 - k; f.rotA = Math.sin(k * 40) * 0.1; f.shiver = 0.1;
       if (Math.random() < 0.7) spawn({ kind: 'debris', c: ['#7a5432', '#a8773e', '#3b2814'], x: f.x + R(-14, 14), y: f.y, z: 4, vx: R(-200, 200), vy: R(-60, 40), vz: R(150, 320), g: 1000, life: 0.8, s0: pick([2, 2, 3]), rot: R(0, 6), spin: 10, bounce: true });
@@ -3283,8 +3294,8 @@ const Retro = (() => {
     shapes.push({ kind: 'mound', f, life: 9, age: 0 });
     // the mound races under the field toward the target
     const sx = f.x, sy = f.y, run = 0.85;
-    while (T - t0 < 0.55 + run && on) {
-      const k = clamp((T - t0 - 0.55) / run, 0, 1), tx = d.state === 'idle' ? d.x : sx, ty = d.state === 'idle' ? d.y + 4 : sy;
+    while (FT - t0 < 0.55 + run && on) {
+      const k = clamp((FT - t0 - 0.55) / run, 0, 1), tx = d.state === 'idle' ? d.x : sx, ty = d.state === 'idle' ? d.y + 4 : sy;
       f.x = sx + (tx - sx) * ease(k); f.y = sy + (ty - sy) * ease(k);
       if (Math.random() < 0.5) dust(f.x, f.y, 0.7, ['#a8773e', '#8a6a44', '#6e4a26']);
       if (Math.random() < 0.25) addDecal('crack', f.x, f.y, 0.5);
@@ -3648,7 +3659,7 @@ const Retro = (() => {
   }
   let cinemaUntil = 0;
   async function doMega(f, tk) {
-    cinemaUntil = T + 3.7;
+    cinemaUntil = T + 3.7 * FX_SLOW;
     const p = f.p, u = f.mon, fm = u.megaForm;
     state.players[p].usedMega = true;
     const tr = TR[p], ks = { x: tr.x + (p ? -12 : 12), y: tr.y - 84 };
@@ -3667,7 +3678,7 @@ const Retro = (() => {
     // 2. a rainbow helix links the Key Stone and the Mega Stone; the Pokémon starts to glow
     shapes.push({ kind: 'helix', f, x0: ks.x, y0: ks.y, life: 1.6, age: 0 });
     for (let i = 0; i < 30; i++) moteP(0, 0, RB[i % 7], { life: 0.7, delay: i * 0.035, s: 1.5, path: k => ({ x: ks.x + (f.cx - ks.x) * k, y: ks.y + (f.cy - ks.y) * k - Math.sin(k * Math.PI) * 40 }) });
-    f.aura = '#ffffff'; f.auraT = T + 3;
+    f.aura = '#ffffff'; f.auraT = FT + 3;
     await tw(0.8, k => { f.white = k * 0.6; f.whiteCol = '#ffffff'; }); chk(tk);
     // 3. a sphere of light closes around it and drinks in energy from all sides
     const orb = { kind: 'megaorb', f, phase: 'grow', life: 1.25, age: 0 };
@@ -3698,7 +3709,7 @@ const Retro = (() => {
     hud(p);
     // 5. a power-up flex: the aura flickers in its new type colour
     const col = (IMP[u.types[0]] || IMP.Normal).glow;
-    f.aura = col; f.auraT = T + 1.1;
+    f.aura = col; f.auraT = FT + 1.1;
     await tw(0.5, k => { f.white = 1 - k; f.whiteCol = '#ffffff'; }); chk(tk);
     for (let i = 0; i < 3; i++) later(() => { if (f.state === 'idle') { f.bump(-5); ringP(f.x, f.y, 8, f.r * 2.4, col, 0.4); } }, i * 180);
     await wait(500);
@@ -3915,8 +3926,8 @@ const Retro = (() => {
     const alive = q => state.players[q].team.some(m => m.hp > 0);
     const w = !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
     (async () => {
-      if (timeUp) { big('TIME UP!', '', 1600); await wait(1600); chk(tk); }
-      await wait(700); chk(tk);
+      if (timeUp) { big('TIME UP!', '', 1600); await waitN(1600); chk(tk); }
+      await waitN(700); chk(tk);
       AudioFX.Music.victory();
       cheer = 1; AudioFX.Crowd.cheer(1);
       big(`${PLAYER[w].toUpperCase()} WINS!`, 'win', 3600);
@@ -3924,7 +3935,7 @@ const Retro = (() => {
       confetti();
       const endL = state.meta.endLines;
       if (endL) { speech(w, endL[w] && endL[w].win, 2800); speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2800); }
-      await wait(3800); chk(tk);
+      await waitN(3800); chk(tk);
       const res = resolveBattle;
       resolveBattle = rejectBattle = null;
       if (res) res(w);
@@ -3946,10 +3957,10 @@ const Retro = (() => {
     SFX.banner();
     const lines = opts.lines;
     if (lines) { later(() => speech(0, lines[0], 1800), 900); later(() => speech(1, lines[1], 1800), 1700); }
-    await wait(3000); chk(tk);
+    await waitN(3000); chk(tk);
     card.classList.add('out');
     later(() => card.remove(), 450);
-    for (const n of ['3', '2', '1']) { big(n, 'count', 650); SFX.beep(false); await wait(620); chk(tk); }
+    for (const n of ['3', '2', '1']) { big(n, 'count', 650); SFX.beep(false); await waitN(620); chk(tk); }
     big('FIGHT!', 'count', 900); SFX.beep(true); SFX.start();
     cheer = 1; AudioFX.Crowd.cheer(0.8);
   }
@@ -3965,7 +3976,7 @@ const Retro = (() => {
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
     ambient(dt);
-    stepFx(dt);
+    stepFx(dt / FX_SLOW);
     render();
     const sec = Math.floor(clockT);
     if (sec !== lastTimer) { lastTimer = sec; const el = document.getElementById('rTimer'); if (el) el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
@@ -3999,6 +4010,7 @@ const Retro = (() => {
   }
   function battle(opts = {}) {
     stop();
+    FX_TIME = 1;
     on = true; ended = false; running = false; token++;
     const tk = token;
     T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camFocus = null; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;

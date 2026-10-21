@@ -219,7 +219,7 @@ function showBracket() {
   if (nx) document.getElementById('brPlay').onclick = () => Tour.play();
   else {
     document.getElementById('brNew').onclick = () => { Tour.quit(); hideBracket(); exitToBuilder(); openTourneySetup(); };
-    VFX.victory(new THREE.Vector3(0, 0, 0));
+    if (World.has3D && !World.skip3D) VFX.victory(new THREE.Vector3(0, 0, 0));
     AudioFX.Music.victory();
   }
   document.getElementById('brQuit').onclick = () => { Tour.quit(); hideBracket(); exitToBuilder(); };

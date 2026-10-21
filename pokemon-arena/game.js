@@ -923,6 +923,7 @@ async function runRetroBattle() {
 async function runBattle() {
   if (prefs.mode === 'retro') return runRetroBattle();
   Retro.stop();
+  if (!World.has3D) { toast('Loading 3D…', 6000); await window.load3D(); guard(); }
   World.reset();
   World.actors.forEach(a => { a.hidden = null; });
   World.trainers.reset();
@@ -994,6 +995,7 @@ async function runBattle() {
 function abortBattle() {
   battleToken++;
   TIME_SCALE = 1;
+  FX_TIME = 1;
   AudioFX.Music.stop();
   AudioFX.Crowd.stop();
   Broadcast.resetBattle();
@@ -1004,7 +1006,7 @@ function abortBattle() {
   pendingChoices.clear();
   skipWait = null;
   World.clearTimers();
-  VFX.clear();
+  if (World.has3D) VFX.clear();
   World.reset();
   World.trainers.reset();
   clearButtons();
@@ -1260,13 +1262,28 @@ $('setReplays').checked = prefs.replays !== false;
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
 // battle style: full 3D or the retro top-down pixel mode
 const applyMode = mode => {
-  prefs.mode = mode === 'retro' ? 'retro' : '3d';
+  prefs.mode = mode === '3d' ? '3d' : 'retro';                 // Retro is the default (light, no 3D engine)
   $('mode3d').classList.toggle('on0', prefs.mode === '3d');
   $('modeRetro').classList.toggle('on0', prefs.mode === 'retro');
   document.body.classList.toggle('retroMode', prefs.mode === 'retro');
 };
 applyMode(prefs.mode);
-$('mode3d').onclick = () => { applyMode('3d'); savePrefs(); };
+$('mode3d').onclick = () => { applyMode('3d'); savePrefs(); load3DNow(); };
+function load3DNow() {
+  if (World.has3D) return;
+  toast('Loading 3D…', 6000);
+  window.load3D().then(() => toast('3D ready', 1500)).catch(e => { console.error(e); toast('3D failed to load: ' + e.message, 5000); });
+}
+// runs once when the 3D engine finishes loading (boot.mjs)
+window.init3D = () => {
+  World.has3D = true;                                // every 3D script has loaded
+  { const visual = World.cheer; World.cheer = v => { visual(v); AudioFX.Crowd.cheer(v); }; }
+  World.setShorts(!!prefs.shorts);
+  World.setTheme(settings.theme !== 'random' ? settings.theme : 'stadium');
+  [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
+  World.trainers.place();
+  World.resize();
+};
 $('modeRetro').onclick = () => { applyMode('retro'); savePrefs(); toast('Retro 2D: real-time pixel battles. Both Pokémon move and attack at the same time.', 3500); };
 $('setChannel').value = prefs.channel || ''; Broadcast.opts.channel = prefs.channel || '';
 $('setMusic').oninput = e => { prefs.music = +e.target.value; AudioFX.setVolume('music', prefs.music); savePrefs(); };
@@ -1290,6 +1307,6 @@ $('startBtn').onclick = () => {
 
 renderDex();
 renderTeams();
-World.setTheme('stadium');
-[0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
 startLoop();
+// the 3D engine only loads if 3D mode is in use (it's heavy: three.js, WebGL, models)
+if (prefs.mode === '3d') load3DNow();

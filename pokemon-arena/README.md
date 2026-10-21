@@ -27,6 +27,8 @@
 Double-click **`start.bat`**. It starts a tiny local server and opens http://localhost:8080 in Chrome/Edge.
 The game must run through that server (the 3D engine loads as modules); opening `index.html` directly shows a reminder.
 
+The game starts in light **Retro 2D** mode: only the 2D engine loads (no three.js, no WebGL, about 2 MB of memory). The 3D engine (three.js, renderer, 3D arena and trainers) loads the first time you pick **🎮 3D**, or at startup if 3D was your last choice; the 3D models only download when a 3D battle starts.
+
 ## Play
 1. **Team builder:** click Pokémon to add them to the highlighted player. Set level, Mega Stone, 4 moves, or evolve/de-evolve each slot.
    Evolved forms can't go below their real evolution level (Charizard ≥ 36). Pick Human or CPU for each player.
