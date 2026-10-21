@@ -569,8 +569,8 @@ const Retro = (() => {
   class Fighter {
     constructor(p, mon, anim) {
       Object.assign(this, { p, mon, anim, x: 0, y: 0, z: 0, jz: 0, vx: 0, vy: 0, kx: 0, ky: 0, face: p ? -1 : 1, faceVis: p ? -1 : 1, alpha: 1, white: 0, whiteCol: '#ffffff', pop: 1, sink: 0,
-        state: 'idle', busy: false, cd: R(0.9, 1.6), sleepT: mon.status === 'slp' ? 3 : 0, goal: null, goalT: 0, tick: 3, protectUntil: 0, queued: null, forceMove: null, plan: null, ready: false,
-        thawT: 0, zT: 0, sq: 0, sqv: 0, crouch: 0, crouchT: 0, walkPh: 0, speed: 0, orbit: Math.random() < 0.5 ? -1 : 1, after: 0, afterT: 0, afterCol: '#bfe0ff', trail: [], lean: 0, tilt: 0, aura: null, auraT: 0, dashing: false, shiver: 0 });
+        state: 'idle', busy: false, cd: 0.5 + 120 / (speedOf(mon) + 40) + R(0, 0.35), sleepT: mon.status === 'slp' ? 3 : 0, goal: null, goalT: 0, tick: 3, protectUntil: 0, queued: null, forceMove: null, plan: null, ready: false,
+        thawT: 0, zT: 0, sq: 0, sqv: 0, crouch: 0, crouchT: 0, walkPh: 0, speed: 0, orbit: Math.random() < 0.5 ? -1 : 1, after: 0, afterT: 0, afterCol: '#bfe0ff', trail: [], lean: 0, tilt: 0, aura: null, auraT: 0, dashing: false, shiver: 0, rotA: 0, rotS: 0, rotSV: 0 });
       this.hover = mon.types.includes('Flying') || LEVITATE.has(mon.species) || LEVITATE.has(mon.modelKey) ? 18 : 0;
       this.fit();
     }
@@ -590,15 +590,32 @@ const Retro = (() => {
   }
   const center = f => ({ x: f.cx, y: f.cy });
   const clampField = f => { f.x = clamp(f.x, field.x0, field.x1); f.y = clamp(f.y, field.y0, field.y1); };
+  // everything about timing comes from the real stats
+  const spd = m => speedOf(m);                                            // Speed x stage x paralysis
+  const tempo = f => clamp((spd(f.mon) + 60) / 170, 0.7, 1.45);           // >1 = snappier body motion
+  const actionGap = m => 0.9 + 210 / (spd(m) + 40);                      // seconds between attacks
+  function statRatio(att, def, mv) {                                      // attacking stat vs defending stat
+    const phys = !mv || mv.cat !== 'special';
+    const A = att.stats[phys ? 'atk' : 'spa'] * stageMult(att.stages[phys ? 'atk' : 'spa']);
+    const D = def.stats[phys ? 'def' : 'spd'] * stageMult(def.stages[phys ? 'def' : 'spd']);
+    return A / Math.max(1, D);
+  }
+  function expectedFrac(att, def, mv) {                                   // official damage as a share of the target's HP
+    if (!mv || mv.cat === 'status' || !mv.power) return 0;
+    let dmg = calcDamage(att, def, mv, false, 0.925);
+    if (mv.maxHits) dmg *= mv.minHits === mv.maxHits ? mv.minHits : 3;
+    return dmg / Math.max(1, def.hp);
+  }
   function maxSpeed(f) {
     const m = f.mon;
-    return clamp(85 + m.stats.spe * stageMult(m.stages.spe) * 0.55, 95, 215) * (m.status === 'par' ? 0.55 : 1) * (m.hp / m.maxhp < 0.25 ? 0.85 : 1);
+    return clamp(80 + spd(m) * 0.6, 90, 240) * (m.hp / m.maxhp < 0.25 ? 0.85 : 1);
   }
   const isContact = mv => !!mv && classify({ id: mv.id, ...mv }).startsWith('contact');
   function wantDist(f, foe) {
     const plan = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
     if (isContact(plan) && f.cd < 1.6) return f.r + foe.r + 46;         // close in before a physical hit
-    return (portrait ? 250 : 330) + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
+    const physical = f.mon.stats.atk > f.mon.stats.spa * 1.15;
+    return (portrait ? 250 : 330) - (physical ? 60 : 0) + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
   }
   function pickGoal(f) {
     const foe = foeOf(f);
@@ -623,9 +640,11 @@ const Retro = (() => {
     f.crouch += (f.crouchT - f.crouch) * Math.min(1, dt * 14);
     f.faceVis += (f.face - f.faceVis) * Math.min(1, dt * 15);
     f.shiver = Math.max(0, f.shiver - dt);
+    f.rotSV += (-f.rotS * 200 - f.rotSV * 11) * dt; f.rotS = clamp(f.rotS + f.rotSV * dt, -0.45, 0.45);
+    if (!f.busy && !f.dashing) f.rotA *= Math.exp(-dt * 8);
     if (f.after > 0) {
       f.after -= dt;
-      if ((f.afterT -= dt) <= 0) { f.afterT = 0.03; f.trail.push({ x: f.x, y: f.y - f.z, a: 0.6, sx: f.faceVis, t: T }); }
+      if ((f.afterT -= dt) <= 0) { f.afterT = 0.03; f.trail.push({ x: f.x, y: f.y - f.z, a: 0.6, sx: f.faceVis, t: T, rot: f.tilt + f.rotA }); }
     }
     for (const g of f.trail) g.a -= dt * 2.8;
     while (f.trail.length && f.trail[0].a <= 0) f.trail.shift();
@@ -636,7 +655,7 @@ const Retro = (() => {
     const fr = Math.exp(-dt * 6); f.kx *= fr; f.ky *= fr;
     if (Math.hypot(f.kx, f.ky) > 110 && !f.hover && Math.random() < dt * 40) dust(f.x - Math.sign(f.kx) * 8, f.y, 0.8);
     let tvx = 0, tvy = 0;
-    const canWalk = !f.busy && !f.stuck && running && !f.dashing;
+    const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0));
     if (canWalk) {
       f.goalT -= dt;
       if (!f.goal || f.goalT <= 0 || Math.hypot(f.goal.x - f.x, f.goal.y - f.y) < 12) { f.goal = pickGoal(f); f.goalT = R(0.8, 2.0); }
@@ -644,6 +663,15 @@ const Retro = (() => {
       const sp = maxSpeed(f) * Math.min(1, d / 90);           // ease into the stop
       tvx = dx / d * sp; tvy = dy / d * sp;
       if (m.vol.conf) { tvx += Math.sin(T * 5 + f.p) * 70; tvy += Math.cos(T * 4.3) * 45; }
+      if (!f.hover && m.stats.spe * stageMult(m.stages.spe) > 95 && (f.hopT = (f.hopT ?? R(1.5, 3)) - dt) <= 0) {
+        f.hopT = R(2, 3.5);
+        const fo = foeOf(f);
+        if (fo && fo.state === 'idle') {
+          const ax = f.x - fo.x, ay = f.y - fo.y, L = Math.hypot(ax, ay) || 1, sd = Math.random() < 0.5 ? -1 : 1;
+          f.kx += -ay / L * 420 * sd; f.ky += ax / L * 300 * sd; f.after = 0.25; f.afterCol = '#ffffff';
+          tw(0.22, k => { f.jz = Math.sin(k * Math.PI) * 18; }).then(() => { f.jz = 0; f.bump(3); dust(f.x, f.y, 0.6); });
+        }
+      }
     }
     if (!f.dashing) {
       const k = 1 - Math.exp(-dt * (canWalk ? 4.5 : 9));
@@ -796,7 +824,7 @@ const Retro = (() => {
   // legacy helpers used by the rules / status code
   function burst(at, type, power = 1) { impactAt(type, at.x, at.y, at.y + 26, power * 0.75, { quiet: true }); }
   function smoke(at, n = 6, col = ['#8a7a76', '#6a5e5c', '#4a4240'], s = 3) { for (let i = 0; i < n; i++) smokeP(at.x + R(-14, 14), at.y + R(-8, 8), s, R(0.6, 1.1), col); }
-  function star(at, type, size = 4, life = 0.28) { const P = tp(type); shapes.push({ kind: 'boom', x: at.x, y: at.y, c: [P.c[1], P.c[0], P.c[3]], s: size, life, age: 0, rot: R(-0.4, 0.4) }); glowP(at.x, at.y, 10, size * 22, P.c[1], life * 1.3, 0.9); }
+  function star(at, type, size = 4, life = 0.28) { const P = tp(type); powAt(at.x, at.y, size * 8, [P.c[0], P.c[1], P.c[2], P.c[4] || P.c[3]], { life }); }
   function ringFx(x, y, r0, r1, col, life = 0.45, o = {}) { rings.push({ x, y, r0, r1, col, life, age: -(o.delay || 0), flat: o.flat ?? 0.45, w: o.w || 1 }); }
   function flash(col = '#fff', a = 0.5) { flashCol = col; flashA = Math.max(flashA, a); }
   function shakeIt(a) { shake = Math.max(shake, a); }
@@ -837,7 +865,7 @@ const Retro = (() => {
       case 'spark': for (let i = 0; i < 18 * n; i++) sparkP(x, y, R(0, 6.28), R(160, 420) * pw, K.sparks, R(0.2, 0.45)); break;
       case 'leaf': for (let i = 0; i < 12 * n; i++) spawn({ bm: 'leaf', c: P.c.slice(1), x, y: gy, z: h, vx: R(-160, 160) * pw, vy: R(-60, 60), vz: R(60, 220), g: 260, drag: 1.5, life: R(0.9, 1.4), s0: 2, s1: 2, rot: R(0, 6), spin: R(-8, 8) }); break;
       case 'shard': for (let i = 0; i < 14 * n; i++) spawn({ bm: 'shard', c: ['#ffffff', '#e2f8ff', '#8fd8ff'], x, y: gy, z: h, vx: R(-220, 220) * pw, vy: R(-80, 80), vz: R(60, 260), g: 800, life: R(0.6, 1), s0: 2, s1: 2, rot: R(0, 6), spin: R(-14, 14), bounce: true }); break;
-      case 'star': shapes.push({ kind: 'boom', x, y, c: [P.c[1] === '#f6f2e6' ? '#ffffff' : P.c[1], '#ffffff', P.c[3]], s: 3 + pw * 2.5, life: 0.26, age: 0, rot: R(-0.5, 0.5) }); for (let i = 0; i < 6 * n; i++) spawn({ bm: 'star', c: ['#ffffff', P.c[1]], x, y, vx: R(-200, 200), vy: R(-200, 120), drag: 3, life: 0.4, s0: 2, s1: 1 }); break;
+      case 'star': powAt(x, y, 22 + pw * 16, type === 'Normal' ? POW_C : [P.c[0], P.c[1], P.c[2], P.c[4] || P.c[3]]); for (let i = 0; i < 6 * n; i++) spawn({ bm: 'star', c: ['#ffffff', P.c[1]], x, y, vx: R(-200, 200), vy: R(-200, 120), drag: 3, life: 0.4, s0: 2, s1: 1 }); break;
       case 'goo': for (let i = 0; i < 12 * n; i++) spawn({ kind: 'blob', c: [pick(['#a54ad8', '#c56bf0', '#6d2398']), '#f0c8ff'], x, y: gy, z: h, vx: R(-170, 170) * pw, vy: R(-70, 70), vz: R(60, 260), g: 900, life: 1.1, s0: R(1.5, 3), s1: 1, land: q => addDecal('goo', q.x, q.y, 0.3) }); break;
       case 'debris': for (let i = 0; i < 9 * n; i++) spawn({ kind: 'debris', c: type === 'Rock' ? ['#9a8356', '#cdb684', '#4a3c24'] : ['#7a5432', '#a8773e', '#3b2814'], x, y: gy, z: h * 0.6, vx: R(-200, 200) * pw, vy: R(-80, 80), vz: R(120, 320), g: 1000, life: R(0.8, 1.2), s0: pick([2, 2, 3]), rot: R(0, 6), spin: R(-10, 10), bounce: true }); break;
       case 'gust': for (let i = 0; i < 6; i++) { const an = i / 6 * 6.28 + R(-0.2, 0.2); spawn({ kind: 'streak', c: ['#ffffff'], x: x + Math.cos(an) * 12, y: y + Math.sin(an) * 9, vx: Math.cos(an) * 340, vy: Math.sin(an) * 260, drag: 4, life: 0.3, len: 28, ang: an }); } for (let i = 0; i < 5; i++) spawn({ bm: 'gust', c: ['#ffffff', '#e6f1ff'], x, y, vx: R(-180, 180), vy: R(-150, 80), drag: 3, life: 0.4, s0: 2, s1: 3, fade: true }); break;
@@ -853,7 +881,7 @@ const Retro = (() => {
     if (K.bolts) for (let i = 0; i < 3; i++) { const an = R(0, 6.28), L = R(40, 80) * pw; boltFx({ ax: x, ay: y, bx: x + Math.cos(an) * L, by: y + Math.sin(an) * L * 0.8, jag: 14, c: TP.Electric.c, life: 0.22, w: 0.6 }); }
     if (K.lines) shapes.push({ kind: 'lines', x, y, r0: 20 * pw, r1: 70 * pw, col: K.lines, n: 12, life: 0.2, age: 0 });
     if (K.rings) { ringP(x, y, 6, 60 * pw, K.rings, 0.4, { flat: 1, w: 1 }); ringP(x, y, 6, 90 * pw, K.rings, 0.5, { flat: 0.4, delay: 0.06 }); }
-    if (K.star) shapes.push({ kind: 'boom', x, y, c: ['#ffffff', '#ffffff', '#9aa4b2'], s: 2.5 + pw * 2, life: 0.2, age: 0, rot: R(0, 1) });
+    if (K.star) powAt(x, y, 18 + pw * 14, ['#ffffff', '#f2f6ff', '#aeb9c8', '#3e4550'], { life: 0.22 });
     if (K.dust) dust(x, gy, 1.2 * pw);
     if (!o.quiet) {
       ringFx(x, gy, 8, 34 + 40 * pw, K.ring, 0.38);
@@ -1247,10 +1275,10 @@ const Retro = (() => {
     const jit = f.white > 0.5 || f.shiver > 0 ? R(-2.5, 2.5) : 0;
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
-    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, alpha: Math.max(0, g.a) * 0.55 * f.alpha, white: 1, whiteCol: f.afterCol });
+    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * f.alpha, white: 1, whiteCol: f.afterCol });
     if (f.aura && T < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
-      { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt, alpha: f.alpha, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
+      { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: f.alpha, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
   function render() {
     const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
@@ -1362,7 +1390,10 @@ const Retro = (() => {
     if (!row) return;
     const m = active(p);
     row.innerHTML = m.moves.map((mv, i) => `<button class="rmv" data-i="${i}" style="--c:${TYPE_COLORS[mv.type] || '#888'}" ${mv.ppLeft <= 0 ? 'disabled' : ''}><b>${i + 1}</b> ${esc(mv.name)}<small>${mv.ppLeft}/${mv.pp}</small></button>`).join('');
+    const pl = state.players[p];
+    row.insertAdjacentHTML('beforeend', '<div class="rparty">' + pl.team.map((x, i) => i === pl.active ? '' : `<button class="rsw" data-s="${i}" ${x.hp <= 0 ? 'disabled' : ''} title="Switch to ${esc(x.name)}"><img src="${x.sprite}" alt=""></button>`).join('') + '</div>');
     row.querySelectorAll('.rmv').forEach(b => b.onclick = () => queueMove(p, +b.dataset.i));
+    row.querySelectorAll('.rsw').forEach(b => b.onclick = () => { const f = F[p]; if (f && f.state === 'idle') { f.queuedSwitch = +b.dataset.s; b.classList.add('q'); } });
   }
   function queueMove(p, i) {
     const f = F[p], m = active(p);
@@ -1498,6 +1529,7 @@ const Retro = (() => {
   const AURA_C = ['#ffffff', '#bfe6ff', '#4aa8ff', '#1e5ad6', '#0c2a7a'];
   // anticipation: crouch, an aura and energy gathering at the mouth, then a recoil on release
   async function charge(f, m, sec = 0.3, o = {}) {
+    sec = Math.max(0.12, sec / tempo(f));
     const P = PAL(m), col = o.col || P.c[1];
     f.crouchT = 1; f.aura = col; f.auraT = T + sec + 0.15;
     if (o.dim) dimTo(o.dim, sec + (o.hold ?? 0.7));
@@ -2005,7 +2037,11 @@ const Retro = (() => {
     'foul-play': { v: 'charge', c: C_DARK, el: 'Dark', aura: true },
     'comeuppance': { v: 'charge', c: C_DARK, el: 'Dark' },
     'double-hit': { v: 'tail', c: C_WHITE, n: 2 },
-    'fake-out': { v: 'clap', c: C_WHITE },
+    'fake-out': { v: 'clap', c: C_WHITE, fast: true },
+    'quick-attack': { v: 'charge', c: C_WHITE, fast: true, blur: true },
+    'extreme-speed': { v: 'charge', c: ['#ffffff', '#fff6d0', '#ffd27a', '#8a5a10'], fast: true, blur: true, size: 1.25 },
+    'sucker-punch': { v: 'fist', c: C_DARK, el: 'Dark', fast: true, blur: true },
+    'feint': { v: 'palm', c: C_WHITE, fast: true, blur: true },
     'high-horsepower': { v: 'slam', c: C_GROUND, el: 'Ground', size: 1.3 },
     'shadow-punch': { v: 'fist', c: C_GHOST, el: 'Ghost' },
     'dragon-rush': { v: 'charge', c: C_DRAGON, el: 'Dragon', aura: true, size: 1.3 },
@@ -2126,42 +2162,283 @@ const Retro = (() => {
       ctx.restore(); ctx.globalAlpha = 1;
     }
   };
+  // ---- hand-drawn strike effects: impact stars, jaws, motion smears ----
+  const POW_C = ['#ffffff', '#fff3a0', '#ffb52a', '#6a2410'];
+  function powAt(x, y, r = 30, c = POW_C, o = {}) { shapes.push({ kind: 'pow', x, y, r, c, life: o.life || 0.32, age: -(o.delay || 0), rot: R(-0.4, 0.4), n: o.n || 9 }); }
+  Object.assign(SHAPE2, {
+    // layered spiky impact star (cleaner than a bitmap at any size)
+    pow: (s, k) => {
+      if (!s.pts) { s.pts = []; for (let i = 0; i < s.n * 2; i++) s.pts.push(i % 2 ? R(0.36, 0.5) : R(0.82, 1.12)); }
+      const sc = s.r * (k < 0.16 ? 0.4 + 0.75 * easeOut(k / 0.16) : 1.15 - (k - 0.16) * 0.4), a = k > 0.5 ? (1 - k) / 0.5 : 1;
+      glow(s.x, s.y, sc * 2, s.c[2], 0.6 * a);
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot + k * 0.4); ctx.globalAlpha = a;
+      const path = mul => { ctx.beginPath(); s.pts.forEach((r, i) => { const an = i / s.pts.length * 6.283, x = Math.cos(an) * r * sc * mul, y = Math.sin(an) * r * sc * mul; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); };
+      path(1.1); ctx.fillStyle = s.c[3]; ctx.fill();
+      path(1); ctx.fillStyle = s.c[2]; ctx.fill();
+      path(0.7); ctx.fillStyle = s.c[1]; ctx.fill();
+      path(0.4); ctx.fillStyle = s.c[0]; ctx.fill();
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // big jaws: open wide, snap shut, grind, fade
+    fangs: (s, k) => {
+      const sz = s.size, W = 84 * sz;
+      const open = k < 0.42 ? easeOut(k / 0.42) : k < 0.5 ? 1 - easeIn((k - 0.42) / 0.08) : 0;
+      const gap = 4 * sz + open * 40 * sz, sc = k < 0.42 ? 0.75 + 0.25 * easeOut(k / 0.42) : 1 + (k < 0.6 ? (0.6 - k) * 0.4 : 0);
+      const a = k > 0.75 ? (1 - k) / 0.25 : 1, shk = k > 0.5 && k < 0.75 ? R(-3, 3) : 0;
+      glow(s.x, s.y, W * (k > 0.5 && k < 0.6 ? 1.6 : 1.1), s.c[1], (k > 0.5 ? 0.8 : 0.45) * a);
+      ctx.save(); ctx.translate(s.x + shk, s.y); ctx.scale(sc, sc); ctx.globalAlpha = a;
+      ctx.lineJoin = 'round';
+      for (const up of [1, -1]) {
+        const n = 6, bow = t => 12 * sz * (1 - (2 * t - 1) ** 2);
+        const baseY = t => -up * (gap + bow(t));
+        // gum
+        ctx.strokeStyle = s.gum; ctx.lineWidth = 9 * sz; ctx.lineCap = 'round';
+        ctx.beginPath(); for (let i = 0; i <= 20; i++) { const t = i / 20, x = -W / 2 + t * W, y = baseY(t) - up * 5 * sz; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n, x = -W / 2 + t * W, by = baseY(t), hw = W / n * 0.46, h = (i === 1 || i === n - 2 ? 26 : 16) * sz, tip = by + up * h;
+          ctx.beginPath(); ctx.moveTo(x - hw, by); ctx.lineTo(x + hw, by); ctx.lineTo(x + (i < n / 2 ? 2 : -2) * sz, tip); ctx.closePath();
+          ctx.fillStyle = s.tooth; ctx.fill();
+          ctx.lineWidth = 2; ctx.strokeStyle = '#1a1420'; ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x + hw, by); ctx.lineTo(x + (i < n / 2 ? 2 : -2) * sz, tip); ctx.closePath();
+          ctx.fillStyle = 'rgba(120,140,170,.35)'; ctx.fill();
+        }
+      }
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // motion smear: a comet-shaped crescent that sweeps and leaves a fading tail
+    smear: (s, k) => {
+      const e = easeOut(clamp(k / 0.42, 0, 1)), tailK = clamp((k - 0.18) / 0.6, 0, 1);
+      const ah = s.a0 + (s.a1 - s.a0) * e, at = s.a0 + (s.a1 - s.a0) * Math.min(e, easeIn(tailK));
+      if (Math.abs(ah - at) < 0.02) return;
+      const m = 26, fl = s.flat ?? 0.8;
+      const layer = (mul, col, alpha, add) => {
+        ctx.beginPath();
+        const pts = [];
+        for (let j = 0; j < m; j++) { const t = j / (m - 1), a = at + (ah - at) * t, th = s.w * mul * (0.12 + 0.88 * t) * (1 - Math.pow(t, 8) * 0.5); pts.push([a, th]); }
+        pts.forEach(([a, th], j) => { const x = s.x + Math.cos(a) * (s.r + th / 2), y = s.y + Math.sin(a) * (s.r + th / 2) * fl; j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        for (let j = m - 1; j >= 0; j--) { const [a, th] = pts[j]; ctx.lineTo(s.x + Math.cos(a) * (s.r - th / 2), s.y + Math.sin(a) * (s.r - th / 2) * fl); }
+        ctx.closePath();
+        ctx.globalAlpha = alpha; if (add) ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = col; ctx.fill();
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      };
+      const fade = k > 0.55 ? (1 - k) / 0.45 : 1;
+      layer(1.7, s.c[2], 0.35 * fade, true);
+      layer(1, s.c[1], 0.95 * fade);
+      layer(0.45, s.c[0], fade);
+    }
+  });
+  SHAPE2.cut = (s, k) => {
+    const e = easeOut(clamp(k / 0.3, 0, 1)), fade = k > 0.5 ? (1 - k) / 0.5 : 1, pts = [];
+    for (let i = 0; i < 20; i++) { const t = i / 19; pts.push({ x: s.x0 + (s.x1 - s.x0) * t, y: s.y0 + (s.y1 - s.y0) * t }); }
+    if (k < 0.3) glow((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, 70, s.c[2], 0.5);
+    taperStroke(pts, s.w, s.c, e, fade);
+  };
+  const GUM = { Fire: '#a8281a', Ice: '#2f6fb0', Electric: '#a07a00', Dark: '#3a1846', Poison: '#5a1a70', Psychic: '#8a1f5c' };
+  // ---- strike choreography: wind-up -> lunge -> strike(s) -> recover ----
+  function strikeImpact(f, d, at, spec, size = 1) {
+    const c = spec.c, pc = spec.el || spec.v === 'fist' || spec.v === 'kick' ? [c[0], c[1], c[2], c[3]] : POW_C;
+    powAt(at.x, at.y, 30 * size * (spec.size || 1), pc);
+    shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 20 * size, r1: 70 * size, col: '#ffffff', n: 10, life: 0.18, age: 0, rot: R(0, 1) });
+    d.rotSV += f.face * 9 * size; d.shiver = 0.15;
+    hitStop(55 + 25 * size);
+  }
+  async function windup2(f, d, spec, big) {
+    const dir = Math.sign(d.x - f.x) || f.face, x0 = f.x;
+    f.face = dir; f.crouchT = 1;
+    await tw((big ? 0.2 : 0.14) / tempo(f), k => { const e = easeOut(k); f.x = x0 - dir * (big ? 26 : 18) * e; f.rotA = -dir * 0.14 * e; });
+    f.crouchT = 0;
+  }
+  async function lunge(f, d, spec, big) {
+    const sx = f.x, sy = f.y, dir = f.face, reach = spec.v === 'fang' ? 0.72 : spec.v === 'tail' ? 0.9 : 0.8;
+    const tx = d.x - dir * (f.r + d.r) * reach, ty = d.y + (spec.low ? 4 : 0);
+    const jump = spec.v === 'kick' && !spec.low ? 30 : spec.v === 'slam' ? 80 : spec.v === 'wing' ? 22 : 0;
+    const sec = (spec.fast ? 0.08 : big ? 0.19 : 0.15) / tempo(f);
+    f.dashing = true; f.after = sec + (spec.blur ? 0.45 : 0.14); f.afterCol = spec.c[1]; f.bump(-5);
+    if (spec.blur) { glowP(f.cx, f.cy, 10, 60, '#ffffff', 0.25, 0.8); for (let i = 0; i < 10; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: f.cx + R(-30, 30), y: f.cy + R(-f.h / 2, f.h / 2), vx: dir * 900, vy: 0, life: 0.22, len: 70, ang: dir > 0 ? 0 : Math.PI, delay: i * 0.012 }); }
+    SFX.whoosh();
+    const trail = spec.el ? elementTrail(spec.el) : null;
+    await tw(sec, k => {
+      const e = easeIn(k);
+      f.x = sx + (tx - sx) * e; f.y = sy + (ty - sy) * e;
+      f.rotA = dir * (spec.v === 'fang' || spec.v === 'charge' ? 0.22 : 0.12) * k;
+      if (jump) f.jz = Math.sin(k * Math.PI * (spec.v === 'slam' ? 1 : 0.75)) * jump;
+      if (trail) trail(f); else if (Math.random() < 0.5 && !f.hover && !jump) dust(f.x, f.y, 0.6);
+    });
+    if (spec.v === 'slam') f.jz = 0;
+    for (let i = 0; i < 4; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: f.x - dir * 12, y: f.cy + R(-f.h / 3, f.h / 3), vx: -dir * 340, vy: 0, drag: 5, life: 0.22, len: 46, ang: dir > 0 ? 0 : Math.PI });
+    return { sx, sy };
+  }
+  async function recover(f, s, big) {
+    const x0 = f.x, y0 = f.y, z0 = f.jz, bx = x0 + (s.sx - x0) * 0.62, by = y0 + (s.sy - y0) * 0.62, r0 = f.rotA;
+    await tw((big ? 0.38 : 0.32) / tempo(f), k => { const e = easeOut(k); f.x = x0 + (bx - x0) * e; f.y = y0 + (by - y0) * e; f.jz = z0 * (1 - e) + Math.sin(k * Math.PI) * (big ? 26 : 18); f.rotA = r0 * (1 - e); });
+    f.jz = 0; f.rotA = 0; f.dashing = false; f.bump(4);
+    if (!f.hover) dust(f.x, f.y, 0.8);
+  }
+  const STRIKE = {
+    async claw(f, d, spec, h, landed) {
+      const dir = f.face, at = { x: d.cx, y: d.cy };
+      SFX.slash(); later(() => SFX.slash(), 70);
+      shapes.push({ kind: 'claw', x: at.x, y: at.y, dir, c: spec.c, n: 3, size: spec.size || 1, life: spec.marks ? 0.8 : 0.6, age: 0 });
+      if (spec.el === 'Dragon') for (let i = 0; i < 16; i++) flameP(at.x + R(-34, 34), at.y + R(-30, 30), R(-40, 40), R(-120, -50), R(2, 4), 0.55, { c: TP.Dragon.c, delay: 0.1 + i * 0.02 });
+      await tw(0.13, k => { f.rotA = dir * (-0.28 + 0.6 * easeOut(k)); if (k > 0.55 && !landed.done) { landed(); strikeImpact(f, d, at, spec, 0.8); } });
+      for (let i = 0; i < 10; i++) later(() => sparkP(at.x + R(-30, 30), at.y + R(-30, 30), R(0, 6.28), R(120, 260), spec.c[1], 0.3), i * 20);
+    },
+    async blade(f, d, spec, h, landed, xcut) {
+      const dir = f.face, at = { x: d.cx, y: d.cy }, sz = spec.size || 1;
+      SFX.slash();
+      const a0 = dir > 0 ? -2.3 : -0.84, sw = dir > 0 ? 2.6 : -2.6;
+      shapes.push({ kind: 'blade', x: at.x, y: at.y, a0, a1: a0 + sw, c: spec.c, size: sz, life: 0.5, age: 0 });
+      if (xcut) { later(() => SFX.slash(), 100); shapes.push({ kind: 'blade', x: at.x, y: at.y, a0: dir > 0 ? 2.3 : 0.84, a1: (dir > 0 ? 2.3 : 0.84) - sw, c: spec.c, size: sz, life: 0.5, age: -0.1 }); }
+      await tw(0.14, k => { f.rotA = dir * (-0.35 + 0.75 * easeOut(k)); if (k > 0.5 && !landed.done) { landed(); strikeImpact(f, d, at, spec, 0.8); } });
+      if (xcut) { await wait(100); powAt(at.x, at.y, 26 * sz, [spec.c[0], spec.c[1], spec.c[2], spec.c[3]]); }
+    },
+    async x(f, d, spec, h, landed) { return STRIKE.blade(f, d, spec, h, landed, true); },
+    async chop(f, d, spec, h, landed) {
+      const dir = f.face, at = { x: d.cx, y: d.cy - 6 };
+      await tw(0.1, k => { f.jz = Math.sin(k * Math.PI * 0.5) * 16; f.rotA = -dir * 0.2 * k; });
+      SFX.slash();
+      { const sd = (h % 2 ? -1 : 1) * dir; shapes.push({ kind: 'cut', x0: at.x - sd * 30, y0: at.y - 62, x1: at.x + sd * 22, y1: at.y + 48, w: 22, c: spec.c, life: 0.42, age: 0 }); }
+      await tw(0.08, k => { f.jz = 16 * (1 - k); f.rotA = dir * 0.3 * k; if (k > 0.6 && !landed.done) { landed(); strikeImpact(f, d, at, spec, 0.8); } });
+    },
+    async fang(f, d, spec, h, landed) {
+      // a lunging bite: the jaws open over the target, snap shut, and the attacker shakes its head
+      const sz = (spec.size || 1) * clamp(d.w / 95, 0.85, 1.5), at = { x: d.cx + R(-4, 4), y: d.cy - 4 }, life = 0.62;
+      shapes.push({ kind: 'fangs', x: at.x, y: at.y, size: sz, c: spec.c, tooth: spec.el === 'Ice' ? '#eafaff' : '#ffffff', gum: GUM[spec.el] || '#6a1a2a', life, age: 0 });
+      f.sqv -= 6;
+      await wait(life * 0.42 * 1000);
+      SFX.slash(); SFX.impact(spec.el || 'Dark', 1, 1);
+      landed(); strikeImpact(f, d, at, spec, 1);
+      shakeIt(5); d.shiver = 0.35;
+      if (spec.el === 'Fire') for (let i = 0; i < 18; i++) flameP(at.x + R(-40, 40), at.y + R(-20, 20), R(-30, 30), R(-140, -60), R(3, 5), 0.6);
+      if (spec.el === 'Ice') { const spikes = []; for (let i = 0; i < 8; i++) spikes.push({ a: i / 8 * 6.28, l: R(26, 44), w: R(5, 8) }); shapes.push({ kind: 'crystal', x: at.x, y: at.y, spikes, life: 0.5, age: 0 }); }
+      if (spec.el === 'Electric') for (let i = 0; i < 4; i++) boltFx({ ax: at.x - 40, ay: at.y + R(-20, 20), bx: at.x + 40, by: at.y + R(-20, 20), jag: 12, c: TP.Electric.c, life: 0.3, w: 0.7 });
+      if (spec.el === 'Dark') smoke(at, 4, IMP.Dark.mist, 3);
+      await tw(0.26, k => { f.rotA = Math.sin(k * 26) * 0.12 * (1 - k) + f.face * 0.15; });
+      if (sz >= 1.3) { await wait(60); powAt(at.x + R(-10, 10), at.y + R(-10, 10), 34, POW_C); SFX.impact('Dark', 0.8, 1); d.rotSV += f.face * 6; }
+    },
+    async fist(f, d, spec, h, landed) {
+      const dir = f.face, sz = spec.size || 1, at = { x: d.cx - dir * 6, y: d.cy + (spec.overhead ? -10 : 0) };
+      if (spec.overhead) await tw(0.12, k => { f.jz = Math.sin(k * Math.PI * 0.5) * 30; f.rotA = -dir * 0.25 * k; });
+      const x0 = f.x;
+      await tw(0.06, k => { f.x = x0 + dir * 14 * k; f.rotA = dir * 0.25 * k; if (spec.overhead) f.jz = 30 * (1 - k); });
+      shapes.push({ kind: 'fist', x: at.x, y: at.y, s: 4 * sz, c: [spec.c[2], spec.c[0], spec.c[3]], flip: dir < 0, life: 0.3, age: 0, vx: dir * 40, vy: spec.overhead ? 140 : 0 });
+      landed(); strikeImpact(f, d, at, spec, sz);
+      ringP(at.x, at.y, 8, 70 * sz, spec.c[1], 0.3, { flat: 1, w: 2 });
+      if (spec.el === 'Electric') for (let i = 0; i < 3; i++) boltFx({ ax: at.x, ay: at.y, bx: at.x + R(-70, 70), by: at.y + R(-60, 60), jag: 14, c: TP.Electric.c, life: 0.3, w: 0.8 });
+      if (spec.overhead) { shakeIt(9); dust(d.x, d.y, 2); addDecal('crack', d.x, d.y, 1); }
+      await tw(0.08, k => { f.x = x0 + dir * 14 * (1 - k * 0.5); });
+    },
+    async palm(f, d, spec, h, landed) {
+      const dir = f.face, sz = spec.size || 1, at = { x: d.cx - dir * 8, y: d.cy }, x0 = f.x;
+      await tw(0.06, k => { f.x = x0 + dir * 10 * k; f.rotA = dir * 0.18 * k; });
+      glowP(at.x, at.y, 10, 90 * sz, spec.c[1], 0.3, 1);
+      for (let i = 0; i < 3; i++) ringP(at.x, at.y, 6, (50 + i * 22) * sz, spec.c[i ? 1 : 0], 0.35, { flat: 1, w: 2, delay: i * 0.05 });
+      landed(); strikeImpact(f, d, at, spec, 0.9 * sz);
+    },
+    async kick(f, d, spec, h, landed) {
+      // jump kick; the second kick of Double Kick is a spinning kick from the other side
+      const dir = f.face, sz = spec.size || 1;
+      if (h > 0) {
+        const x0 = f.x, tx = d.x - dir * (f.r + d.r) * 0.6;
+        f.face = -dir; later(() => { f.face = dir; }, 90);       // quick spin
+        await tw(0.16, k => { f.x = x0 + (tx - x0) * k; f.jz = Math.sin(k * Math.PI) * 34 + 10; f.rotA = -dir * 0.4 * k; });
+      }
+      const at = { x: d.cx - dir * 4, y: d.cy + (spec.low ? d.h * 0.28 : -6) };
+      const a0 = spec.low ? (dir > 0 ? 2.6 : 0.54) : (h % 2 ? (dir > 0 ? -2.4 : -0.74) : (dir > 0 ? 2.2 : 0.94));
+      const a1 = spec.low ? (dir > 0 ? 0.7 : 2.44) : (h % 2 ? (dir > 0 ? 0.2 : 2.94) : (dir > 0 ? -0.5 : -2.64));
+      shapes.push({ kind: 'smear', x: f.x + dir * f.w * 0.15, y: f.cy - f.z * 0.1, r: f.w * 0.55 + 18, w: 26 * sz, a0, a1, c: spec.c, life: 0.36, age: 0, flat: 0.85 });
+      SFX.whoosh();
+      await tw(0.1, k => { f.rotA = dir * (h % 2 ? -0.45 : 0.45) * easeOut(k); if (k > 0.6 && !landed.done) { landed(); strikeImpact(f, d, at, spec, 0.9 * sz); } });
+      if (spec.el === 'Fire') for (let i = 0; i < 14; i++) flameP(at.x + R(-20, 20), at.y + R(-16, 16), dir * R(60, 180), R(-120, -30), R(3, 5), 0.5);
+      dust(d.x, d.y, 0.8);
+      await tw(0.12, k => { f.jz = Math.max(0, f.jz * (1 - k)); });
+    },
+    async tail(f, d, spec, h, landed) {
+      // turn around and whip the tail through the target
+      const dir = f.face, sz = spec.size || 1, at = { x: d.cx, y: d.cy + 8 };
+      f.face = -dir;
+      later(() => { f.face = dir; }, 200);
+      await wait(70);
+      SFX.slash();
+      { const rr = Math.max(50, Math.hypot(d.cx - f.cx, d.cy - f.cy)) * 0.95, a0 = dir > 0 ? -2.0 : -1.14, a1 = dir > 0 ? 0.75 : 2.39; shapes.push({ kind: 'smear', x: f.cx, y: f.cy, r: rr, w: 34 * sz, a0, a1, c: spec.c, life: 0.45, age: 0, flat: 0.85 }); }
+      await tw(0.12, k => { f.rotA = -dir * 0.2 * Math.sin(k * Math.PI); if (k > 0.5 && !landed.done) { landed(); strikeImpact(f, d, at, spec, sz); } });
+      if (spec.el === 'Water') for (let i = 0; i < 16; i++) spawn({ kind: 'drop', c: ['#8fd0ff'], x: at.x, y: d.y, z: 30, vx: R(-200, 200), vy: R(-60, 60), vz: R(100, 260), g: 900, life: 1, s0: R(1, 2), splash: true });
+    },
+    async wing(f, d, spec, h, landed) {
+      const dir = f.face, at = { x: d.cx, y: d.cy };
+      SFX.whoosh();
+      for (const side2 of [1, -1]) shapes.push({ kind: 'smear', x: at.x - dir * 6, y: at.y - 4, r: 58, w: 30, a0: side2 > 0 ? -2.7 : -0.44, a1: side2 > 0 ? -0.5 : -2.64, c: spec.c, life: 0.4, age: side2 > 0 ? 0 : -0.07, flat: 0.85 });
+      await tw(0.12, k => { f.jz = Math.max(f.jz, 18) + Math.sin(k * Math.PI) * 10; f.rotA = dir * 0.2 * k; if (k > 0.5 && !landed.done) { landed(); strikeImpact(f, d, at, spec, 0.8); } });
+      for (let i = 0; i < 6; i++) spawn({ bm: 'gust', c: ['#ffffff', '#e6f1ff'], x: at.x, y: at.y, vx: R(-160, 160), vy: R(-120, 60), drag: 3, life: 0.45, s0: 2, s1: 2, fade: true });
+    },
+    async spin(f, d, spec, h, landed) {
+      const at = { x: d.cx, y: d.cy };
+      for (let i = 0; i < 6; i++) later(() => { f.face = -f.face; }, i * 45);
+      for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28; spawn({ kind: 'streak', c: ['#ffffff'], x: f.cx + Math.cos(a) * f.w * 0.6, y: f.cy + Math.sin(a) * f.h * 0.3, vx: -Math.sin(a) * 300, vy: Math.cos(a) * 150, life: 0.3, len: 22, ang: a + 1.57 }); }
+      await wait(160);
+      f.face = Math.sign(d.x - f.x) || 1;
+      landed(); strikeImpact(f, d, at, spec, 0.8);
+    },
+    async tongue(f, d, spec, h, landed) {
+      shapes.push({ kind: 'tongue', f, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx, by: d.cy, life: 0.55, age: 0 });
+      await wait(230);
+      landed(); strikeImpact(f, d, { x: d.cx, y: d.cy }, spec, 0.6);
+      d.white = 1; d.whiteCol = '#c8a8ff';
+      await wait(200);
+    },
+    async bone(f, d, spec, h, landed) {
+      const dir = f.face, at = { x: d.cx, y: d.cy - 6 };
+      shapes.push({ kind: 'bone', x: at.x - dir * 20, y: at.y - 20, rot: R(0, 6), life: 0.35, age: 0, vx: dir * 120, vy: 60 });
+      await tw(0.1, k => { f.rotA = dir * (-0.3 + 0.6 * k); });
+      landed(); strikeImpact(f, d, at, spec, 0.8);
+    },
+    async clap(f, d, spec, h, landed) {
+      const at = { x: d.cx, y: d.cy };
+      for (const sd of [-1, 1]) { glowP(at.x + sd * 34, at.y, 6, 40, '#ffffff', 0.2, 1); spawn({ kind: 'streak', c: ['#ffffff'], x: at.x + sd * 40, y: at.y, vx: -sd * 300, vy: 0, life: 0.15, len: 30, ang: sd > 0 ? Math.PI : 0 }); }
+      await wait(90);
+      landed(); strikeImpact(f, d, at, spec, 1.1);
+      d.jz = 0; tw(0.2, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 14; }).then(() => { d.jz = 0; });
+    },
+    async slam(f, d, spec, h, landed) {
+      const sz = spec.size || 1;
+      f.bump(12);
+      landed(); strikeImpact(f, d, { x: d.cx, y: d.cy }, spec, sz);
+      ringFx(d.x, d.y, 10, 130 * sz, '#ffffff', 0.45, { w: 2 }); dust(d.x, d.y, 2.6); addDecal('crack', d.x, d.y, 1.2); shakeIt(9);
+      await wait(80);
+    },
+    async charge(f, d, spec, h, landed) {
+      const dir = f.face, sz = spec.size || 1, at = { x: d.cx - dir * (d.w * 0.25), y: d.cy }, x0 = f.x;
+      await tw(0.05, k => { f.x = x0 + dir * 10 * k; });
+      landed(); strikeImpact(f, d, at, spec, sz);
+      ringP(at.x, at.y, 8, 70 * sz, spec.c[1], 0.3, { flat: 1, w: 2 });
+      if ((spec.size || 1) >= 1.3) { ringFx(d.x, d.y, 10, 120, spec.c[1], 0.4, { w: 2 }); dust(d.x, d.y, 1.8); }
+    }
+  };
   S.contact = async (f, d, m, o, hit, variant) => {
     const t = m.type || 'Normal';
     const spec = CT[m.id] || { v: { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail' }[variant] || 'charge', c: TYPE_CT[t] || C_WHITE, el: t !== 'Normal' ? t : null };
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
-    if (spec.aura || big) { f.aura = c[1]; f.auraT = T + 0.7; dimTo(big ? 0.3 : 0.18, 0.8); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
-    if (!spec.fast) await windup(f, d, big ? 0.2 : 0.13);
-    const s = await dashTo(f, d, spec.fast ? 0.08 : big ? 0.2 : 0.16, { afterCol: c[1], trail: spec.el ? elementTrail(spec.el) : null, jump: spec.v === 'kick' && !spec.low ? 26 : spec.v === 'slam' ? 70 : 0, dy: spec.low ? 4 : 0 });
+    if (spec.aura || big) { f.aura = c[1]; f.auraT = T + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
+    if (!spec.fast) await windup2(f, d, spec, big);
+    const s = await lunge(f, d, spec, big);
     if (!on) return;
-    if (spec.v === 'spin') { f.after = 0.4; for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28; spawn({ kind: 'streak', c: ['#ffffff'], x: f.cx + Math.cos(a) * f.w * 0.6, y: f.cy + Math.sin(a) * f.h * 0.3, vx: -Math.sin(a) * 300, vy: Math.cos(a) * 150, life: 0.25, len: 22, ang: a + 1.57 }); } }
-    const dir = f.face;
+    const strike = STRIKE[spec.v] || STRIKE.charge;
     for (let h = 0; h < n; h++) {
-      const at = { x: d.cx + R(-6, 6), y: d.cy + R(-8, 8) };
-      switch (spec.v) {
-        case 'claw': SFX.slash(); later(() => SFX.slash(), 70); shapes.push({ kind: 'claw', x: at.x, y: at.y, dir, c, n: 3, size: spec.size || 1, life: spec.marks ? 0.8 : 0.55, age: 0 }); if (spec.el === 'Dragon') for (let i = 0; i < 16; i++) flameP(at.x + R(-34, 34), at.y + R(-30, 30), R(-40, 40), R(-120, -50), R(2, 4), 0.55, { c: TP.Dragon.c, delay: 0.1 + i * 0.02 }); for (let i = 0; i < 10; i++) later(() => sparkP(at.x + R(-30, 30), at.y + R(-30, 30), R(0, 6.28), R(120, 260), c[1], 0.3), i * 20); break;
-        case 'blade': SFX.slash(); { const a0 = dir > 0 ? -2.3 : -0.84, sw = dir > 0 ? 2.6 : -2.6; shapes.push({ kind: 'blade', x: at.x, y: at.y, a0, a1: a0 + sw, c, size: spec.size || 1, life: 0.45, age: 0 }); } break;
-        case 'x': SFX.slash(); later(() => SFX.slash(), 90); shapes.push({ kind: 'blade', x: at.x, y: at.y, a0: -2.4, a1: 0.2, c, size: spec.size || 1, life: 0.5, age: 0 }); shapes.push({ kind: 'blade', x: at.x, y: at.y, a0: -0.74, a1: -3.34, c, size: spec.size || 1, life: 0.5, age: -0.09 }); break;
-        case 'chop': SFX.slash(); shapes.push({ kind: 'blade', x: at.x, y: at.y - 10, a0: -1.9, a1: -1.0 + (h % 2 ? 0.6 : 0), c, size: 1.1, life: 0.35, age: 0 }); break;
-        case 'fang': shapes.push({ kind: 'jaws', x: at.x, y: at.y, r: 38 * (spec.size || 1), life: 0.42, age: 0, col: c[1] }); break;
-        case 'fist': shapes.push({ kind: 'fist', x: at.x - dir * 6, y: at.y + (spec.overhead ? -24 : 0), s: 4 * (spec.size || 1), c: [c[2], c[0], c[3]], flip: dir < 0, life: 0.32, age: 0, vy: spec.overhead ? 160 : 0, vx: 0 }); shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 18, r1: 64, col: c[1], n: 10, life: 0.2, age: 0 }); break;
-        case 'palm': glowP(at.x, at.y, 10, 80 * (spec.size || 1), c[1], 0.3, 1); ringP(at.x, at.y, 6, 60 * (spec.size || 1), c[1], 0.35, { flat: 1, w: 2 }); shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 20, r1: 70, col: c[0], n: 12, life: 0.2, age: 0 }); break;
-        case 'kick': shapes.push({ kind: 'blade', x: at.x, y: at.y + (spec.low ? 22 : 4), a0: dir > 0 ? 2.4 : 0.74, a1: dir > 0 ? 0.6 : 2.54, c, size: 0.9 * (spec.size || 1), life: 0.35, age: 0 }); break;
-        case 'tail': SFX.slash(); shapes.push({ kind: 'blade', x: at.x, y: at.y + 8, a0: dir > 0 ? -3.0 : -0.14, a1: dir > 0 ? 0.3 : -3.44, c, size: 1.25 * (spec.size || 1), life: 0.45, age: 0 }); break;
-        case 'wing': SFX.whoosh(); shapes.push({ kind: 'blade', x: at.x, y: at.y, a0: -2.6, a1: -0.6, c, size: 1, life: 0.38, age: 0 }, { kind: 'blade', x: at.x, y: at.y, a0: -0.5, a1: -2.5, c, size: 0.8, life: 0.38, age: -0.06 }); for (let i = 0; i < 6; i++) spawn({ bm: 'gust', c: ['#ffffff', '#e6f1ff'], x: at.x, y: at.y, vx: R(-160, 160), vy: R(-120, 60), drag: 3, life: 0.45, s0: 2, s1: 2, fade: true }); break;
-        case 'tongue': shapes.push({ kind: 'tongue', f, ax: f.mouth().x, ay: f.mouth().y, bx: at.x, by: at.y, life: 0.5, age: 0 }); break;
-        case 'bone': shapes.push({ kind: 'bone', x: at.x, y: at.y - 10, rot: R(0, 6), life: 0.35, age: 0 }); break;
-        case 'clap': for (const sd of [-1, 1]) glowP(at.x + sd * 30, at.y, 6, 40, '#ffffff', 0.2, 1); shapes.push({ kind: 'boom', x: at.x, y: at.y, c: C_WHITE, s: 4, life: 0.22, age: 0 }); break;
-        case 'slam': ringFx(d.x, d.y, 10, 120 * (spec.size || 1), '#ffffff', 0.45, { w: 2 }); dust(d.x, d.y, 2.4); addDecal('crack', d.x, d.y, 1.1); shakeIt(8); break;
-        default: shapes.push({ kind: 'boom', x: at.x, y: at.y, c: [c[1], c[0], c[3]], s: 3 + (big ? 2 : 1), life: 0.25, age: 0, rot: R(-0.5, 0.5) }); ringP(at.x, at.y, 8, 60, c[1], 0.3, { flat: 1 });
-      }
-      if (h === 0) hit();
-      else { impactAt(spec.el || t, at.x, at.y, d.y, 0.5, { quiet: true }); d.white = 1; d.bump(3); SFX.impact(t, 0.6, 1); }
-      if (n > 1) await wait(150);
+      if (d.state !== 'idle' && h > 0) break;
+      const landed = () => {
+        if (landed.done) return;
+        landed.done = true;
+        if (h === 0) hit();
+        else { impactAt(spec.el || t, d.cx, d.cy, d.y, 0.5, { quiet: true }); d.white = 1; d.bump(3); SFX.impact(t, 0.6, 1); }
+      };
+      await strike(f, d, spec, h, landed);
+      landed();
+      if (n > 1 && h < n - 1) await wait(70);
     }
-    if (big) { camPunch(d.cx, d.cy, 0.06, 0.3); }
-    await wait(big ? 160 : 110);
-    await bounceBack(f, s, big ? 26 : 18);
+    if (big) camPunch(d.cx, d.cy, 0.06, 0.3);
+    await wait(big ? 150 : 90);
+    await recover(f, s, big);
   };
   // ---- signature moves ----
   const SIG = {};
@@ -2299,7 +2576,7 @@ const Retro = (() => {
     const s = await dashTo(f, d, 0.1, { afterCol: '#e6ebf2' });
     for (let i = 0; i < 4; i++) {
       const at = { x: d.cx + R(-12, 12), y: d.cy + R(-14, 14) };
-      shapes.push({ kind: 'boom', x: at.x, y: at.y, c: ['#ffffff', '#ffffff', '#9aa4b2'], s: 2.5, life: 0.15, age: 0, rot: R(0, 1) });
+      powAt(at.x, at.y, 20, ['#ffffff', '#f2f6ff', '#aeb9c8', '#3e4550'], { life: 0.18 });
       for (let j = 0; j < 4; j++) sparkP(at.x, at.y, R(0, 6.28), R(120, 260), '#ffffff', 0.2);
       SFX.impact('Steel', 0.6, 1);
       if (i === 0) hit();
@@ -2316,7 +2593,7 @@ const Retro = (() => {
       if (!on || d.state !== 'idle') break;
       const ang = R(0, 6.28), at = { x: d.cx + Math.cos(ang) * 14, y: d.cy + Math.sin(ang) * 14 };
       f.x = d.x - Math.cos(ang) * (f.r + d.r) * 0.6; f.y = clamp(d.y - Math.sin(ang) * 20, field.y0, field.y1); f.face = Math.sign(d.x - f.x) || f.face; f.after = 0.12;
-      shapes.push({ kind: 'boom', x: at.x, y: at.y, c: rage ? ['#ff6a6a', '#ffffff', '#8a1a1a'] : ['#ffd59a', '#ffffff', '#b8401a'], s: 3 + (i === 5 ? 2 : 0), life: 0.18, age: 0, rot: R(0, 1) });
+      powAt(at.x, at.y, i === 5 ? 40 : 26, rage ? ['#ffffff', '#ffb0b0', '#ff3a3a', '#5a0a0a'] : POW_C, { life: 0.2 }); d.rotSV += f.face * 5;
       shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 16, r1: 50, col: '#ffffff', n: 8, life: 0.15, age: 0, rot: R(0, 1) });
       SFX.impact(rage ? 'Dragon' : 'Fighting', 0.7, 1);
       d.white = 1; d.bump(3); d.shiver = 0.1;
@@ -2382,7 +2659,7 @@ const Retro = (() => {
     await wait(150); hit(); await wait(400);
   };
   SIG['draining-kiss'] = S.drain;
-  SIG['quick-attack'] = SIG['extreme-speed'] = SIG['sucker-punch'] = SIG['fake-out'] = SIG['feint'] = async (f, d, m, o, hit) => {
+  SIG['__unused_quick'] = async (f, d, m, o, hit) => {
     // a blur: barely visible dash with long afterimages
     const s = await dashTo(f, d, 0.08, { afterCol: '#ffffff' });
     f.after = 0.3;
@@ -2491,14 +2768,224 @@ const Retro = (() => {
     impactAt(m.type || 'Normal', f.cx, f.cy, f.y, 0.6, { quiet: true }); SFX.buff(); f.bump(-5); await wait(400); hit();
   };
 
+  // ---- status moves with real body language ----
+  Object.assign(SHAPE2, {
+    // thick travelling sound wave (Growl, Roar, Hyper Voice...)
+    wave2: (s, k) => {
+      const r = 14 + k * (s.grow || 70), a = (1 - k) * (k < 0.1 ? k / 0.1 : 1), span = s.span || 0.9;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.5; ctx.strokeStyle = s.col; ctx.lineWidth = PX * 4.5;
+      ctx.beginPath(); ctx.arc(0, 0, r, -span, span); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a; ctx.lineWidth = PX * 1.8; ctx.strokeStyle = s.jag ? s.col : '#ffffff';
+      ctx.beginPath();
+      if (s.jag) { for (let i = 0; i <= 14; i++) { const t = -span + 2 * span * i / 14, rr = r + (i % 2 ? 6 : -6); i ? ctx.lineTo(Math.cos(t) * rr, Math.sin(t) * rr) : ctx.moveTo(Math.cos(t) * rr, Math.sin(t) * rr); } }
+      else ctx.arc(0, 0, r, -span, span);
+      ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // 4-point twinkle (an eye glint / sparkle)
+    glint: (s, k) => {
+      const sc = s.r * (k < 0.3 ? easeOut(k / 0.3) : 1 - (k - 0.3) / 0.7 * 0.6), a = k > 0.6 ? (1 - k) / 0.4 : 1;
+      glow(s.x, s.y, sc * 2.4, s.col, 0.8 * a);
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(k * 1.2); ctx.globalAlpha = a; ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sc * 0.18, sc * 0.18); ctx.lineTo(0, sc); ctx.lineTo(-sc * 0.18, sc * 0.18); ctx.closePath(); ctx.fill(); }
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // anger mark (Taunt / Torment / Swagger)
+    anger: (s, k) => {
+      const sc = (k < 0.2 ? easeOut(k / 0.2) * 1.2 : 1 + Math.sin(k * 30) * 0.06) * s.r, a = k > 0.75 ? (1 - k) / 0.25 : 1;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.scale(sc / 20, sc / 20); ctx.globalAlpha = a;
+      for (let i = 0; i < 4; i++) {
+        ctx.save(); ctx.rotate(i * Math.PI / 2 + 0.785);
+        ctx.strokeStyle = '#5a0a0a'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(5, -6); ctx.quadraticCurveTo(14, 0, 5, 6); ctx.stroke();
+        ctx.strokeStyle = '#ff3a3a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(5, -6); ctx.quadraticCurveTo(14, 0, 5, 6); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
+    // hypnotic spiral over the target
+    spiral: (s, k) => {
+      const a = k < 0.15 ? k / 0.15 : k > 0.8 ? (1 - k) / 0.2 : 1, R0 = s.r;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(T * 6); ctx.globalAlpha = a;
+      for (const [col, w] of [['#ff6ec0', 6], ['#ffffff', 2.5]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
+        for (let i = 0; i <= 80; i++) { const t = i / 80, ang = t * 6.28 * 3, rr = t * R0; i ? ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr * 0.7) : ctx.moveTo(0, 0); }
+        ctx.stroke();
+      }
+      ctx.restore(); ctx.globalAlpha = 1;
+      glow(s.x, s.y, R0 * 1.6, '#ff9ccf', 0.4 * a);
+    },
+    // hexagon force-field dome bursting out (Protect / Detect)
+    dome: (s, k) => {
+      const f = s.f; if (!f) return;
+      const r = Math.max(f.w, f.h) * 0.66 * (k < 0.2 ? easeOut(k / 0.2) * 1.1 : 1.1 - (k - 0.2) * 0.12), a = k > 0.7 ? (1 - k) / 0.3 : 1;
+      glow(f.cx, f.cy, r * 1.5, s.col, 0.55 * a);
+      ctx.save(); ctx.translate(f.cx, f.cy); ctx.globalAlpha = a;
+      ctx.fillStyle = s.col; ctx.globalAlpha = 0.16 * a; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.28); ctx.fill();
+      ctx.globalAlpha = 0.85 * a; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
+      const hs = r * 0.3;
+      for (let gx = -3; gx <= 3; gx++) for (let gy = -3; gy <= 3; gy++) {
+        const cx = gx * hs * 1.5, cy = gy * hs * 1.73 + (gx % 2 ? hs * 0.87 : 0);
+        if (cx * cx + cy * cy > (r - hs * 0.4) ** 2) continue;
+        ctx.beginPath(); for (let j = 0; j <= 6; j++) { const an = j / 6 * 6.28; const hx = cx + Math.cos(an) * hs * 0.95, hy = cy + Math.sin(an) * hs * 0.95; j ? ctx.lineTo(hx, hy) : ctx.moveTo(hx, hy); } ctx.stroke();
+      }
+      ctx.lineWidth = PX * 1.4; ctx.strokeStyle = s.col; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.28); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  });
+  const eyeOf = f => ({ x: f.x + f.face * f.w * 0.16, y: f.top + f.h * 0.24 });
+  function soundBurst(f, d, col, n = 5, o = {}) {
+    for (let i = 0; i < n; i++) later(() => {
+      if (!on || f.state !== 'idle') return;
+      const mo = f.mouth(), a = Math.atan2(d.cy - mo.y, d.cx - mo.x);
+      shapes.push({ kind: 'wave2', x: mo.x, y: mo.y, a, vx: Math.cos(a) * (o.speed || 520), vy: Math.sin(a) * (o.speed || 520), col, jag: o.jag, span: o.span, grow: o.grow, life: o.life || 0.65, age: 0 });
+      if (o.notes && i % 2) spawn({ bm: 'note', c: [col, '#ffffff'], x: mo.x, y: mo.y, vx: Math.cos(a) * 300 + R(-40, 40), vy: Math.sin(a) * 300 + R(-60, 0), life: 0.7, s0: 2, s1: 2, fade: true });
+    }, i * (o.gap || 80));
+  }
+  function shrinkFoe(d, col = '#7aa8ff') {
+    if (d.state !== 'idle') return;
+    d.bump(5); d.shiver = 0.25;
+    for (let j = 0; j < 7; j++) spawn({ bm: 'down', c: [col, '#ffffff', col], x: d.x + R(-d.w / 2, d.w / 2), y: d.top + R(-10, 10), vy: 90, life: 0.7, delay: j * 0.05, s0: 2, s1: 2, fade: true });
+  }
+  S.sound = async (f, d, m, o, hit) => {
+    const status = m.cat === 'status', id = m.id;
+    const col = id === 'screech' ? '#ff5a5a' : id === 'metal-sound' ? '#dfe6f0' : id === 'supersonic' ? '#bfe6ff' : m.type === 'Bug' ? '#cdeb5a' : m.type === 'Dark' ? '#b080d8' : m.type === 'Fairy' ? '#ff9bd6' : id === 'sing' || id === 'perish-song' ? '#c8a8ff' : '#ffffff';
+    const roar = id === 'roar' || id === 'noble-roar' || id === 'hyper-voice' || id === 'boomburst';
+    // rear back, then let it out
+    f.crouchT = 1;
+    await tw(0.16, k => { f.rotA = -f.face * 0.18 * k; });
+    f.crouchT = 0; f.bump(-8);
+    await tw(0.08, k => { f.rotA = -f.face * 0.18 + f.face * 0.3 * k; });
+    if (roar) { shakeIt(6); dimTo(0.15, 0.8); }
+    SFX.sonic();
+    soundBurst(f, d, col, roar ? 6 : 5, { jag: id === 'screech' || id === 'snarl', span: id === 'supersonic' ? 0.5 : roar ? 1.2 : 0.9, notes: id === 'sing' || id === 'perish-song' || id === 'growl' || id === 'round', grow: roar ? 110 : 70 });
+    await wait(380);
+    hit();
+    if (status) shrinkFoe(d, id === 'screech' || id === 'metal-sound' ? '#7aa8ff' : '#ff9a6a');
+    else if (d.state === 'idle') { d.shiver = 0.3; }
+    await wait(300);
+  };
+  const STATUS_SIG = {};
+  STATUS_SIG['tail-whip'] = async (f, d, m, o, hit) => {
+    // turn round and wag the tail at the foe
+    const dir = f.face;
+    for (let i = 0; i < 6; i++) later(() => { f.face = i % 2 ? dir : -dir; f.jz = 0; }, i * 90);
+    await tw(0.55, k => { f.jz = Math.abs(Math.sin(k * Math.PI * 3)) * 8; f.rotA = Math.sin(k * Math.PI * 6) * 0.15; });
+    f.face = dir; f.jz = 0;
+    for (let i = 0; i < 3; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: f.x - dir * f.w * 0.4, y: f.cy + (i - 1) * 10, vx: -dir * 60, vy: 0, life: 0.3, len: 20, ang: Math.PI / 2 });
+    hit(); shrinkFoe(d);
+    await wait(250);
+  };
+  STATUS_SIG['leer'] = STATUS_SIG['scary-face'] = STATUS_SIG['glare'] = STATUS_SIG['mean-look'] = STATUS_SIG['block'] = async (f, d, m, o, hit) => {
+    const scary = m.id !== 'leer', col = scary ? '#ff4a4a' : '#ffffff', e = eyeOf(f);
+    dimTo(scary ? 0.45 : 0.25, 1.0);
+    shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 36, col, life: 0.6, age: 0 });
+    SFX.status('flinch');
+    await wait(260);
+    // piercing glare lines
+    for (let i = 0; i < 5; i++) { const off = (i - 2) * 8; spawn({ kind: 'streak', c: [col], x: d.cx, y: d.cy + off, vx: 0, vy: 0, life: 0.3, len: Math.hypot(d.cx - e.x, d.cy - e.y), ang: Math.atan2(d.cy - e.y, d.cx - e.x), delay: i * 0.03 }); }
+    if (scary) { f.white = 0.8; f.whiteCol = '#ff4a4a'; shapes.push({ kind: 'lines', x: d.cx, y: d.cy, r0: 30, r1: 80, col: '#ff6a6a', n: 12, life: 0.35, age: 0 }); }
+    await wait(150);
+    hit(); shrinkFoe(d, scary ? '#ff9a6a' : '#7aa8ff');
+    await wait(300);
+  };
+  STATUS_SIG['taunt'] = STATUS_SIG['torment'] = STATUS_SIG['swagger'] = STATUS_SIG['flatter'] = async (f, d, m, o, hit) => {
+    // a cocky hop, then the foe boils over
+    await tw(0.35, k => { f.jz = Math.abs(Math.sin(k * Math.PI * 2)) * 14; f.rotA = Math.sin(k * Math.PI * 4) * 0.12; });
+    f.jz = 0;
+    shapes.push({ kind: 'anger', x: d.x - d.face * d.w * 0.22, y: d.top + 4, r: 38, life: 1.2, age: 0 });
+    d.white = 0.7; d.whiteCol = '#ff4a4a'; d.shiver = 0.4;
+    SFX.status('flinch');
+    await wait(250); hit(); await wait(450);
+  };
+  STATUS_SIG['disable'] = STATUS_SIG['spite'] = STATUS_SIG['curse'] = STATUS_SIG['destiny-bond'] = STATUS_SIG['imprison'] = STATUS_SIG['perish-song'] = async (f, d, m, o, hit) => {
+    const ghost = m.id !== 'disable', col = ghost ? '#8a5af0' : '#ff9ccf';
+    dimTo(0.4, 1.3);
+    f.aura = col; f.auraT = T + 1.1;
+    for (let i = 0; i < 16; i++) smokeP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h * 0.5), R(3, 5), 1, ghost ? IMP.Ghost.mist : ['#ffc8e8', '#ff9ccf', '#c0307e'], { vy: -60, a: 0.7, delay: i * 0.03 });
+    await wait(400);
+    for (let i = 0; i < 10; i++) { const a = center(f), b = center(d), ox = R(-20, 20); moteP(0, 0, col, { life: 0.6, delay: i * 0.04, s: 1.5, path: k => ({ x: a.x + (b.x - a.x) * k + ox * Math.sin(k * 6), y: a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 40 }) }); }
+    await wait(550);
+    if (d.state === 'idle') { d.white = 0.7; d.whiteCol = col; d.shiver = 0.3; ringP(d.cx, d.cy, 8, 60, col, 0.4, { flat: 1 }); }
+    hit(); await wait(250);
+  };
+  STATUS_SIG['charm'] = STATUS_SIG['sweet-kiss'] = STATUS_SIG['baby-doll-eyes'] = STATUS_SIG['attract'] = STATUS_SIG['captivate'] = async (f, d, m, o, hit) => {
+    const e = eyeOf(f);
+    shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 20, col: '#ff9bd6', life: 0.45, age: 0 });
+    await tw(0.3, k => { f.rotA = Math.sin(k * Math.PI * 2) * 0.15; f.jz = Math.sin(k * Math.PI) * 10; });
+    SFX.heal();
+    for (let i = 0; i < 8; i++) { const a = f.mouth(), b = center(d), ox = R(-24, 24); spawn({ bm: 'heart', c: ['#ff5aa8', '#ffd6ef', '#c0307e'], x: a.x, y: a.y, life: 0.7, delay: i * 0.06, s0: 3, s1: 4, path: k => ({ x: a.x + (b.x - a.x) * k + ox * Math.sin(k * 3.14), y: a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * 50 + Math.sin(k * 12 + i) * 6 }) }); }
+    await wait(800);
+    for (let i = 0; i < 6; i++) spawn({ bm: 'heart', c: ['#ff5aa8', '#ffd6ef', '#c0307e'], x: d.cx + R(-30, 30), y: d.cy + R(-20, 10), vy: -60, life: 0.7, s0: 2, s1: 2, fade: true });
+    hit(); shrinkFoe(d, '#ff9a6a'); await wait(200);
+  };
+  STATUS_SIG['feather-dance'] = async (f, d, m, o, hit) => {
+    await tw(0.4, k => { f.jz = Math.sin(k * Math.PI) * 18; f.rotA = Math.sin(k * Math.PI * 4) * 0.2; });
+    for (let i = 0; i < 18; i++) spawn({ bm: 'gust', c: ['#ffffff', '#e6f1ff', '#b8c8dc'], x: d.cx + R(-60, 60), y: d.top - R(30, 90), vx: R(-20, 20), vy: R(30, 60), sway: 80, life: 1.1, delay: i * 0.03, s0: 2, s1: 2, rot: R(0, 6), spin: R(-3, 3), fade: true });
+    await wait(600); hit(); shrinkFoe(d, '#ff9a6a'); await wait(200);
+  };
+  STATUS_SIG['yawn'] = async (f, d, m, o, hit) => {
+    f.crouchT = 1; await wait(200); f.crouchT = 0; f.bump(-6);
+    const q = await shoot({ x: f.mouth().x, y: f.mouth().y, to: d, speed: 260, r: 14, c: ['#ffffff', '#f2f6ff', '#d8e6f5', '#a8bcd4'], curve: 0.4, trail: q => { if (Math.random() < 0.1) spawn({ bm: 'zzz', c: ['#ffffff', '#cfe3ff', '#8fb3ff'], x: q.x, y: q.y, vy: -30, life: 0.8, s0: 2, s1: 2, fade: true }); } });
+    ringP(q.x, q.y, 6, 40, '#ffffff', 0.3, { flat: 1 }); hit(); await wait(200);
+  };
+  S.shield = async (f, d, m, o, hit) => {
+    const detect = m.id === 'detect';
+    if (detect) { const e = eyeOf(f); shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 24, col: '#ffffff', life: 0.4, age: 0 }); await wait(200); }
+    SFX.shield(); f.bump(-6);
+    shapes.push({ kind: 'dome', f, col: m.id === 'wide-guard' || m.id === 'quick-guard' ? '#ffd23f' : '#5affb0', life: 1.2, age: 0 });
+    flash('#e0fff0', 0.12);
+    hit(); await wait(800);
+  };
+  S.twave = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.2, { col: '#fff59a', motes: 10, size: 24, recoil: 20 });
+    SFX.zap();
+    boltFx({ from: f, to: d, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx, by: d.cy, jag: 16, c: TP.Electric.c, life: 0.3, w: 0.8 });
+    await wait(120);
+    // a crackling ring of static closes around the target
+    for (let i = 0; i < 6; i++) { const a0 = i / 6 * 6.28, a1 = a0 + 1.05, r = Math.max(d.w, d.h) * 0.55; boltFx({ ax: d.cx + Math.cos(a0) * r, ay: d.cy + Math.sin(a0) * r * 0.7, bx: d.cx + Math.cos(a1) * r, by: d.cy + Math.sin(a1) * r * 0.7, jag: 8, c: TP.Electric.c, life: 0.85, w: 0.8 }); }
+    ringP(d.cx, d.cy, d.r * 2.2, d.r * 1.2, '#fff59a', 0.5, { flat: 0.7, w: 2 });
+    if (d.state === 'idle') { d.white = 0.7; d.whiteCol = '#fff59a'; d.shiver = 0.5; }
+    await wait(250); hit(); await wait(500);
+  };
+  S.hypno = async (f, d, m, o, hit) => {
+    SFX.status('confused');
+    if (m.id === 'confuse-ray') { const q = await shoot({ x: f.mouth().x, y: f.mouth().y, to: d, speed: 420, r: 12, c: ['#ffffff', '#fff3a0', '#ffd23f', '#c99a00'], curve: 0.8, trail: q => moteP(q.x, q.y, '#fff3a0', { life: 0.4 }) }); hit(); if (d.state === 'idle') { d.rotSV += 8; } return q; }
+    const e = eyeOf(f);
+    shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 20, col: '#ff9ccf', life: 0.4, age: 0 });
+    for (let i = 0; i < 4; i++) later(() => { if (!on) return; const mo = f.mouth(), a = Math.atan2(d.cy - mo.y, d.cx - mo.x); shapes.push({ kind: 'wave2', x: mo.x, y: mo.y, a, vx: Math.cos(a) * 360, vy: Math.sin(a) * 360, col: '#ff8ad8', span: 1.4, grow: 30, life: 0.8, age: 0 }); }, i * 110);
+    await wait(500);
+    shapes.push({ kind: 'spiral', x: d.cx, y: d.top + 10, r: 34, life: 0.9, age: 0 });
+    await wait(350); hit(); await wait(350);
+  };
+  SIG['confusion'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.22, { col: '#ff9ccf', motes: 12 });
+    const tx = d.cx + (o.miss ? 80 : 0);
+    for (let i = 0; i < 4; i++) ringP(tx, d.cy, 10, 70, i % 2 ? '#ffb0dc' : '#ffffff', 0.5, { flat: 1, w: 2, delay: i * 0.09 });
+    glowP(tx, d.cy, 10, 80, '#ff9ccf', 0.6, 0.7);
+    await wait(200);
+    if (!o.miss && d.state === 'idle') { d.whiteCol = '#ff9ccf'; tw(0.4, k => { if (d.state === 'idle') { d.rotS = Math.sin(k * 30) * 0.12 * (1 - k); d.white = 0.4 * (1 - k); } }); }
+    hit(); await wait(300);
+  };
+  for (const [id, fn] of Object.entries(STATUS_SIG)) SIG[id] = fn;
+
   // ---------------------------------------------------------------------
   //  Hit reactions
   // ---------------------------------------------------------------------
-  function impactFx(d, m, eff, crit) {
+  function impactFx(d, m, eff, crit, frac = 0.2) {
     const at = { x: d.cx + R(-6, 6), y: d.cy + R(-6, 6) }, type = m.type || 'Normal';
-    const pw = clamp((m.power || 60) / 80, 0.6, 1.7) * (eff > 1 ? 1.25 : eff < 1 ? 0.7 : 1) * (crit ? 1.3 : 1);
+    const pwMove = clamp((m.power || 60) / 80, 0.6, 1.6) * (eff > 1 ? 1.2 : eff < 1 ? 0.75 : 1);
+    const pwDmg = clamp(0.5 + frac * 2.6, 0.5, 2.0);
+    const pw = (pwMove + pwDmg) / 2 * (crit ? 1.2 : 1);
+    d.lastFrac = frac;
     impactAt(type, at.x, at.y, d.y, pw);
     d.white = 1; d.whiteCol = '#ffffff'; d.bump(4 + pw * 3); d.shiver = 0.12;
+    const foe = foeOf(d); d.rotSV += (Math.sign(d.x - (foe ? foe.x : d.x - 1)) || 1) * 5 * pw;
+    const stg = clamp((frac - 0.12) * 2.2, 0, 0.8) + (crit ? 0.3 : 0);
+    if (stg > 0.08) { d.stagger = Math.max(d.stagger || 0, T + stg); d.goal = null; }
+    if (crit) shapes.push({ kind: 'dizzy', f: d, life: 0.9, age: 0 });
+    if (eff < 1) shapes.push({ kind: 'dome', f: d, col: '#9fc4ff', life: 0.35, age: 0 });
+    if (eff > 1 || crit) trainerPose(d.p, 'dismay', 0.9);
     SFX.impact(type, pw, eff);
     if (pw > 1.15 || crit) { shakeIt(4 + pw * 4); hitStop(crit ? 110 : 70); }
     if (crit || pw > 1.5) camPunch(at.x, at.y, crit ? 0.09 : 0.06, 0.3);
@@ -2506,7 +2993,16 @@ const Retro = (() => {
   }
   function knock(d, from, pw) {
     const dx = d.x - from.x, dy = d.y - from.y, L = Math.hypot(dx, dy) || 1;
+    const ratio = statRatio(from.mon, d.mon, from.lastMove), push = clamp(Math.sqrt(ratio), 0.4, 1.6);
+    if (ratio < 0.8 && (d.lastFrac || 0) < 0.2) {
+      // the defender is much sturdier: it digs in and barely moves
+      d.crouchT = 0.8; later(() => { d.crouchT = 0; }, 220);
+      dust(d.x, d.y, 1.2);
+      glowP(d.cx, d.cy, 10, Math.max(d.w, d.h) * 0.7, from.lastMove && from.lastMove.cat === 'special' ? '#bcd6ff' : '#e8e0d0', 0.3, 0.6);
+    }
+    pw *= push;
     d.kx += dx / L * 300 * pw; d.ky += dy / L * 130 * pw + R(-30, 30);
+    if (pw > 1.2) { d.goal = { x: clamp(d.x + dx / L * 130, field.x0, field.x1), y: clamp(d.y + dy / L * 70, field.y0, field.y1) }; d.goalT = 1; }
     if (pw > 1.15 && !d.hover && d.state === 'idle') {
       // big hits launch the target into a short tumble
       tw(0.38, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 22 * pw; }).then(() => { d.jz = 0; if (d.state === 'idle') { d.bump(6); dust(d.x, d.y, 1.4); } });
@@ -2590,7 +3086,7 @@ const Retro = (() => {
     if (!selfT && miss) { dodge(d, f); text(d, 'MISSED!', 'miss'); AudioFX.Crowd.gasp(); return; }
     if (m.cat === 'status') return statusMove(f, selfT ? f : d, m);
     const eff = m.type ? effectiveness(m.type, t.types) : 1;
-    if (eff === 0) { text(d, 'NO EFFECT', 'weak'); AudioFX.Crowd.gasp(); return; }
+    if (eff === 0) { text(d, 'NO EFFECT', 'weak'); AudioFX.Crowd.gasp(); d.bump(-5); tw(0.3, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 12; }).then(() => { d.jz = 0; }); return; }
     let hits = 1;
     if (m.maxHits) {
       if (m.minHits === m.maxHits) hits = m.minHits;
@@ -2606,8 +3102,8 @@ const Retro = (() => {
       t.hp -= dmg; total += dmg; landed++;
       if (c) crit = true;
       u.dmgDealt = (u.dmgDealt || 0) + dmg;
-      if (h === 0) { pw = impactFx(d, m, eff, c); number(d, dmg, 0, c ? 'crit' : eff > 1 ? 'super' : ''); }
-      else later(() => { if (on && d.state !== 'gone') { impactFx(d, m, eff, c); number(d, dmg, h); } }, h * 160);
+      if (h === 0) { pw = impactFx(d, m, eff, c, dmg / t.maxhp); number(d, dmg, 0, c ? 'crit' : eff > 1 ? 'super' : ''); }
+      else later(() => { if (on && d.state !== 'gone') { impactFx(d, m, eff, c, dmg / t.maxhp); number(d, dmg, h); } }, h * 160);
     }
     knock(d, f, pw);
     if (t.status === 'frz' && m.type === 'Fire' && t.hp > 0) { t.status = null; text(d, 'THAWED OUT!', 'info'); }
@@ -2668,8 +3164,11 @@ const Retro = (() => {
     }
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0) m.ppLeft--;
+    f.lastMove = m;
     pill(p, m.name);
     trainerPose(p, 'throw', 0.6);
+    if (Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
+    if (m.cat !== 'status') react(d, f, m);
     const selfT = SELF_TARGETS.has(m.target) || m.id === 'rest';
     let miss = false;
     if (!selfT && m.acc != null) { const st = clamp(u.stages.acc - d.mon.stages.eva, -6, 6); miss = Math.random() * 100 >= m.acc * accMult(st); }
@@ -2751,10 +3250,21 @@ const Retro = (() => {
     }
     const foe = foeOf(f);
     if (!foe || foe.state !== 'idle') return;
+    if (T < (f.stagger || 0)) return;
     const cpu = controllers[f.p] === 'cpu';
+    if (f.queuedSwitch != null) { const i = f.queuedSwitch; f.queuedSwitch = null; if (canSwitchTo(f.p, i)) { f.busy = true; switchOut(f, i, token).catch(swallow); return; } }
     if (cpu && f.plan == null) f.plan = chooseMove(f, foe);
-    f.cd -= dt * (f.mon.status === 'par' ? 0.6 : 1);
+    f.cd -= dt;
+    // telegraph: a short ready crouch just before it acts
+    f.crouchT = f.cd > 0 && f.cd < 0.3 ? 0.55 : 0;
     if (f.cd > 0) return;
+    f.crouchT = 0;
+    if (cpu && f.forceMove == null) {
+      const swi = considerSwitch(f, foe);
+      if (swi >= 0) { f.busy = true; switchOut(f, swi, token).catch(swallow); return; }
+      const pm = f.plan >= 0 ? f.mon.moves[f.plan] : null;
+      if (foe.protectUntil > T && (!pm || !(pm.cat === 'status' && SELF_TARGETS.has(pm.target)))) { f.cd = 0.25; return; }
+    }
     if (!cpu && f.queued == null && f.forceMove == null) {
       if (!f.ready) { f.ready = true; document.getElementById('rrow' + f.p)?.classList.add('ready'); }
       return;
@@ -2773,7 +3283,8 @@ const Retro = (() => {
     act(f, tk).catch(swallow).finally(() => {
       if (tk !== token) return;
       f.busy = false;
-      f.cd = clamp(3.5 - f.mon.stats.spe * stageMult(f.mon.stages.spe) / 150, 2.0, 3.4) + R(0, 1) + (f.extraCd || 0);
+      f.cd = actionGap(f.mon) + R(-0.25, 0.4) + (f.extraCd || 0);
+      if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
       f.extraCd = 0;
       f.goal = null;
     });
@@ -2811,7 +3322,7 @@ const Retro = (() => {
     ringP(dest.x, dest.y, 6, 70, '#ffffff', 0.4);
     flash('#ffffff', 0.12);
     const f = new Fighter(p, mon, anim);
-    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff';
+    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
     playCry(mon);
     await tw(0.32, k => { f.pop = easeOut(k); f.white = 1 - k * 0.6; }); chk(tk);
@@ -2845,22 +3356,88 @@ const Retro = (() => {
       f.jz = 0; f.bump(10); dust(f.x, f.y, 1.8); shakeIt(4);
       await tw(0.4, k => { f.sink = k * 0.45; f.white = 0; }); chk(tk);
       await wait(250); chk(tk);
-      const tr = TR[p], hand = { x: tr.x + (p ? -12 : 12), y: tr.y - 80 };
-      beamFx({ ax: hand.x, ay: hand.y, bx: f.cx, by: f.cy, w: 7, c: ['#ffffff', '#ff9a9a', '#ff3a3a', '#a01818'], life: 0.6 });
-      f.whiteCol = '#ff5a5a';
-      await tw(0.5, k => { f.white = Math.min(1, k * 4); f.pop = 1 - easeIn(k); f.alpha = k > 0.75 ? (1 - k) * 4 : 1; }); chk(tk);
+      await recallFx(f, tk);
       f.state = 'gone';
-      glowP(f.cx, f.cy, 6, 50, '#ff5a5a', 0.3, 0.8);
       if (F[p] === f) F[p] = null;
       if (!state.players[p].team.some(x => x.hp > 0)) return endBattle(false);
       await wait(700); chk(tk);
       if (ended) return;
       const pl = state.players[p];
-      const idx = bestMatchupIdx(p);
+      const foeNow = F[1 - p], idx = foeNow ? pl.team.reduce((b, m, i) => m.hp > 0 && (b < 0 || matchup(m, foeNow.mon) > matchup(pl.team[b], foeNow.mon)) ? i : b, -1) : bestMatchupIdx(p);
       pl.active = idx >= 0 ? idx : pl.team.findIndex(x => x.hp > 0);
       await sendOut(p, tk, false);
     })().catch(swallow);
   }
+  // ---------------------------------------------------------------------
+  //  Strategy: switching out of bad matchups, reactive Protect
+  // ---------------------------------------------------------------------
+  const SW = { n: [0, 0], t: [-99, -99] };
+  // how well `mon` does against `foeMon`: its best hit, minus the worst hit it can take, plus health
+  function matchup(mon, foeMon) {
+    const best = (a, b) => Math.min(1.2, Math.max(0, ...a.moves.filter(mv => mv.ppLeft > 0).map(mv => expectedFrac(a, b, mv) * (mv.acc || 100) / 100)));
+    const off = best(mon, foeMon), def = best(foeMon, mon);
+    return off - def * 0.9 + (spd(mon) > spd(foeMon) ? 0.12 : 0) + mon.hp / mon.maxhp * 0.25;
+  }
+  function considerSwitch(f, foe) {
+    const p = f.p, pl = state.players[p];
+    if (f.forceMove != null || SW.n[p] >= 3 || T - SW.t[p] < 12 || T - (f.enterT || 0) < 5) return -1;
+    if (pl.team.filter(m => m.hp > 0).length < 2) return -1;
+    const cur = matchup(f.mon, foe.mon);
+    let best = -1, bs = -Infinity;
+    pl.team.forEach((m, i) => { if (i !== pl.active && m.hp > 0) { const v = matchup(m, foe.mon); if (v > bs) { bs = v; best = i; } } });
+    if (best < 0) return -1;
+    const gain = bs - cur, low = f.mon.hp / f.mon.maxhp;
+    if ((gain > 0.45 && Math.random() < 0.55) || (gain > 0.25 && low < 0.3 && Math.random() < 0.3)) return best;
+    return -1;
+  }
+  const canSwitchTo = (p, i) => { const pl = state.players[p]; return i !== pl.active && pl.team[i] && pl.team[i].hp > 0 && T - SW.t[p] > 3; };
+  // the trainer's ball pulls the Pokémon back in a red beam
+  async function recallFx(f, tk) {
+    const tr = TR[f.p], hand = { x: tr.x + (f.p ? -12 : 12), y: tr.y - 80 };
+    SFX.pop();
+    beamFx({ ax: hand.x, ay: hand.y, bx: f.cx, by: f.cy, w: 7, c: ['#ffffff', '#ff9a9a', '#ff3a3a', '#a01818'], life: 0.6 });
+    f.whiteCol = '#ff5a5a';
+    await tw(0.5, k => { f.white = Math.min(1, k * 4); f.pop = 1 - easeIn(k); f.alpha = k > 0.75 ? (1 - k) * 4 : 1; }); chk(tk);
+    glowP(f.cx, f.cy, 6, 50, '#ff5a5a', 0.3, 0.8);
+    for (let i = 0; i < 8; i++) moteP(0, 0, '#ff8a8a', { life: 0.35, delay: i * 0.02, path: k => ({ x: f.cx + (hand.x - f.cx) * k, y: f.cy + (hand.y - f.cy) * k }) });
+  }
+  async function switchOut(f, idx, tk) {
+    const p = f.p, pl = state.players[p], mon = f.mon;
+    SW.n[p]++; SW.t[p] = T;
+    f.state = 'recall'; f.vx = f.vy = 0;
+    for (const b of beams) if (b.owner === f) b.life = Math.min(b.life, b.age + 0.1);
+    trainerPose(p, 'throw', 1.1);
+    speech(p, `${mon.name}, come back!`, 1300);
+    pill(p, 'Switch!');
+    await wait(220); chk(tk);
+    await recallFx(f, tk);
+    f.state = 'gone';
+    if (F[p] === f) F[p] = null;
+    mon.stages = blankStages(); mon.vol = {};
+    pl.active = idx;
+    hud(p);
+    await wait(350); chk(tk);
+    if (ended) return;
+    await sendOut(p, tk, false);
+  }
+  // the defender reads a big incoming attack and throws up Protect in time
+  function react(d, f, m) {
+    if (!d || d.state !== 'idle' || d.busy || d.stuck || controllers[d.p] !== 'cpu' || T < (d.stagger || 0) || canMega(d.p)) return;
+    const idx = d.mon.moves.findIndex(mv => mv.ppLeft > 0 && mv.ailment === 'protect');
+    if (idx < 0 || (d.mon.vol.protectCount || 0) > 0) return;
+    const frac = expectedFrac(f.mon, d.mon, m);
+    if (frac < 0.22) return;
+    const quick = clamp(0.55 + (spd(d.mon) / Math.max(1, spd(f.mon))) * 0.35, 0.4, 1.1);   // slow Pokémon react late
+    const chance = clamp(0.2 + (frac - 0.22) * 1.3, 0, 0.88) * quick * (isContact(m) ? 0.85 : 1);
+    if (Math.random() > chance) return;
+    d.forceMove = idx; d.cd = 0;
+  }
+  SHAPE2.dizzy = (s, k) => {
+    const f = s.f; if (!f || f.state !== 'idle') return;
+    ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+    for (let i = 0; i < 3; i++) { const an = T * 7 + i * 2.09; drawBm('star', ['#fff35a', '#ffffff', '#c99a00'], f.cx + Math.cos(an) * f.w * 0.35, f.top - 4 + Math.sin(an) * 7, 2); }
+    ctx.globalAlpha = 1;
+  };
   function confetti() {
     const cols = ['#ff5a5a', '#ffd23f', '#5ad6ff', '#7be35a', '#ff8ad8', '#ffffff'];
     for (let i = 0; i < 160; i++) spawn({ sq: 1, c: [pick(cols)], x: R(0, VW), y: R(-200, -10), vx: R(-40, 40), vy: R(110, 210), life: R(3, 4.5), delay: R(0, 1.2), s0: 2, s1: 2 });
@@ -2959,7 +3536,7 @@ const Retro = (() => {
     stop();
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
     resize(); layout(); camX = VW / 2; camY = VH / 2;
@@ -2985,7 +3562,8 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field }),
+  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field, SW }),
     // test hook: play one move's effect (no damage) with the battle paused
-    _testMove: async id => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { hit = true; }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
+    _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; } }); parts.length = 0; shapes.length = 0; },
+    _testMove: async (id, visual) => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { if (hit) return; hit = true; if (visual && m.cat !== 'status') { const pw = impactFx(d, m, 1, false); knock(d, f, pw * 0.4); } }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
 })();

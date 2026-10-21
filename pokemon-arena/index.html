@@ -434,6 +434,10 @@
   .rmv b { opacity: .7; margin-right: calc(var(--u) * 4); } .rmv small { margin-left: calc(var(--u) * 8); opacity: .8; font-size: .75em; }
   .rmv:disabled { filter: grayscale(1); opacity: .5; }
   .rmv.q { outline: calc(var(--u) * 4) solid #facc15; }
+  .rparty { grid-column: 1 / -1; display: flex; gap: calc(var(--u) * 4); }
+  .rsw { width: calc(var(--u) * 46); height: calc(var(--u) * 40); padding: 0; border: calc(var(--u) * 3) solid #1b1530; border-radius: calc(var(--u) * 8); background: #fff8ea; cursor: pointer; }
+  .rsw img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .rsw:disabled { filter: grayscale(1); opacity: .4; } .rsw.q { outline: calc(var(--u) * 4) solid #facc15; }
   .rrow.ready .rmv:not(:disabled) { animation: rmvPulse .8s ease-in-out infinite; }
   @keyframes rmvPulse { 50% { transform: translateY(calc(var(--u) * -3)); } }
   /* portrait (Shorts): two compact panels side by side */
