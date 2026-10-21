@@ -52,10 +52,10 @@ const Retro = (() => {
   }
   function layout() {
     if (!portrait) {
-      field = { x0: VW * 0.19, x1: VW * 0.81, y0: VH * 0.37, y1: VH * 0.83 };
+      field = { x0: VW * 0.16, x1: VW * 0.84, y0: VH * 0.355, y1: VH * 0.845 };
       spots = { trainer: [{ x: VW * 0.105, y: VH * 0.6 }, { x: VW * 0.895, y: VH * 0.6 }], start: [{ x: VW * 0.3, y: VH * 0.6 }, { x: VW * 0.7, y: VH * 0.6 }] };
     } else {
-      field = { x0: VW * 0.12, x1: VW * 0.88, y0: VH * 0.33, y1: VH * 0.83 };
+      field = { x0: VW * 0.09, x1: VW * 0.91, y0: VH * 0.32, y1: VH * 0.845 };
       spots = { trainer: [{ x: VW * 0.16, y: VH * 0.875 }, { x: VW * 0.84, y: VH * 0.285 }], start: [{ x: VW * 0.4, y: VH * 0.72 }, { x: VW * 0.6, y: VH * 0.44 }] };
     }
   }
@@ -617,17 +617,37 @@ const Retro = (() => {
     const physical = f.mon.stats.atk > f.mon.stats.spa * 1.15;
     return (portrait ? 250 : 330) - (physical ? 60 : 0) + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
   }
+  // each new goal comes from a tactic: sweep around the foe, cross to its other side,
+  // reposition far across the field, retreat when hurt, or press in for a physical hit
   function pickGoal(f) {
     const foe = foeOf(f);
-    if (!foe || foe.state !== 'idle') {
-      const s = spots.start[f.p];
-      return { x: clamp(s.x + R(-90, 90), field.x0, field.x1), y: clamp(s.y + R(-70, 70), field.y0, field.y1) };
+    const inField = g => ({ x: clamp(g.x, field.x0 + 8, field.x1 - 8), y: clamp(g.y, field.y0 + 6, field.y1 - 6) });
+    if (!foe || foe.state !== 'idle') return inField({ x: f.x + R(-220, 220), y: f.y + R(-110, 110) });
+    const want = wantDist(f, foe), low = f.mon.hp / f.mon.maxhp < 0.3, fast = spd(f.mon) > 90;
+    const plan = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
+    const r = Math.random();
+    let mode = low && r < 0.4 ? 'retreat' : r < (fast ? 0.34 : 0.2) ? 'flank' : r < 0.62 ? 'arc' : 'roam';
+    if (f.hitRun) { mode = Math.random() < 0.5 ? 'roam' : 'flank'; f.hitRun = false; }
+    else if (isContact(plan) && f.cd < 1.3) mode = 'press';
+    f.mode = mode;
+    if (Math.random() < 0.25) f.orbit *= -1;
+    let best = null, bs = -1e9;
+    for (let i = 0; i < 14; i++) {
+      let g;
+      if (mode === 'flank') { const ang = Math.atan2(f.y - foe.y, f.x - foe.x) + Math.PI + R(-0.8, 0.8); g = { x: foe.x + Math.cos(ang) * want, y: foe.y + Math.sin(ang) * want * 0.6 }; }
+      else if (mode === 'arc') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(0.8, 1.7); g = { x: foe.x + Math.cos(ang) * want * R(0.9, 1.3), y: foe.y + Math.sin(ang) * want * 0.6 * R(0.9, 1.3) }; }
+      else if (mode === 'press') g = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40) + R(-20, 20), y: foe.y + R(-24, 24) };
+      else g = { x: R(field.x0, field.x1), y: R(field.y0, field.y1) };
+      g = inField(g);
+      const df = Math.hypot(g.x - foe.x, (g.y - foe.y) / 0.6), travel = Math.hypot(g.x - f.x, g.y - f.y);
+      const edge = Math.min(g.x - field.x0, field.x1 - g.x, (g.y - field.y0) * 1.6, (field.y1 - g.y) * 1.6);
+      let sc;
+      if (mode === 'retreat') sc = df * 0.8 - (edge < 24 ? 60 : 0) + R(0, 40);
+      else if (mode === 'press') sc = -travel * 0.2 + R(0, 20);
+      else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - (edge < 30 ? 70 : 0) + R(0, 50);
+      if (sc > bs) { bs = sc; best = g; }
     }
-    if (Math.random() < 0.2) f.orbit *= -1;
-    // circle around the foe, a step at a time, at the preferred range
-    const ang = Math.atan2((f.y - foe.y) / 0.62, f.x - foe.x) + f.orbit * R(0.3, 0.85);
-    const dd = wantDist(f, foe) * R(0.85, 1.12);
-    return { x: clamp(foe.x + Math.cos(ang) * dd, field.x0, field.x1), y: clamp(foe.y + Math.sin(ang) * dd * 0.62, field.y0, field.y1) };
+    return best;
   }
   function dust(x, y, s = 1, col = TH && TH.ground === 'snow' ? ['#ffffff', '#e6eef8', '#cfdcee'] : ['#d8c4a4', '#bba486', '#9a8466']) {
     for (let i = 0; i < 1 + s * 2; i++) spawn({ kind: 'smoke', c: col, x: x + R(-8, 8) * s, y: y + R(-3, 3), vx: R(-40, 40) * s, vy: R(-22, -4), drag: 3, life: R(0.35, 0.65), s0: 1 + s, s1: 2 + s * 1.6, a: 0.5 });
@@ -658,9 +678,16 @@ const Retro = (() => {
     const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0));
     if (canWalk) {
       f.goalT -= dt;
-      if (!f.goal || f.goalT <= 0 || Math.hypot(f.goal.x - f.x, f.goal.y - f.y) < 12) { f.goal = pickGoal(f); f.goalT = R(0.8, 2.0); }
-      const dx = f.goal.x - f.x, dy = f.goal.y - f.y, d = Math.hypot(dx, dy) || 1;
-      const sp = maxSpeed(f) * Math.min(1, d / 90);           // ease into the stop
+      if (!f.goal && !(f.pauseT > 0)) f.goal = pickGoal(f);
+      if (f.pauseT > 0) f.pauseT -= dt;
+      else if (!f.goal || f.goalT <= 0 || Math.hypot(f.goal.x - f.x, f.goal.y - f.y) < 12) {
+        if (f.goal && Math.random() < 0.3) { f.pauseT = R(0.25, 0.7); f.goal = null; }
+        else { f.goal = pickGoal(f); f.goalT = Math.hypot(f.goal.x - f.x, f.goal.y - f.y) / maxSpeed(f) + R(0.4, 1.0); }
+      }
+      const gx = f.goal ? f.goal.x : f.x, gy = f.goal ? f.goal.y : f.y;
+      const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1;
+      const sp = (f.goal ? maxSpeed(f) * (d > 260 ? 1.3 : 1) : 0) * Math.min(1, d / 90);   // sprint on long runs, ease into the stop
+      if (d > 260 && f.speed > 180 && !f.hover && Math.random() < dt * 12) dust(f.x, f.y, 0.7);
       tvx = dx / d * sp; tvy = dy / d * sp;
       if (m.vol.conf) { tvx += Math.sin(T * 5 + f.p) * 70; tvy += Math.cos(T * 4.3) * 45; }
       if (!f.hover && m.stats.spe * stageMult(m.stages.spe) > 95 && (f.hopT = (f.hopT ?? R(1.5, 3)) - dt) <= 0) {
@@ -1134,11 +1161,29 @@ const Retro = (() => {
     flashA = Math.max(0, flashA - dt * 2.5);
     dimA += ((T < dimUntil ? dimTarget : 0) - dimA) * Math.min(1, dt * (T < dimUntil ? 8 : 3));
     // camera: punch toward the action, then settle back
-    const want = camT && T < camT.until ? camT : { x: VW / 2, y: VH / 2, z: 1 };
-    const kc = Math.min(1, dt * (want.z > camZ ? 10 : 3.2));
+    const punch = camT && T < camT.until, want = punch ? camT : directorView();
+    const kc = Math.min(1, dt * (punch ? (want.z > camZ ? 10 : 3.2) : 2.2));
     camZ += (want.z - camZ) * kc; camX += (want.x - camX) * kc; camY += (want.y - camY) * kc;
   }
 
+  // the camera frames both Pokémon (and anything flying between them): it pushes in when they
+  // close in, pulls back when they spread out, leans toward the current action, and drifts gently
+  let camFocus = null;
+  function focusOn(x, y, sec = 0.6) { camFocus = { x, y, until: T + sec }; }
+  function directorView() {
+    const pts = [];
+    for (const f of F) if (f && f.state !== 'gone') pts.push({ x: f.x, y: f.y - f.h * 0.5 });
+    if (!pts.length) return { x: VW / 2, y: VH / 2, z: 1 };
+    for (const o of projs) pts.push({ x: o.x, y: o.y });
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    if (camFocus && T < camFocus.until) { cx += (camFocus.x - cx) * 0.4; cy += (camFocus.y - cy) * 0.4; }
+    const z = clamp(Math.min(VW / (x1 - x0 + 520), VH / (y1 - y0 + 420)), 1.04, 1.24);
+    // keep the action a little below centre (the HUD sits on top)
+    cy -= VH * 0.07 / z;
+    return { x: cx + Math.sin(T * 0.37) * 7, y: cy + Math.sin(T * 0.29 + 1) * 5, z: z + Math.sin(T * 0.21) * 0.01 };
+  }
   // ---- drawing ----
   function drawBm(name, c, x, y, s, flip = false, rot = 0) {
     const img = bmCanvas(name, c[0], c[1] || c[0], c[2] || c[1] || c[0]);
@@ -1646,7 +1691,7 @@ const Retro = (() => {
   function big(s, cls = '', ms = 2200) {
     const el = document.createElement('div');
     el.className = 'rbig ' + cls; el.textContent = s;
-    fxEl.append(el);
+    (hudEl.classList.contains('hidden') ? fxEl : hudEl).append(el);
     later(() => el.remove(), ms);
   }
   function speech(p, s, ms = 1600) { const t = TR[p]; if (t && s) floatAt(clamp(t.x, 110, VW - 110), t.y - 112, esc(s), 'rgo', ms); }
@@ -3169,6 +3214,7 @@ const Retro = (() => {
   //  Hit reactions
   // ---------------------------------------------------------------------
   function impactFx(d, m, eff, crit, frac = 0.2) {
+    focusOn(d.cx, d.cy, 0.55);
     const at = { x: d.cx + R(-6, 6), y: d.cy + R(-6, 6) }, type = m.type || 'Normal';
     const pwMove = clamp((m.power || 60) / 80, 0.6, 1.6) * (eff > 1 ? 1.2 : eff < 1 ? 0.75 : 1);
     const pwDmg = clamp(0.5 + frac * 2.6, 0.5, 2.0);
@@ -3361,6 +3407,7 @@ const Retro = (() => {
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
+    focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
     callout(f, m.name, m.type);
     trainerPose(p, 'throw', 0.6);
@@ -3469,7 +3516,7 @@ const Retro = (() => {
     // physical attackers close the distance before they swing
     if (cpu && f.forceMove == null && f.plan >= 0 && isContact(f.mon.moves[f.plan])) {
       const dd = Math.hypot(foe.x - f.x, foe.y - f.y);
-      if (dd > f.r + foe.r + 150 && (f.approach = (f.approach || 0) + dt) < 1.3) { f.goal = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40), y: foe.y + R(-10, 10) }; f.goalT = 0.3; return; }
+      if (dd > f.r + foe.r + 150 && (f.approach = (f.approach || 0) + dt) < 2.0) { f.goal = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40), y: foe.y + R(-10, 10) }; f.goalT = 0.3; return; }
     }
     f.approach = 0;
     f.ready = false;
@@ -3484,6 +3531,7 @@ const Retro = (() => {
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
       f.extraCd = 0;
       f.goal = null;
+      f.hitRun = true;
     });
   }
 
@@ -3521,6 +3569,7 @@ const Retro = (() => {
     const f = new Fighter(p, mon, anim);
     f.x = dest.x; f.y = dest.y; f.face = f.faceVis = p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
+    focusOn(f.x, f.y - 30, 0.9);
     playCry(mon);
     await tw(0.32, k => { f.pop = easeOut(k); f.white = 1 - k * 0.6; }); chk(tk);
     f.pop = 1; f.bump(-7);
@@ -3733,7 +3782,7 @@ const Retro = (() => {
     stop();
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camFocus = null; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
     resize(); layout(); camX = VW / 2; camY = VH / 2;
@@ -3759,7 +3808,7 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field, SW }),
+  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field, SW, cam: { x: camX, y: camY, z: camZ } }),
     // test hook: play one move's effect (no damage) with the battle paused
     _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; } }); parts.length = 0; shapes.length = 0; },
     _testMove: async (id, visual) => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { if (hit) return; hit = true; if (visual && m.cat !== 'status') { const pw = impactFx(d, m, 1, false); knock(d, f, pw * 0.4); } }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
