@@ -830,7 +830,14 @@ const Retro = (() => {
   function shakeIt(a) { shake = Math.max(shake, a); }
   function beamFx(o) { o.age = 0; o.len = 0; beams.push(o); return o; }
   function boltFx(o) { o.age = 0; o.ptT = -1; bolts.push(o); return o; }
-  function shoot(o) { return new Promise(res => { o.res = res; o.age = 0; o.trailT = 0; o.hist = []; projs.push(o); }); }
+  function shoot(o) {
+    return new Promise(res => {
+      o.res = res; o.age = 0; o.trailT = 0; o.hist = [];
+      // start aimed at the target as it is now, so a target that leaves (recalled, fainted) still has a point to fly to
+      o.last = o.toPt || (o.to ? { x: o.to.cx + (o.miss ? o.missOff || 0 : 0), y: o.to.cy } : { x: o.x + 60, y: o.y });
+      projs.push(o);
+    });
+  }
 
   // ---- per-type impact kits ----
   const IMP = {
@@ -1427,14 +1434,23 @@ const Retro = (() => {
     el.querySelector('.party').innerHTML = pl.team.map((x, i) => `<i class="ball ${x.hp <= 0 ? 'dead' : ''} ${i === pl.active ? 'on' : ''}"></i>`).join('') + `<b class="tn">${esc(PLAYER[p])}</b>`;
     if (controllers[p] === 'human') humanRow(p);
   }
-  function pill(p, name) {
+  function pill(p, name, type) {
     const el = document.querySelector(`#rp${p} .pill`);
     if (!el) return;
-    el.textContent = name + '!';
+    const col = type ? TYPE_COLORS[type] || '#f59e0b' : '#f59e0b';
+    el.style.setProperty('--tc', col);
+    el.innerHTML = (type ? `<i class="pt" style="background:${col}">${type.toUpperCase()}</i>` : '') + esc(name) + '!';
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     const tk = token;
     clearTimeout(el._t);
-    el._t = setTimeout(() => { if (tk === token) el.classList.remove('show'); }, 1800);
+    el._t = setTimeout(() => { if (tk === token) el.classList.remove('show'); }, 2400);
+  }
+  // the move name pops up on a type-coloured plate right above the Pokémon using it
+  function callout(f, name, type) {
+    const col = type ? TYPE_COLORS[type] || '#6b7280' : '#6b7280';
+    const st = stacks[f.p];
+    st.t = T; st.n = 1;                                   // later texts stack above the callout
+    floatAt(clamp(f.x, 130, VW - 130), Math.max(f.top - 30, VH * 0.27), `<b style="--tc:${col}">${esc(name)}</b>`, 'mvcall', 1500);
   }
   function floatAt(x, y, html, cls, ms = 1100) {
     const el = document.createElement('div');
@@ -3165,7 +3181,8 @@ const Retro = (() => {
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
-    pill(p, m.name);
+    pill(p, m.name, m.type);
+    callout(f, m.name, m.type);
     trainerPose(p, 'throw', 0.6);
     if (Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
     if (m.cat !== 'status') react(d, f, m);

@@ -378,9 +378,10 @@
   .rp .ball.dead { filter: grayscale(1); opacity: .45; }
   .rp .tn { font-size: calc(var(--u) * 24); font-style: italic; margin: 0 calc(var(--u) * 6); -webkit-text-stroke: calc(var(--u) * 6) #fff; paint-order: stroke fill; white-space: nowrap; }
   .rp.p0 .tn { color: #5a3fd8; } .rp.p1 .tn { color: #e22d7d; }
-  .rp .pill { position: absolute; top: calc(var(--u) * 140); font-size: calc(var(--u) * 23); font-style: italic; color: #1b1530; background: #fff8ea; padding: calc(var(--u) * 2) calc(var(--u) * 16); border-radius: 999px; box-shadow: inset 0 0 0 calc(var(--u) * 3) #f59e0b, 0 0 0 calc(var(--u) * 3) #1b1530, 0 calc(var(--u) * 4) 0 calc(var(--u) * 3) rgba(0,0,0,.3); white-space: nowrap; opacity: 0; transform: scale(.6); transition: opacity .15s, transform .18s cubic-bezier(.3,1.6,.6,1); }
-  .rp.p0 .pill { left: calc(var(--u) * 8); transform-origin: left center; } .rp.p1 .pill { right: calc(var(--u) * 8); transform-origin: right center; }
-  .rp .pill.show { opacity: 1; transform: scale(1); }
+  .rp .pill { position: absolute; top: calc(var(--u) * 140); display: flex; align-items: center; gap: calc(var(--u) * 8); font-size: calc(var(--u) * 31); font-style: italic; color: #1b1530; background: #fffaf0; padding: calc(var(--u) * 3) calc(var(--u) * 22) calc(var(--u) * 3) calc(var(--u) * 10); border-radius: 999px; box-shadow: inset 0 0 0 calc(var(--u) * 4) var(--tc, #f59e0b), 0 0 0 calc(var(--u) * 3.5) #1b1530, 0 calc(var(--u) * 5) 0 calc(var(--u) * 3) rgba(0,0,0,.35), 0 0 calc(var(--u) * 18) var(--tc, #f59e0b); white-space: nowrap; opacity: 0; transform: translateX(var(--from, -30%)) scale(.7); transition: opacity .15s, transform .22s cubic-bezier(.3,1.5,.6,1); }
+  .rp .pill .pt { font-style: normal; font-size: calc(var(--u) * 14); color: #fff; padding: calc(var(--u) * 2) calc(var(--u) * 7); border-radius: calc(var(--u) * 999); border: calc(var(--u) * 2) solid rgba(255,255,255,.9); text-shadow: 0 calc(var(--u) * 1.5) 0 rgba(0,0,0,.45); letter-spacing: calc(var(--u) * .5); }
+  .rp.p0 .pill { left: calc(var(--u) * 8); transform-origin: left center; --from: -30%; } .rp.p1 .pill { right: calc(var(--u) * 8); transform-origin: right center; --from: 30%; flex-direction: row-reverse; padding: calc(var(--u) * 3) calc(var(--u) * 10) calc(var(--u) * 3) calc(var(--u) * 22); }
+  .rp .pill.show { opacity: 1; transform: none; }
   .rtimer { position: absolute; top: calc(var(--u) * 12); left: 50%; transform: translateX(-50%); font-size: calc(var(--u) * 26); background: rgba(22,16,36,.82); padding: calc(var(--u) * 3) calc(var(--u) * 16); border-radius: 999px; box-shadow: 0 0 0 calc(var(--u) * 2) rgba(255,255,255,.15); letter-spacing: calc(var(--u) * 1); }
   /* floating text */
   .rf { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; paint-order: stroke fill; animation: rfUp 1.2s ease-out forwards; }
@@ -395,6 +396,9 @@
   .rf.up { font-size: calc(var(--u) * 24); color: #ff9a4a; -webkit-text-stroke: calc(var(--u) * 6) #3b1208; }
   .rf.down { font-size: calc(var(--u) * 24); color: #7aa8ff; -webkit-text-stroke: calc(var(--u) * 6) #0c1d4a; }
   .rf.clash { font-size: calc(var(--u) * 64); font-style: italic; color: #fde047; -webkit-text-stroke: calc(var(--u) * 9) #3b2508; text-shadow: 0 calc(var(--u) * 5) 0 #3b2508; animation: rfPop 1.3s ease-out forwards; }
+  .rf.mvcall { animation: rfCall 1.5s ease-out forwards; z-index: 3; }
+  .rf.mvcall b { display: inline-block; font-size: calc(var(--u) * 33); font-style: italic; color: #fff; background: var(--tc); padding: calc(var(--u) * 2) calc(var(--u) * 14); border-radius: calc(var(--u) * 10); border: calc(var(--u) * 3) solid #1b1530; -webkit-text-stroke: calc(var(--u) * 5) #1b1530; paint-order: stroke fill; box-shadow: inset 0 calc(var(--u) * -4) 0 rgba(0,0,0,.22), 0 calc(var(--u) * 4) 0 rgba(0,0,0,.35); }
+  @keyframes rfCall { 0% { opacity: 0; transform: translate(-50%, -20%) scale(.6); } 10% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } 18% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; transform: translate(-50%, -62%); } 100% { opacity: 0; transform: translate(-50%, -80%); } }
   .rf.rgo { font-size: calc(var(--u) * 24); color: #fff; -webkit-text-stroke: calc(var(--u) * 6) #1b1530; animation: rfSay 1.6s ease-out forwards; }
   @keyframes rfUp { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); } 22% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -110%) scale(1); } }
   @keyframes rfDmg { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.8); } 10% { opacity: 1; transform: translate(-50%, -60%) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -160%); } }
@@ -448,7 +452,7 @@
   #retro.port .rp .tn { font-size: calc(var(--u) * 19); }
   #retro.port .rp .ball { width: calc(var(--u) * 15); height: calc(var(--u) * 15); }
   #retro.port .rp .chip { font-size: calc(var(--u) * 11.5); padding: 0 calc(var(--u) * 5); }
-  #retro.port .rp .pill { font-size: calc(var(--u) * 20); }
+  #retro.port .rp .pill { font-size: calc(var(--u) * 25); }
   #retro.port .rtimer { top: calc(var(--u) * 186); font-size: calc(var(--u) * 22); }
   #retro.port .rbig { font-size: calc(var(--u) * 58); top: 30%; }
   #retro.port .rbig.win { font-size: calc(var(--u) * 66); }
