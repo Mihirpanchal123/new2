@@ -114,6 +114,10 @@
   .gentabs button:hover { border-color: #facc15; }
   .gentabs button[aria-selected="true"] { background: #facc15; color: #111827; border-color: #facc15; }
   #settingsToggle { display: none; }
+  /* Battle Royale has one list of entrants; multi formats are CPU only */
+  body.fmtRoyale #team1, body.fmtRoyale #edit1, body.fmtRoyale .teamrow .pname-input, body.fmtRoyale .teamrow [data-outfit] { display: none; }
+  body.fmtMulti .teamrow [data-ctrl] { display: none; }
+  .fmtSeg button.on0 { background: #7c3aed; }
   /* phones: settings fold away behind a button, compact footer, smaller cards */
   @media (max-width: 700px) {
     #builder { padding: 10px 12px; gap: 8px; }
@@ -498,6 +502,52 @@
   .re-ask { font-size: calc(var(--u) * 28); font-style: italic; background: #ef4444; padding: calc(var(--u) * 4) calc(var(--u) * 16); border-radius: calc(var(--u) * 12); border: calc(var(--u) * 3) solid #1b1530; -webkit-text-stroke: calc(var(--u) * 5) #1b1530; paint-order: stroke fill; animation: rcAsk .45s .5s cubic-bezier(.3,1.6,.6,1) both; }
   .re-ask span { color: #fde047; }
   .re-ch { font-size: calc(var(--u) * 20); color: #fff; -webkit-text-stroke: calc(var(--u) * 5) #1b1530; paint-order: stroke fill; letter-spacing: calc(var(--u) * 1); }
+  /* multi battles (Battle Royale / Team Brawl): mini cards, KO feed, intro grid */
+  .rmh { position: absolute; left: calc(var(--u) * 10); right: calc(var(--u) * 10); top: calc(var(--u) * 8); display: flex; justify-content: center; align-items: flex-start; gap: calc(var(--u) * 10); }
+  .rmg { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 6); align-items: center; }
+  .rmh.brawl .rmg { flex: 1; } .rmh.brawl .g0 { justify-content: flex-start; } .rmh.brawl .g1 { justify-content: flex-end; }
+  .rmt { width: 100%; font-size: calc(var(--u) * 20); font-style: italic; font-weight: 400; -webkit-text-stroke: calc(var(--u) * 5) #1b1530; paint-order: stroke fill; }
+  .g0 .rmt { color: #8fb4ff; } .g1 .rmt { color: #ff8fb8; text-align: right; }
+  .rmvs { align-self: center; font-size: calc(var(--u) * 36); font-style: italic; font-weight: 400; color: #facc15; -webkit-text-stroke: calc(var(--u) * 7) #4a2507; paint-order: stroke fill; }
+  .rmc { position: relative; width: calc(var(--u) * 142); height: calc(var(--u) * 46); background: rgba(22,16,36,.86); border: calc(var(--u) * 3) solid var(--tc); border-radius: calc(var(--u) * 9); box-shadow: 0 0 0 calc(var(--u) * 2) #1b1530; transition: filter .3s, opacity .3s; }
+  .rmc.s0 { border-color: #5a8aff; } .rmc.s1 { border-color: #ff5a7a; }
+  .rmc img { position: absolute; left: calc(var(--u) * 2); bottom: calc(var(--u) * 2); width: calc(var(--u) * 40); height: calc(var(--u) * 40); object-fit: contain; image-rendering: pixelated; }
+  .rmc .nm { position: absolute; left: calc(var(--u) * 44); right: calc(var(--u) * 6); top: calc(var(--u) * 3); font-size: calc(var(--u) * 15); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+  .rmc .hp { position: absolute; left: calc(var(--u) * 44); right: calc(var(--u) * 6); bottom: calc(var(--u) * 7); height: calc(var(--u) * 10); background: #222849; border: calc(var(--u) * 2) solid #13152b; border-radius: calc(var(--u) * 4); overflow: hidden; }
+  .rmc .hp .lag, .rmc .hp .fill { position: absolute; left: 0; top: 0; bottom: 0; }
+  .rmc .hp .lag { background: #fff; transition: width .55s ease .45s; } .rmc .hp .fill { transition: width .25s ease-out, background-color .3s; }
+  .rmc.dead { filter: grayscale(1) brightness(.6); opacity: .65; }
+  .rmc.dead::after { content: '✖'; position: absolute; left: calc(var(--u) * 8); top: calc(var(--u) * 2); font-size: calc(var(--u) * 30); color: #ef4444; -webkit-text-stroke: calc(var(--u) * 4) #1b1530; paint-order: stroke fill; }
+  #retro.multi .rtimer { top: calc(var(--u) * 66); }
+  /* many Pokémon at once: smaller floating texts so a busy fight stays readable */
+  #retro.multi .rf.dmg { font-size: calc(var(--u) * 30); -webkit-text-stroke-width: calc(var(--u) * 5); }
+  #retro.multi .rf.dmg.super, #retro.multi .rf.dmg.crit { font-size: calc(var(--u) * 36); }
+  #retro.multi .rf.eff, #retro.multi .rf.crit { font-size: calc(var(--u) * 21); -webkit-text-stroke-width: calc(var(--u) * 5); }
+  #retro.multi .rf.weak, #retro.multi .rf.miss, #retro.multi .rf.info, #retro.multi .rf.up, #retro.multi .rf.down { font-size: calc(var(--u) * 17); -webkit-text-stroke-width: calc(var(--u) * 4); }
+  #retro.multi .rf.mvcall b { font-size: calc(var(--u) * 22); padding: calc(var(--u) * 1) calc(var(--u) * 10); -webkit-text-stroke-width: calc(var(--u) * 4); }
+  .rfeed { position: absolute; right: calc(var(--u) * 14); top: calc(var(--u) * 66); display: flex; flex-direction: column; align-items: flex-end; gap: calc(var(--u) * 4); pointer-events: none; }
+  .rfeed div { font-size: calc(var(--u) * 18); background: rgba(22,16,36,.88); padding: calc(var(--u) * 3) calc(var(--u) * 12); border-radius: 999px; border: calc(var(--u) * 2) solid rgba(255,255,255,.2); animation: rfeedIn .35s cubic-bezier(.3,1.5,.6,1); white-space: nowrap; }
+  .rfeed b { font-weight: 400; color: #fff; text-shadow: 0 0 calc(var(--u) * 6) var(--tc); } .rfeed i { font-style: normal; color: #ef4444; margin: 0 calc(var(--u) * 6); }
+  @keyframes rfeedIn { from { opacity: 0; transform: translateX(calc(var(--u) * 40)); } }
+  .rcard.multi { max-width: 92%; }
+  .rc-title { font-size: calc(var(--u) * 54); font-style: italic; color: #facc15; -webkit-text-stroke: calc(var(--u) * 8) #4a2507; paint-order: stroke fill; line-height: 1.1; }
+  .rc-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 8); margin: calc(var(--u) * 10) 0; }
+  .rc-mon { display: flex; flex-direction: column; align-items: center; width: calc(var(--u) * 92); }
+  .rc-mon img { height: calc(var(--u) * 56); image-rendering: pixelated; }
+  .rc-mon span { font-size: calc(var(--u) * 14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .rc-row.brawl { align-items: flex-start; justify-content: center; }
+  .rc-row.brawl .rc-side { flex-direction: column; align-items: center; }
+  .rc-row.brawl .rc-grid { max-width: calc(var(--u) * 300); }
+  #retro.port .rmc { width: calc(var(--u) * 164); }
+  #retro.port .rmh { top: calc(var(--u) * 70); }
+  #retro.port .rmh.brawl { flex-direction: column; align-items: stretch; gap: calc(var(--u) * 4); }
+  #retro.port .rmh.brawl .rmvs { display: none; }
+  #retro.port.multi .rtimer { top: calc(var(--u) * 196); }
+  #retro.port .rfeed { top: calc(var(--u) * 236); right: 50%; transform: translateX(50%); align-items: center; }
+  #retro.port .rc-row.brawl { flex-direction: column; align-items: center; }
+  #retro.port .rc-row.brawl .rc-side, #retro.port .rc-row.brawl .rc-side.p1 { flex-direction: column; }
+  #retro.port.multi .rmh.brawl ~ .rtimer { top: calc(var(--u) * 246); }
+  #retro.port .rmh.brawl ~ .rfeed { top: calc(var(--u) * 286); }
   /* human controls (only when a side is played by a person) */
   .rctl { position: absolute; left: 0; right: 0; bottom: calc(var(--u) * 8); display: flex; justify-content: space-between; padding: 0 calc(var(--u) * 14); }
   .rrow { display: grid; grid-template-columns: repeat(2, auto); gap: calc(var(--u) * 5); opacity: .55; transition: opacity .2s; }
@@ -592,8 +642,9 @@
   <div class="topbar">
     <h1 class="logo">POKéMON ARENA</h1>
     <div class="seg modeSeg" title="How battles are shown"><button id="mode3d">🎮 3D</button><button id="modeRetro">👾 Retro 2D</button></div>
+    <div class="seg fmtSeg" title="Battle format"><button id="fmt1v1" data-fmt="1v1">⚔ 1v1</button><button id="fmtRoyale" data-fmt="royale" title="Battle Royale: everyone against everyone, last one standing wins (Retro 2D)">👑 Royale</button><button id="fmtBrawl" data-fmt="brawl" title="Team Brawl: both teams fight on the field at the same time (Retro 2D)">👥 Brawl</button></div>
     <button class="small" id="settingsToggle" aria-expanded="false">⚙ Settings</button>
-    <label class="keep">Team size <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+    <label class="keep"><span id="sizeLbl">Team size</span> <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <label>Default level <input type="number" id="setLevel" min="1" max="100" value="50"></label>
     <label>Arena <select id="setTheme"><option value="random">Random</option></select></label>
     <label>Battle speed <select id="setSpeed"><option value="1">Normal</option><option value="0.6">Fast</option><option value="0.35">Turbo</option></select></label>

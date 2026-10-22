@@ -23,6 +23,8 @@ Pokémon battles in Retro 2D pixel art or 3D with 491 Pokémon from all nine gen
   - *Physical moves* play in three beats (wind-up, strike, follow-through with a brief impact freeze): Bite/Crunch jaws snap shut with a head-shake, Double Kick is a jump kick plus a spinning kick, tails whip through the target, Quick Attack blurs in with afterimages. Status moves have body language too (Growl/Roar sound waves, Tail Whip wag, Leer glare, Taunt anger mark, Protect dome, Hypnosis spiral).
   - *Mega Evolution:* the Key Stone shines, a rainbow helix links trainer and Pokémon, a sphere of light gathers energy and shatters, and the new form appears with the Mega emblem. The opponent waits while it plays.
 
+- **👑 Battle Royale & 👥 Team Brawl** (Retro 2D, pick the format next to the 3D / Retro switch): up to 8 Pokémon on the field at once. *Battle Royale* is a free-for-all (2–8 entrants, last one standing wins); *Team Brawl* puts both whole teams on the field together (1–4 per side). Each Pokémon picks its own target (close, weakened or one it hits hard), gets a name tag and HP bar over its head, and the HUD shows a mini card per Pokémon plus a knockout feed. Intro card, sudden death, the final-blow replay and the MVP end card all work here too. Multi battles are CPU only and are not added to the records.
+
 ## Run it
 Double-click **`start.bat`**. It starts a tiny local server and opens http://localhost:8080 in Chrome/Edge.
 The game must run through that server (the 3D engine loads as modules); opening `index.html` directly shows a reminder.

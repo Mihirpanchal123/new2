@@ -43,7 +43,50 @@ const Retro = (() => {
   const later = (fn, ms) => RAW_TIME.later(fn, ms * FX_SLOW);
   const tw = (sec, fn) => RAW_TIME.tween(sec * FX_SLOW, fn);
   const waitN = RAW_TIME.wait;                         // normal speed (UI: intro, banners)
-  const foeOf = f => F[1 - f.p];
+  // ---------------------------------------------------------------------
+  //  Multi-Pokémon battles (Battle Royale / Team Brawl): every Pokémon is
+  //  its own slot p with a side; in 1v1 the slot is the player and the side
+  // ---------------------------------------------------------------------
+  let multi = null;                                    // { mode: 'royale' | 'brawl', side: [...], names: [...] } or null for 1v1
+  const sideOf = p => multi ? multi.side[p] : p;
+  const trOf = p => multi ? (multi.mode === 'brawl' ? TR[sideOf(p)] : null) : TR[p];
+  const isCpu = p => !!multi || controllers[p] === 'cpu';
+  const enemiesOf = f => F.filter(o => o && o !== f && o.state === 'idle' && sideOf(o.p) !== sideOf(f.p));
+  const sidesAlive = () => [...new Set(state.players.flatMap((pl, p) => pl.team.some(m => m.hp > 0) ? [sideOf(p)] : []))];
+  const sideMons = s => state.players.flatMap((pl, p) => sideOf(p) === s ? pl.team : []);
+  const sideName = s => multi ? multi.names[s] : PLAYER[s];
+  let elim = [];                                       // multi: sides in the order they were wiped out
+  // one more knockout could end the battle (starts the final-blow replay recorder)
+  function nearEnd() {
+    if (!multi) return [0, 1].some(q => state.players[q].team.filter(x => x.hp > 0).length === 1);
+    const s = sidesAlive();
+    return s.length === 2 && s.some(side => sideMons(side).filter(m => m.hp > 0).length === 1);
+  }
+  // starting spots: Battle Royale in a ring, Team Brawl in two lines facing each other
+  function multiSpot(p) {
+    const n = state.players.length, cx = (field.x0 + field.x1) / 2, cy = (field.y0 + field.y1) / 2, fw = field.x1 - field.x0, fh = field.y1 - field.y0;
+    if (multi.mode === 'royale') { const a = -Math.PI / 2 + (p + 0.5) / n * Math.PI * 2; return { x: cx + Math.cos(a) * fw * 0.36, y: cy + Math.sin(a) * fh * 0.36 }; }
+    const s = sideOf(p), mates = state.players.map((_, q) => q).filter(q => sideOf(q) === s), k = (mates.indexOf(p) + 1) / (mates.length + 1);
+    return portrait ? { x: field.x0 + fw * k, y: s ? field.y0 + fh * 0.2 : field.y1 - fh * 0.2 } : { x: s ? field.x1 - fw * 0.18 : field.x0 + fw * 0.18, y: field.y0 + fh * k };
+  }
+  const foeOf = f => multi ? targetOf(f) : F[1 - f.p];
+  // pick an enemy to go after: close, weakened, or one it hits hard; stay on it for a few seconds
+  function targetOf(f) {
+    const t = f.target;
+    if (t && t.state === 'idle' && F[t.p] === t && T < (f.retargetT || 0)) return t;
+    const es = enemiesOf(f);
+    if (!es.length) return null;
+    let best = null, bs = -1e9;
+    for (const e of es) {
+      const dist = Math.hypot(e.x - f.x, (e.y - f.y) / 0.6);
+      const hurt = 1 - e.mon.hp / e.mon.maxhp;
+      const dmg = Math.min(1, Math.max(0, ...f.mon.moves.filter(mv => mv.ppLeft > 0).map(mv => expectedFrac(f.mon, e.mon, mv))));
+      const s = -dist / 500 + hurt * 0.8 + dmg + (e === t ? 0.5 : 0) + (e.target === f ? 0.3 : 0) + R(0, 0.5);
+      if (s > bs) { bs = s; best = e; }
+    }
+    f.target = best; f.retargetT = T + R(3, 6);
+    return best;
+  }
 
   // ---------------------------------------------------------------------
   //  Canvas size: 720 virtual units on the short side, the frame's aspect
@@ -554,7 +597,9 @@ const Retro = (() => {
     pg.drawImage(frames.idle, 0, 1, 18, 16, 0, 0, 18, 16);
     return { p, x: spots.trainer[p].x, y: spots.trainer[p].y, frames, pose: 'idle', poseUntil: 0, portrait: pc.toDataURL(), jump: 0 };
   }
-  function trainerPose(p, pose, sec = 1.1) { const t = TR[p]; if (t) { t.pose = pose; t.poseUntil = T + sec; } }
+  function trainerPose(p, pose, sec = 1.1) { const t = trOf(p); if (t) { t.pose = pose; t.poseUntil = T + sec; } }
+  // a side's trainer (end of battle): the player in 1v1, the team trainer in Team Brawl, none in Battle Royale
+  function sidePose(s, pose, sec) { const t = multi ? (multi.mode === 'brawl' ? TR[s] : null) : TR[s]; if (t) { t.pose = pose; t.poseUntil = T + sec; } }
   function drawTrainer(t) {
     const pose = T < t.poseUntil ? t.pose : 'idle';
     const img = t.frames[pose];
@@ -587,7 +632,7 @@ const Retro = (() => {
     }
     fit() {
       const h = Math.max(this.anim.bh, this.anim.bw * 0.8), th = h <= 85 ? h : 85 + (h - 85) * 0.4;
-      this.scale = th / h * SPR;
+      this.scale = th / h * SPR * (multi ? multi.spr : 1);
       this.h = this.anim.bh * this.scale; this.w = this.anim.bw * this.scale;
       this.r = Math.max(20, this.w * 0.34);
     }
@@ -623,9 +668,10 @@ const Retro = (() => {
   }
   const isContact = mv => !!mv && classify({ id: mv.id, ...mv }).startsWith('contact');
   // keep a real fighting distance: physical moves lunge across the gap, so nobody needs to walk up close
-  const space = (f, foe) => (portrait ? 190 : 250) + (f.r + foe.r) * 0.5;      // personal space (in 0.6-squashed ground units)
+  const crowdK = () => multi ? multi.space : 1;                                // a busy multi battle keeps tighter distances
+  const space = (f, foe) => ((portrait ? 190 : 250) + (f.r + foe.r) * 0.5) * crowdK();      // personal space (in 0.6-squashed ground units)
   function wantDist(f, foe) {
-    return (portrait ? 290 : 400) + (f.r + foe.r) * 0.4 + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0);
+    return ((portrait ? 290 : 400) + (f.r + foe.r) * 0.4 + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0)) * crowdK();
   }
   // each new goal comes from a tactic: sweep around the foe, cross to its other side,
   // reposition far across the field, retreat when hurt, or press in for a physical hit
@@ -746,6 +792,11 @@ const Retro = (() => {
       if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
       if (Math.abs(foe.x - f.x) > 12) f.face = Math.sign(foe.x - f.x);
     } else if (f.speed > 40 && !f.dashing) f.face = Math.sign(f.vx) || f.face;
+    if (multi && !f.dashing) for (const o of F) {
+      if (!o || o === f || o === foe || o.state !== 'idle' || o.dashing) continue;
+      const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1, min = f.r + o.r + 10;
+      if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
+    }
     clampField(f);
     if (!running || m.hp <= 0) return;
     // status over time (one "turn" = 3 s)
@@ -1599,7 +1650,19 @@ const Retro = (() => {
       }
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
+    if (multi) for (const f of F) if (f && f.state === 'idle' && f.alpha > 0.5 && !f.invuln) drawTag(f);
     if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, VW + 80, VH + 80); ctx.globalAlpha = 1; }
+  }
+  // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl)
+  function drawTag(f) {
+    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX, x = sn(f.x - w / 2), y = sn(f.top - 8);
+    ctx.fillStyle = '#1b1530'; ctx.fillRect(x - PX, y - PX, w + PX * 2, PX * 3);
+    ctx.fillStyle = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'; ctx.fillRect(x, y, Math.max(PX, Math.round(w * k / PX) * PX), PX);
+    ctx.font = `${6 * PX}px Tiny5, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineWidth = PX * 1.6; ctx.strokeStyle = '#1b1530'; ctx.lineJoin = 'round';
+    ctx.strokeText(m.name.toUpperCase(), f.x, y - PX * 2);
+    ctx.fillStyle = multi.mode === 'brawl' ? (sideOf(f.p) ? '#ff8fb8' : '#8fb4ff') : '#ffffff';
+    ctx.fillText(m.name.toUpperCase(), f.x, y - PX * 2);
   }
   function ambient(dt) {
     if (!TH || !TH.amb) return;
@@ -1621,6 +1684,7 @@ const Retro = (() => {
   const STATUS_WORD = { brn: 'BURNED!', psn: 'POISONED!', par: 'PARALYZED!', slp: 'FELL ASLEEP!', frz: 'FROZEN SOLID!' };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   function buildHud() {
+    if (multi) return buildMultiHud();
     hudEl.innerHTML = [0, 1].map(p => `
       <div class="rp p${p}" id="rp${p}">
         <div class="por"><img alt=""></div>
@@ -1657,8 +1721,45 @@ const Retro = (() => {
     f.queued = i;
     document.querySelectorAll(`#rrow${p} .rmv`).forEach(b => b.classList.toggle('q', +b.dataset.i === i));
   }
+  // multi battles: a strip of mini cards (portrait, name, HP) grouped by side, plus a knockout feed
+  function buildMultiHud() {
+    const card = p => {
+      const m = state.players[p].team[0];
+      return `<div class="rmc s${multi.mode === 'brawl' ? sideOf(p) : 'x'}" id="rp${p}" style="--tc:${TYPE_COLORS[m.types[0]]}"><img alt="" src="${m.sprite}"><div class="nm"></div><div class="hp"><div class="lag"></div><div class="fill"></div></div></div>`;
+    };
+    const ps = state.players.map((_, p) => p);
+    const groups = multi.mode === 'brawl'
+      ? [0, 1].map(s => `<div class="rmg g${s}"><b class="rmt">${esc(sideName(s))}</b>${ps.filter(p => sideOf(p) === s).map(card).join('')}</div>`).join('<b class="rmvs">VS</b>')
+      : `<div class="rmg">${ps.map(card).join('')}</div>`;
+    hudEl.innerHTML = `<div class="rmh ${multi.mode}">${groups}</div><div class="rtimer" id="rTimer">0:00</div><div class="rfeed" id="rFeed"></div>`;
+    lastTimer = '';
+  }
+  function hudMini(p) {
+    const el = document.getElementById('rp' + p);
+    if (!el) return;
+    const m = state.players[p].team[0];
+    const img = el.querySelector('img');
+    if (img.getAttribute('src') !== m.sprite) img.setAttribute('src', m.sprite);
+    el.querySelector('.nm').textContent = m.name;
+    const pct = clamp(m.hp / m.maxhp * 100, 0, 100);
+    const fill = el.querySelector('.fill');
+    fill.style.width = pct + '%';
+    fill.style.backgroundColor = pct > 50 ? '#3ddc68' : pct > 20 ? '#f5c518' : '#ef4444';
+    el.querySelector('.lag').style.width = pct + '%';
+    el.classList.toggle('dead', m.hp <= 0);
+  }
+  function feed(html) {
+    const el = document.getElementById('rFeed');
+    if (!el) return;
+    const row = document.createElement('div');
+    row.innerHTML = html;
+    el.prepend(row);
+    while (el.children.length > 4) el.lastChild.remove();
+    later(() => row.remove(), 4200);
+  }
   function hud(p) {
-    if (p === undefined) { hud(0); hud(1); return; }
+    if (p === undefined) { state.players.forEach((_, q) => hud(q)); return; }
+    if (multi) return hudMini(p);
     const el = document.getElementById('rp' + p);
     if (!el || !state) return;
     const pl = state.players[p], m = pl.team[pl.active];
@@ -1697,7 +1798,7 @@ const Retro = (() => {
   // the move name pops up on a type-coloured plate right above the Pokémon using it
   function callout(f, name, type) {
     const col = type ? TYPE_COLORS[type] || '#6b7280' : '#6b7280';
-    const st = stacks[f.p];
+    const st = stackOf(f.p);
     st.t = T; st.n = 1;                                   // later texts stack above the callout
     floatAt(clamp(f.x, 130, VW - 130), Math.max(f.top - 30, VH * 0.27), `<b style="--tc:${col}">${esc(name)}</b>`, 'mvcall', 1500);
   }
@@ -1709,9 +1810,10 @@ const Retro = (() => {
     later(() => el.remove(), ms);
     return el;
   }
-  const stacks = [{ t: -9, n: 0 }, { t: -9, n: 0 }];
+  const stacks = [];
+  const stackOf = p => stacks[p] || (stacks[p] = { t: -9, n: 0 });
   function text(f, s, cls = 'info') {
-    const st = stacks[f.p];
+    const st = stackOf(f.p);
     if (T - st.t > 0.7) st.n = 0;
     st.t = T;
     const n = st.n++;
@@ -1725,7 +1827,7 @@ const Retro = (() => {
     (hudEl.classList.contains('hidden') ? fxEl : hudEl).append(el);
     later(() => el.remove(), ms);
   }
-  function speech(p, s, ms = 1600) { const t = TR[p]; if (t && s) floatAt(clamp(t.x, 110, VW - 110), t.y - 112, esc(s), 'rgo', ms); }
+  function speech(p, s, ms = 1600) { const t = trOf(p); if (t && s) floatAt(clamp(t.x, 110, VW - 110), t.y - 112, esc(s), 'rgo', ms); }
 
   // ---------------------------------------------------------------------
   //  Move -> effect style (same groups as the 3D effects)
@@ -1935,10 +2037,11 @@ const Retro = (() => {
     if (m.type === 'Ice' && !o.miss) terrainAdd('ice', d.x, d.y, 20 + pw * 8);
   };
   function maybeClash(r, attacker) {
-    if (!r || r.state !== 'idle' || r.busy || r.stuck || controllers[r.p] !== 'cpu' || canMega(r.p)) return;
+    if (!r || r.state !== 'idle' || r.busy || r.stuck || !isCpu(r.p) || canMega(r.p)) return;
     const idx = r.mon.moves.findIndex(mv => mv.ppLeft > 0 && mv.cat !== 'status' && classify({ id: mv.id, ...mv }) === 'beam' && effectiveness(mv.type, attacker.mon.types) > 0);
     if (idx < 0 || Math.random() > 0.5) return;
     r.forceMove = idx; r.cd = 0;
+    if (multi) { r.target = attacker; r.retargetT = T + 3; }       // turn to answer the beam
   }
   function startClash(b1, b2) {
     const c = {};
@@ -4153,7 +4256,7 @@ const Retro = (() => {
     const ko = t.hp <= 0;
     const score = (ko ? 3 : 0) + (crit ? 2 : 0) + (eff > 1 ? 1.5 : 0) + total / t.maxhp * 2;
     if (score >= 2) later(() => Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : crit ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!'), 60);
-    if (ko) { u.kos = (u.kos || 0) + 1; koFighter(d); }
+    if (ko) { u.kos = (u.kos || 0) + 1; koFighter(d, f); }
     else {
       if (m.ailment !== 'none' && m.ailmentChance > 0 && Math.random() * 100 < m.ailmentChance) inflictRT(d, m.ailment, m.name);
       if (m.flinch && Math.random() * 100 < m.flinch) { text(d, 'FLINCHED!', 'info'); if (d.busy) d.extraCd = (d.extraCd || 0) + 1; else d.cd += 1; }
@@ -4206,7 +4309,7 @@ const Retro = (() => {
     pill(p, m.name, m.type);
     callout(f, m.name, m.type);
     trainerPose(p, 'throw', 0.6);
-    if (Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
+    if (!multi && Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
     if (m.cat !== 'status') react(d, f, m);
     const selfT = SELF_TARGETS.has(m.target) || m.id === 'rest';
     let miss = false;
@@ -4230,7 +4333,7 @@ const Retro = (() => {
     cinemaUntil = T + 3.9;
     const p = f.p, u = f.mon, fm = u.megaForm;
     state.players[p].usedMega = true;
-    const tr = TR[p], ks = { x: tr.x + (p ? -12 : 12), y: tr.y - 84 };
+    const tr = trOf(p), ks = tr ? { x: tr.x + (tr.p ? -12 : 12), y: tr.y - 84 } : { x: f.cx, y: f.top - 36 };   // no trainer (Battle Royale): the Key Stone shines above it
     const RB = ['#ff5a5a', '#ffb84a', '#fff35a', '#5aff8a', '#5ad6ff', '#9a7bff', '#ff7be3'];
     f.busy = true; f.vx = f.vy = 0;
     // 1. the trainer raises the Key Stone; the arena darkens and it starts to shine
@@ -4241,7 +4344,7 @@ const Retro = (() => {
     camPunch((ks.x + f.cx) / 2, (ks.y + f.cy) / 2, 0.05, 3.2);
     const ksGlow = spawn({ kind: 'glow', c: ['#ffffff'], x: ks.x, y: ks.y, s0: 6, s1: 70, life: 3.0, a: 0.9, must: true });
     for (let i = 0; i < 4; i++) ringP(ks.x, ks.y, 4, 60, RB[i * 2 % 7], 0.6, { flat: 1, delay: i * 0.15 });
-    lightAt(tr.x, tr.y, 160, '#ffffff', 3, 0.7);
+    lightAt(ks.x, ks.y + 84, 160, '#ffffff', 3, 0.7);
     await wait(500); chk(tk);
     // 2. a rainbow helix links the Key Stone and the Mega Stone; the Pokémon starts to glow
     shapes.push({ kind: 'helix', f, x0: ks.x, y0: ks.y, life: 1.6, age: 0 });
@@ -4291,7 +4394,7 @@ const Retro = (() => {
     const foe = foeOf(f);
     if (!foe || foe.state !== 'idle') return;
     if (T < (f.stagger || 0)) return;
-    const cpu = controllers[f.p] === 'cpu';
+    const cpu = isCpu(f.p);
     if (f.queuedSwitch != null) { const i = f.queuedSwitch; f.queuedSwitch = null; if (canSwitchTo(f.p, i)) { f.busy = true; switchOut(f, i, token).catch(swallow); return; } }
     if (cpu && f.plan == null) f.plan = chooseMove(f, foe);
     f.cd -= dt;
@@ -4336,19 +4439,20 @@ const Retro = (() => {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
     const anim = await getAnim(mon.sprite); chk(tk);
-    const tr = TR[p];
-    const dest = { ...spots.start[p] };
-    const foe = F[1 - p];
+    const tr = trOf(p);
+    const dest = multi ? multiSpot(p) : { ...spots.start[p] };
+    const foe = multi ? null : F[1 - p];
     if (!first && foe && foe.state === 'idle') {
       dest.x = clamp(foe.x + (p ? 1 : -1) * (portrait ? 140 : 300), field.x0, field.x1);
       dest.y = portrait ? clamp(foe.y + (p ? -1 : 1) * 260, field.y0, field.y1) : clamp(foe.y + R(-60, 60), field.y0, field.y1);
     }
     trainerPose(p, 'throw', 0.8);
     hud(p);
-    speech(p, `Go! ${mon.name}!`);
+    if (!multi) speech(p, `Go! ${mon.name}!`);
     await wait(220); chk(tk);
     SFX.whoosh();
-    const hand = { x: tr.x + (p ? -12 : 12), y: tr.y - 80 };
+    // no trainer (Battle Royale): the ball drops in from above the arena
+    const hand = tr ? { x: tr.x + (tr.p ? -12 : 12), y: tr.y - 80 } : { x: dest.x + R(-60, 60), y: field.y0 - 180 };
     // the ball arcs out, bounces once and bursts open
     spawn({ bm: 'ball', c: ['#e23b3b', '#ffffff', '#1a1a22'], x: hand.x, y: hand.y, life: 0.62, s0: 2, s1: 2, rot: 0.01, spin: 18, must: true,
       path: k => { const e = Math.min(1, k / 0.8); const bx = hand.x + (dest.x - hand.x) * e, by = hand.y + (dest.y - 8 - hand.y) * e - Math.sin(e * Math.PI) * 120; return k < 0.8 ? { x: bx, y: by } : { x: dest.x, y: dest.y - 8 - Math.sin((k - 0.8) / 0.2 * Math.PI) * 18 }; } });
@@ -4361,7 +4465,7 @@ const Retro = (() => {
     ringP(dest.x, dest.y, 6, 70, '#ffffff', 0.4);
     flash('#ffffff', 0.12);
     const f = new Fighter(p, mon, anim);
-    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
+    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = multi ? (Math.sign(VW / 2 - dest.x) || 1) : p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
     focusOn(f.x, f.y - 30, 0.9);
     playCry(mon);
@@ -4372,24 +4476,30 @@ const Retro = (() => {
     if (!first && pl.team.filter(x => x.hp > 0).length === 1) big('LAST POKéMON!', 'small', 1500);
     return f;
   }
-  function koFighter(f) {
+  function koFighter(f, by) {
     if (f.state !== 'idle') return;
     f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
     f.state = 'faint';
     const p = f.p, mon = f.mon, tk = token;
     playCry(mon, 0.8); SFX.faint();
-    big(`${mon.name.toUpperCase()} FAINTED!`, '', 2100);
+    if (multi) {
+      // knockout feed: who took out whom
+      const tag = o => `<b style="--tc:${TYPE_COLORS[o.mon.types[0]]}">${esc(o.mon.name)}</b>`;
+      feed(by && by !== f ? `${tag(by)} <i>✖</i> ${tag(f)}` : `${tag(f)} <i>fainted</i>`);
+      floatAt(clamp(f.x, 130, VW - 130), Math.max(f.top - 16, VH * 0.25), 'K.O.!', 'crit', 1200);
+      if (!sideMons(sideOf(p)).some(m => m.hp > 0)) elim.push(sideOf(p));
+    } else big(`${mon.name.toUpperCase()} FAINTED!`, '', 2100);
     cheer = 1; AudioFX.Crowd.cheer(1);
     trainerPose(p, 'dismay', 2.4);
-    trainerPose(1 - p, 'cheer', 1.6);
-    const last = !state.players[p].team.some(x => x.hp > 0);
-    if (last) { World.slowmo(0.35, 1300); rpMark(f); if (firstOut < 0) firstOut = p; }
+    if (by && by !== f) trainerPose(by.p, 'cheer', 1.6); else if (!multi) trainerPose(1 - p, 'cheer', 1.6);
+    const last = multi ? sidesAlive().length <= 1 : !state.players[p].team.some(x => x.hp > 0);
+    if (last) { World.slowmo(0.35, 1300); rpMark(f, by); if (firstOut < 0) firstOut = p; }
+    else if (multi && multi.mode === 'royale') { const n = sidesAlive().length; if (n <= 4) later(() => { if (!ended) big(`${n} LEFT!`, 'small', 1300); }, 400); }
     camPunch(f.cx, f.cy, last ? 0.12 : 0.07, last ? 1.2 : 0.6);
     later(() => Broadcast.captureThumb(last ? 5 : 3, last ? 'KNOCKOUT!' : `${mon.name.toUpperCase()} FAINTED!`), 40);
     for (const b of beams) if (b.owner === f) b.life = Math.min(b.life, b.age + 0.1);
     hud(p);
-    const pinch = [0, 1].some(q => state.players[q].team.filter(x => x.hp > 0).length === 1);
-    if (pinch) AudioFX.Music.setLevel(2);
+    if (nearEnd()) AudioFX.Music.setLevel(2);
     (async () => {
       // knocked up, crash down, then the trainer's ball recalls it in a red beam
       f.white = 1; f.whiteCol = '#ffffff'; f.dashing = false;
@@ -4400,6 +4510,7 @@ const Retro = (() => {
       await recallFx(f, tk);
       f.state = 'gone';
       if (F[p] === f) F[p] = null;
+      if (multi) { if (sidesAlive().length <= 1) endBattle(false); return; }
       if (!state.players[p].team.some(x => x.hp > 0)) return endBattle(false);
       await wait(700); chk(tk);
       if (ended) return;
@@ -4421,7 +4532,7 @@ const Retro = (() => {
   }
   function considerSwitch(f, foe) {
     const p = f.p, pl = state.players[p];
-    if (f.forceMove != null || SW.n[p] >= 3 || T - SW.t[p] < 12 || T - (f.enterT || 0) < 5) return -1;
+    if (multi || f.forceMove != null || SW.n[p] >= 3 || T - SW.t[p] < 12 || T - (f.enterT || 0) < 5) return -1;
     if (pl.team.filter(m => m.hp > 0).length < 2) return -1;
     const cur = matchup(f.mon, foe.mon);
     let best = -1, bs = -Infinity;
@@ -4434,7 +4545,14 @@ const Retro = (() => {
   const canSwitchTo = (p, i) => { const pl = state.players[p]; return i !== pl.active && pl.team[i] && pl.team[i].hp > 0 && T - SW.t[p] > 3; };
   // the trainer's ball pulls the Pokémon back in a red beam
   async function recallFx(f, tk) {
-    const tr = TR[f.p], hand = { x: tr.x + (f.p ? -12 : 12), y: tr.y - 80 };
+    const tr = trOf(f.p);
+    if (!tr) {                                         // Battle Royale: no trainer, it just fades out
+      f.whiteCol = '#ff5a5a';
+      await tw(0.5, k => { f.white = Math.min(1, k * 3); f.alpha = 1 - k; }); chk(tk);
+      glowP(f.cx, f.cy, 6, 50, '#ff5a5a', 0.3, 0.8);
+      return;
+    }
+    const hand = { x: tr.x + (tr.p ? -12 : 12), y: tr.y - 80 };
     SFX.pop();
     beamFx({ ax: hand.x, ay: hand.y, bx: f.cx, by: f.cy, w: 7, c: ['#ffffff', '#ff9a9a', '#ff3a3a', '#a01818'], life: 0.6 });
     f.whiteCol = '#ff5a5a';
@@ -4463,7 +4581,7 @@ const Retro = (() => {
   }
   // the defender reads a big incoming attack and throws up Protect in time
   function react(d, f, m) {
-    if (!d || d.state !== 'idle' || d.busy || d.stuck || controllers[d.p] !== 'cpu' || T < (d.stagger || 0) || canMega(d.p)) return;
+    if (!d || d.state !== 'idle' || d.busy || d.stuck || !isCpu(d.p) || T < (d.stagger || 0) || canMega(d.p)) return;
     const idx = d.mon.moves.findIndex(mv => mv.ppLeft > 0 && mv.ailment === 'protect');
     if (idx < 0 || (d.mon.vol.protectCount || 0) > 0) return;
     const frac = expectedFrac(f.mon, d.mon, m);
@@ -4512,7 +4630,7 @@ const Retro = (() => {
   function rpTick() {
     if (RP.stream && (RP.keep || RP.slots.some(Boolean))) RP.g.drawImage(cv, 0, 0, RP.cv.width, RP.cv.height);
     if (RP.ko) return;
-    const pinch = running && RP_MIME && prefs.replays !== false && [0, 1].some(q => state.players[q].team.filter(x => x.hp > 0).length === 1);
+    const pinch = running && RP_MIME && prefs.replays !== false && nearEnd();
     if (!pinch) { if (RP.stream) rpReset(); return; }
     const now = rpNow();
     if (!RP.stream) {
@@ -4530,10 +4648,10 @@ const Retro = (() => {
     RP.slots.forEach((s, i) => { if (s && now - s.t0 > RP_SEG) { rpDrop(s); RP.slots[i] = rpSlot(); } });
   }
   // the last Pokémon just fell: keep the recorder with the most lead-up and close it shortly after the hit
-  function rpMark(f) {
+  function rpMark(f, killer) {
     const s = RP.slots.filter(Boolean).sort((a, b) => a.t0 - b.t0)[0];
     if (!s) return;
-    const by = foeOf(f), m = by && by.state === 'idle' && by.lastMove;
+    const by = killer || foeOf(f), m = by && by.state === 'idle' && by.lastMove;
     RP.ko = { t: rpNow(), label: m ? `${by.mon.name}'s ${m.name}` : 'Knockout', type: (m && m.type) || 'Normal' };
     RP.slots.forEach(x => x !== s && rpDrop(x));
     RP.slots = []; RP.keep = s;
@@ -4617,11 +4735,12 @@ const Retro = (() => {
 
   // the closing card: MVP, how close it was, and a prompt for the comments
   function endCard(w) {
-    const team = state.players[w].team;
+    const team = multi ? sideMons(w) : state.players[w].team;
     const mvp = team.reduce((b, m) => (m.kos || 0) * 1000 + (m.dmgDealt || 0) > (b.kos || 0) * 1000 + (b.dmgDealt || 0) ? m : b, team[0]);
     const alive = team.filter(m => m.hp > 0), lost = team.length - alive.length;
     const close = alive.length === 1 && alive[0].hp / alive[0].maxhp <= 0.15;
-    const tag = close ? `WON WITH ${Math.ceil(alive[0].hp)} HP LEFT!` : lost === 0 && team.length > 1 ? 'FLAWLESS VICTORY!' : '';
+    const royale = multi && multi.mode === 'royale';
+    const tag = close ? `WON WITH ${Math.ceil(alive[0].hp)} HP LEFT!` : royale ? (mvp.kos >= 2 ? `${mvp.kos} KNOCKOUTS!` : '') : lost === 0 && team.length > 1 ? 'FLAWLESS VICTORY!' : '';
     const ch = Broadcast.opts.channel;
     const card = document.createElement('div');
     card.className = 'rend';
@@ -4638,18 +4757,25 @@ const Retro = (() => {
     const hpLeft = q => state.players[q].team.reduce((a, m) => a + Math.max(0, m.hp) / m.maxhp, 0);
     const alive = q => state.players[q].team.some(m => m.hp > 0);
     // a double knockout goes to the side whose last Pokémon fell second (matches the replayed blow)
-    const w = !alive(0) && !alive(1) ? 1 - Math.max(0, firstOut) : !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
+    let w;
+    if (multi) {
+      // last side standing; on time up the side with the most HP left; if everyone fell together, the one that fell last
+      const s = sidesAlive(), frac = side => { const ms = sideMons(side); return ms.reduce((a, m) => a + Math.max(0, m.hp) / m.maxhp, 0) / ms.length; };
+      w = s.length === 1 ? s[0] : s.length ? s.reduce((a, b) => frac(b) > frac(a) ? b : a) : (elim.length ? elim[elim.length - 1] : 0);
+      state.multi.winner = w; state.multi.winnerName = sideName(w);
+    } else w = !alive(0) && !alive(1) ? 1 - Math.max(0, firstOut) : !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
     (async () => {
       if (timeUp) { big('TIME UP!', '', 1600); await waitN(1600); chk(tk); }
       await waitN(700); chk(tk);
       if (!timeUp) await playReplay(tk);
       AudioFX.Music.victory();
       cheer = 1; AudioFX.Crowd.cheer(1);
-      big(`${PLAYER[w].toUpperCase()} WINS!`, 'win', 3600);
-      trainerPose(w, 'cheer', 5); trainerPose(1 - w, 'dismay', 5);
+      big(`${sideName(w).toUpperCase()} WINS!`, 'win', 3600);
+      sidePose(w, 'cheer', 5); if (!multi || multi.mode === 'brawl') sidePose(1 - w, 'dismay', 5);
+      for (const f of F) if (f && f.state === 'idle' && sideOf(f.p) === w) { f.aura = '#fff3a0'; f.auraT = FT + 4; for (let i = 0; i < 3; i++) later(() => f.bump(-9), i * 260); }
       confetti();
       const endL = state.meta.endLines;
-      if (endL) { speech(w, endL[w] && endL[w].win, 2800); speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2800); }
+      if (endL && !multi) { speech(w, endL[w] && endL[w].win, 2800); speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2800); }
       await waitN(1300); chk(tk);
       endCard(w);
       await waitN(3400); chk(tk);
@@ -4658,13 +4784,28 @@ const Retro = (() => {
       if (res) res(w);
     })().catch(swallow);
   }
+  // intro card of a multi battle: every entrant (Battle Royale) or the two line-ups (Team Brawl)
+  function multiCard(opts) {
+    const ps = state.players.map((_, p) => p);
+    const mon = p => { const m = state.players[p].team[0]; return `<div class="rc-mon"><img src="${m.sprite}" alt=""><span>${esc(m.name)}</span></div>`; };
+    const royale = multi.mode === 'royale';
+    const body = royale
+      ? `<div class="rc-grid">${ps.map(mon).join('')}</div>`
+      : `<div class="rc-row brawl">${[0, 1].map(s => `<div class="rc-side p${s}"><div class="rc-name">${esc(sideName(s))}</div><div class="rc-grid">${ps.filter(p => sideOf(p) === s).map(mon).join('')}</div></div>`).join('<div class="rc-vs">VS</div>')}</div>`;
+    return `<div class="rc-no">BATTLE #${Stats.battleNo()}${Broadcast.opts.channel ? ' · ' + esc(Broadcast.opts.channel) : ''}</div>
+      <div class="rc-title">${royale ? 'BATTLE ROYALE' : 'TEAM BRAWL'}</div>
+      ${royale ? `<div class="rc-sub">${ps.length} ENTER · 1 WINS</div>` : ''}${body}
+      <div class="rc-sub">${opts.subtitle ? esc(opts.subtitle) + ' · ' : ''}${TH.name}</div>
+      <div class="rc-ask">WHO WINS? <span>COMMENT 👇</span></div>`;
+  }
   async function intro(opts, tk) {
     AudioFX.Crowd.start(); AudioFX.Music.start(0);
     const team = p => state.players[p].team.map(m => `<img src="${m.sprite}" alt="">`).join('');
     const who = p => `<div class="rc-name">${esc(PLAYER[p])}</div><div class="rc-rec">${esc(Stats.recordText(PLAYER[p]))}</div><div class="rc-team">${team(p)}</div>`;
     const card = document.createElement('div');
-    card.className = 'rcard';
-    card.innerHTML = `<div class="rc-no">BATTLE #${Stats.battleNo()}${Broadcast.opts.channel ? ' · ' + esc(Broadcast.opts.channel) : ''}</div>
+    card.className = 'rcard' + (multi ? ' multi' : '');
+    if (multi) card.innerHTML = multiCard(opts);
+    else card.innerHTML = `<div class="rc-no">BATTLE #${Stats.battleNo()}${Broadcast.opts.channel ? ' · ' + esc(Broadcast.opts.channel) : ''}</div>
       <div class="rc-row">
         <div class="rc-side p0"><img class="rc-tr" src="${TR[0].portrait}" alt=""><div>${who(0)}</div></div>
         <div class="rc-vs">VS</div>
@@ -4691,7 +4832,7 @@ const Retro = (() => {
   function update(dt) {
     if (!on) return;
     T += dt;
-    if (running) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && F.every(f => f && f.state === 'idle')) suddenDeath(); }
+    if (running) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
@@ -4712,7 +4853,7 @@ const Retro = (() => {
     F.forEach(f => { if (f) { f.x *= VW / oldW; f.y *= VH / oldH; f.goal = null; clampField(f); } });
   });
   addEventListener('keydown', e => {
-    if (!on || e.target.tagName === 'INPUT') return;
+    if (!on || multi || e.target.tagName === 'INPUT') return;
     const n = +e.key;
     if (n >= 1 && n <= 4) { const p = controllers[0] === 'human' ? 0 : controllers[1] === 'human' ? 1 : -1; if (p >= 0) queueMove(p, n - 1); }
   });
@@ -4725,7 +4866,9 @@ const Retro = (() => {
     root.classList.remove('sd', 'replaying');
     root.querySelectorAll('.rreplay, .rrp').forEach(n => n.remove());
     parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = terrain.length = 0;
-    F[0] = F[1] = null;
+    F.length = 0; F.push(null, null);
+    multi = null; elim = [];
+    root.classList.remove('multi');
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
     camT = null; camZ = 1; dimA = dimTarget = 0;
     root.classList.add('hidden');
@@ -4744,8 +4887,15 @@ const Retro = (() => {
     decal = null;
     const key = settings.theme === 'random' ? pick(Object.keys(THEMES)) : (THEME_MAP[settings.theme] || 'plaza');
     buildTheme(key);
-    TR[0] = makeTrainer(0, settings.outfits[0]);
-    TR[1] = makeTrainer(1, settings.outfits[1]);
+    // multi battle: one slot per Pokémon; smaller sprites and tighter spacing when the field is busy
+    if (state.multi) {
+      const n = state.players.length;
+      multi = { ...state.multi, spr: n > 4 ? 0.78 : 0.9, space: (n > 4 ? 0.5 : 0.65) * (state.multi.mode === 'brawl' ? 1.2 : 1) };
+      F.length = 0; for (let p = 0; p < n; p++) F.push(null);
+      root.classList.add('multi');
+    }
+    TR[0] = TR[1] = null;
+    if (!multi || multi.mode === 'brawl') { TR[0] = makeTrainer(0, settings.outfits[0]); TR[1] = makeTrainer(1, settings.outfits[1]); }
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
@@ -4756,7 +4906,7 @@ const Retro = (() => {
       await loading; chk(tk);
       hudEl.classList.remove('hidden');
       hud();
-      await Promise.all([sendOut(0, tk, true), wait(160).then(() => sendOut(1, tk, true))]);
+      await Promise.all(state.players.map((_, p) => wait(p * (multi ? 140 : 160)).then(() => sendOut(p, tk, true))));
       chk(tk);
       running = true;
       AudioFX.Music.setLevel(1);

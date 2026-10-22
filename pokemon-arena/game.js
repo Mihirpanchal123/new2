@@ -905,10 +905,15 @@ function showIntro(players) {
 async function startBattle(specs, meta = {}) {
   clearTimeout(autoTimer);
   lastSpecs = specs; lastMeta = meta;
-  state = {
-    players: [0, 1].map(p => ({ team: specs[p].map(s => makeMon(s, p)), active: 0, usedMega: false })),
-    token: ++battleToken, meta, started: false
-  };
+  const fmt = meta.format || '1v1';
+  let players, multi = null;
+  if (fmt === 'royale' || fmt === 'brawl') {
+    // multi battle (Retro 2D): one slot per Pokémon; Battle Royale gives each its own side, Team Brawl keeps the two teams
+    const entries = fmt === 'royale' ? specs[0].map((s, i) => [s, i]) : specs.flatMap((t, side) => t.map(s => [s, side]));
+    players = entries.map(([s, side]) => ({ team: [makeMon(s, side)], active: 0, usedMega: false }));
+    multi = { mode: fmt, side: entries.map(([, side]) => side), names: fmt === 'royale' ? players.map(pl => pl.team[0].name) : [PLAYER[0], PLAYER[1]] };
+  } else players = [0, 1].map(p => ({ team: specs[p].map(s => makeMon(s, p)), active: 0, usedMega: false }));
+  state = { players, multi, token: ++battleToken, meta, started: false };
   battleActive = true;
   setPaused(false);
   try { await runBattle(); }
@@ -927,7 +932,8 @@ async function runRetroBattle() {
   state.started = true;
   const w = await Retro.battle({ subtitle: state.meta.subtitle, lines: state.meta.lines });
   guard();
-  Stats.saveBattle({
+  // records / Hall of Fame track trainer battles; multi battles aren't recorded
+  if (!state.multi) Stats.saveBattle({
     names: [PLAYER[0], PLAYER[1]], winner: w,
     mons: state.players.flatMap((pl, side) => pl.team.map(m => ({ species: m.species, name: m.name, side, kos: m.kos || 0, dmg: m.dmgDealt || 0 })))
   });
@@ -938,7 +944,7 @@ async function runRetroBattle() {
 }
 
 async function runBattle() {
-  if (prefs.mode === 'retro') return runRetroBattle();
+  if (prefs.mode === 'retro' || state.multi) return runRetroBattle();
   Retro.stop();
   if (!World.has3D) { toast('Loading 3D…', 6000); await window.load3D(); guard(); }
   World.reset();
@@ -1055,9 +1061,11 @@ function setPaused(v) {
 }
 
 function showEnd(w) {
-  const left = state.players[w].team.filter(m => m.hp > 0).length;
-  $('endTitle').textContent = `${PLAYER[w]} Wins!`;
-  $('endSub').textContent = `${left} Pokémon remaining`;
+  const m = state.multi;
+  const left = m ? state.players.filter((pl, p) => m.side[p] === w && pl.team[0].hp > 0).length : state.players[w].team.filter(x => x.hp > 0).length;
+  const sub = m && m.mode === 'royale' ? `Last one standing out of ${state.players.length}` : `${left} Pokémon remaining`;
+  $('endTitle').textContent = `${m ? m.winnerName : PLAYER[w]} Wins!`;
+  $('endSub').textContent = sub;
   $('endScreen').classList.remove('hidden');
   const label = `battle`;
   if (settings.auto) {
@@ -1065,10 +1073,10 @@ function showEnd(w) {
     const tick = () => {
       if (n === 0) {
         splitRecording(label);
-        randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))));
+        randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))), { format: settings.format });
         return;
       }
-      $('endSub').textContent = `${left} Pokémon remaining · next battle in ${n--}...`;
+      $('endSub').textContent = `${sub} · next battle in ${n--}...`;
       autoTimer = setTimeout(tick, 1000);
     };
     autoTimer = setTimeout(tick, 1500);
@@ -1086,7 +1094,7 @@ $('thumbBtn').onclick = async () => {
 };
 $('tourneyBtn').onclick = () => openTourneySetup();
 $('recordsBtn').onclick = () => openRecords();
-$('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s })))); };
+$('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))), { format: settings.format }); };
 $('builderBtn').onclick = exitToBuilder;
 $('ctlPause').onclick = () => setPaused(!PAUSED);
 $('ctlRestart').onclick = restartBattle;
@@ -1099,6 +1107,26 @@ $('pmExit').onclick = exitToBuilder;
 //  TEAM BUILDER
 // =====================================================================
 let editing = 0;
+// battle format: 1v1 trainer battle, Battle Royale (free-for-all) or Team Brawl (whole teams on the field at once)
+const FORMAT_SIZES = { '1v1': [1, 6], royale: [2, 8], brawl: [1, 4] };
+const FORMAT_LABEL = { '1v1': 'Team size', royale: 'Entrants', brawl: 'Per team' };
+const formatSizes = { '1v1': 3, royale: 8, brawl: 3, ...prefs.sizes };
+settings.format = FORMAT_SIZES[prefs.format] ? prefs.format : '1v1';
+const teamTitle = p => settings.format === 'royale' ? 'Entrants' : PLAYER[p];
+function applyFormat(fmt) {
+  settings.format = fmt;
+  const [lo, hi] = FORMAT_SIZES[fmt];
+  settings.teamSize = clamp(formatSizes[fmt], lo, hi);
+  $('setSize').innerHTML = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i).map(n => `<option ${n === settings.teamSize ? 'selected' : ''}>${n}</option>`).join('');
+  $('sizeLbl').textContent = FORMAT_LABEL[fmt];
+  document.querySelectorAll('.fmtSeg button').forEach(b => b.classList.toggle('on0', b.dataset.fmt === fmt));
+  document.body.classList.toggle('fmtRoyale', fmt === 'royale');
+  document.body.classList.toggle('fmtMulti', fmt !== '1v1');
+  teams.forEach((t, p) => teams[p] = t.slice(0, settings.teamSize));
+  if (fmt === 'royale') editing = 0;
+  if (fmt !== '1v1' && prefs.mode === '3d') { applyMode('retro'); savePrefs(); toast('Battle Royale and Team Brawl play in Retro 2D.', 3000); }
+  setEditing(editing);
+}
 
 function makeSpec(species, level) {
   const sp = DEX.species[species];
@@ -1120,7 +1148,7 @@ function randomTeam() {
     return s;
   });
 }
-function randomizeTeams() { teams[0] = randomTeam(); teams[1] = randomTeam(); }
+function randomizeTeams() { teams[0] = randomTeam(); teams[1] = settings.format === 'royale' ? [] : randomTeam(); }
 
 // Pokédex generation tabs: national dex number ranges of each generation
 const GENS = [[1, 151], [152, 251], [252, 386], [387, 493], [494, 649], [650, 721], [722, 809], [810, 905], [906, 1025]];
@@ -1173,19 +1201,19 @@ function renderDex() {
 function renderTeams() {
   for (const p of [0, 1]) {
     const row = $('team' + p);
-    const name = `${PLAYER[p]} <small>${teams[p].length}/${settings.teamSize}</small>`;
+    const name = `${teamTitle(p)} <small>${teams[p].length}/${settings.teamSize}</small>`;
     $('edit' + p).innerHTML = name;
     row.classList.toggle('editing', editing === p);
     row.classList.toggle('compact', editing !== p);
     if (editing !== p) {
       // the team not being edited collapses to a strip of sprites; click to edit it
-      row.innerHTML = `<div class="teamhead"><span style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}</span>
+      row.innerHTML = `<div class="teamhead"><span style="color:${p ? '#f87171' : '#60a5fa'}">${teamTitle(p)}</span>
         <span class="muted">${controllers[p] === 'cpu' ? 'CPU' : 'Human'} · ${teams[p].length}/${settings.teamSize} · click to edit</span></div>
         <div class="strip">${teams[p].map(s => `<img src="${DEX.species[s.species].sprite}" title="${DEX.species[s.species].display} Lv${s.level}">`).join('') || '<span class="muted">No Pokémon yet</span>'}</div>`;
       row.onclick = () => setEditing(p);
       continue;
     }
-    row.innerHTML = `<div class="teamhead"><span class="p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}</span>
+    row.innerHTML = `<div class="teamhead"><span class="p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${teamTitle(p)}</span>
       <input class="pname-input" data-name="${p}" value="${PLAYER[p]}" maxlength="14" title="Trainer name">
       <select data-outfit="${p}" title="Trainer outfit">${Object.entries(OUTFITS).map(([k, o]) => `<option value="${k}" ${settings.outfits[p] === k ? 'selected' : ''}>${o.label}</option>`).join('')}</select>
       <select data-ctrl="${p}"><option value="human">Human</option><option value="cpu">CPU</option></select>
@@ -1278,6 +1306,7 @@ $('edit0').onclick = () => setEditing(0);
 $('edit1').onclick = () => setEditing(1);
 $('setSize').onchange = e => {
   settings.teamSize = +e.target.value;
+  formatSizes[settings.format] = settings.teamSize; prefs.sizes = formatSizes; savePrefs();
   teams.forEach((t, p) => teams[p] = t.slice(0, settings.teamSize));
   renderTeams();
 };
@@ -1307,7 +1336,11 @@ const applyMode = mode => {
   document.body.classList.toggle('retroMode', prefs.mode === 'retro');
 };
 applyMode(prefs.mode);
-$('mode3d').onclick = () => { applyMode('3d'); savePrefs(); load3DNow(); };
+$('mode3d').onclick = () => {
+  if (settings.format !== '1v1') { applyFormat('1v1'); prefs.format = '1v1'; toast('Battle Royale and Team Brawl are Retro 2D only — switched to 1v1.', 3500); }
+  applyMode('3d'); savePrefs(); load3DNow();
+};
+document.querySelectorAll('.fmtSeg button').forEach(b => b.onclick = () => { applyFormat(b.dataset.fmt); prefs.format = settings.format; savePrefs(); });
 function load3DNow() {
   if (World.has3D) return;
   toast('Loading 3D…', 6000);
@@ -1339,14 +1372,15 @@ World.themeKeys.forEach(k => $('setTheme').insertAdjacentHTML('beforeend', `<opt
 $('setTheme').onchange = e => { settings.theme = e.target.value; if (settings.theme !== 'random') World.setTheme(settings.theme); };
 $('randomBoth').onclick = () => { randomizeTeams(); renderTeams(); };
 $('startBtn').onclick = () => {
-  if (!teams[0].length || !teams[1].length) { toast('Both players need at least one Pokémon.'); return; }
+  const fmt = settings.format;
+  if (fmt === 'royale' ? teams[0].length < 2 : !teams[0].length || !teams[1].length) { toast(fmt === 'royale' ? 'A Battle Royale needs at least 2 Pokémon.' : 'Both players need at least one Pokémon.'); return; }
   if (teams.some(t => t.some(s => !s.moves.length)))
     toast('A Pokémon with no moves will use Struggle.', 3000);
-  startBattle(teams.map(t => t.map(s => ({ ...s, moves: s.moves.slice() }))));
+  startBattle(teams.map(t => t.map(s => ({ ...s, moves: s.moves.slice() }))), { format: fmt });
 };
 
 renderDex();
-renderTeams();
+applyFormat(settings.format);
 startLoop();
 // the 3D engine only loads if 3D mode is in use (it's heavy: three.js, WebGL, models)
 if (prefs.mode === '3d') load3DNow();
