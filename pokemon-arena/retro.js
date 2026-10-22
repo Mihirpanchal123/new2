@@ -65,8 +65,9 @@ const Retro = (() => {
       field = { x0: VW * 0.16, x1: VW * 0.84, y0: VH * 0.355, y1: VH * 0.845 };
       spots = { trainer: [{ x: VW * 0.105, y: VH * 0.6 }, { x: VW * 0.895, y: VH * 0.6 }], start: [{ x: VW * 0.3, y: VH * 0.6 }, { x: VW * 0.7, y: VH * 0.6 }] };
     } else {
-      field = { x0: VW * 0.09, x1: VW * 0.91, y0: VH * 0.32, y1: VH * 0.845 };
-      spots = { trainer: [{ x: VW * 0.16, y: VH * 0.875 }, { x: VW * 0.84, y: VH * 0.285 }], start: [{ x: VW * 0.4, y: VH * 0.72 }, { x: VW * 0.6, y: VH * 0.44 }] };
+      // keep the action clear of the Reels / Shorts overlays: caption (bottom ~20%) and buttons (bottom right)
+      field = { x0: VW * 0.09, x1: VW * 0.87, y0: VH * 0.33, y1: VH * 0.77 };
+      spots = { trainer: [{ x: VW * 0.16, y: VH * 0.8 }, { x: VW * 0.84, y: VH * 0.3 }], start: [{ x: VW * 0.4, y: VH * 0.67 }, { x: VW * 0.6, y: VH * 0.45 }] };
     }
   }
 
@@ -1637,9 +1638,9 @@ const Retro = (() => {
       row.className = 'rrow p' + p; row.id = 'rrow' + p;
       ctl.append(row);
     });
-    lastTimer = -1;
+    lastTimer = '';
   }
-  let lastTimer = -1;
+  let lastTimer = '';
   function humanRow(p) {
     const row = document.getElementById('rrow' + p);
     if (!row) return;
@@ -3813,7 +3814,7 @@ const Retro = (() => {
     for (let h = 0; h < hits && t.hp > 0; h++) {
       const critStage = (m.crit || 0) + (m.id === 'aqua-cutter' ? 1 : 0);
       const c = FIXED_DAMAGE[m.id] === undefined && Math.random() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
-      let dmg = Math.floor(calcDamage(u, t, m, c, (85 + Math.floor(Math.random() * 16)) / 100) * mult);
+      let dmg = Math.floor(calcDamage(u, t, m, c, (85 + Math.floor(Math.random() * 16)) / 100) * mult * (sd ? SD_DMG : 1));
       dmg = Math.min(t.hp, Math.max(1, dmg));
       if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
       t.hp -= dmg; total += dmg; landed++;
@@ -4002,6 +4003,7 @@ const Retro = (() => {
       f.busy = false;
       f.cd = actionGap(f.mon) + R(-0.25, 0.4) + (f.extraCd || 0);
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
+      if (sd) f.cd *= SD_CD;
       f.extraCd = 0;
       f.goal = null;
       f.hitRun = true;
@@ -4062,7 +4064,7 @@ const Retro = (() => {
     trainerPose(p, 'dismay', 2.4);
     trainerPose(1 - p, 'cheer', 1.6);
     const last = !state.players[p].team.some(x => x.hp > 0);
-    if (last) World.slowmo(0.35, 1300);
+    if (last) { World.slowmo(0.35, 1300); rpMark(f); if (firstOut < 0) firstOut = p; }
     camPunch(f.cx, f.cy, last ? 0.12 : 0.07, last ? 1.2 : 0.6);
     later(() => Broadcast.captureThumb(last ? 5 : 3, last ? 'KNOCKOUT!' : `${mon.name.toUpperCase()} FAINTED!`), 40);
     for (const b of beams) if (b.owner === f) b.life = Math.min(b.life, b.age + 0.1);
@@ -4162,16 +4164,166 @@ const Retro = (() => {
     const cols = ['#ff5a5a', '#ffd23f', '#5ad6ff', '#7be35a', '#ff8ad8', '#ffffff'];
     for (let i = 0; i < 160; i++) spawn({ sq: 1, c: [pick(cols)], x: R(0, VW), y: R(-200, -10), vx: R(-40, 40), vy: R(110, 210), life: R(3, 4.5), delay: R(0, 1.2), s0: 2, s1: 2 });
   }
+  // ---------------------------------------------------------------------
+  //  Final-blow replay: while a side is down to its last Pokémon, two canvas
+  //  recorders take turns keeping the last few seconds; after the knockout
+  //  the hit plays back in slow motion before the winner is announced
+  // ---------------------------------------------------------------------
+  const RP_MIME = window.MediaRecorder ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '' : '';
+  const RP_SEG = 3.4;                                  // each recorder restarts after this many seconds; the two run half a segment apart
+  const RP = { cv: null, g: null, stream: null, slots: [], offT: 0, keep: null, ko: null, clip: null };
+  const rpNow = () => performance.now() / 1000;
+  function rpSlot() {
+    const s = { chunks: [], t0: rpNow(), rec: null };
+    try {
+      s.rec = new MediaRecorder(RP.stream, { mimeType: RP_MIME, videoBitsPerSecond: 6_000_000 });
+      s.rec.ondataavailable = e => e.data.size && s.chunks.push(e.data);
+      s.rec.start();
+    } catch (e) { return null; }
+    return s;
+  }
+  function rpDrop(s) { if (s && s.rec.state !== 'inactive') { s.rec.ondataavailable = s.rec.onstop = null; try { s.rec.stop(); } catch (e) {} } }
+  function rpReset() {
+    RP.slots.forEach(rpDrop); rpDrop(RP.keep);
+    if (RP.stream) RP.stream.getTracks().forEach(t => t.stop());
+    if (RP.clip) RP.clip.then(c => c && URL.revokeObjectURL(c.url));
+    RP.stream = RP.keep = RP.ko = RP.clip = null; RP.slots = [];
+  }
+  // every frame, after render(): copy the frame and start / roll the recorders
+  function rpTick() {
+    if (RP.stream && (RP.keep || RP.slots.some(Boolean))) RP.g.drawImage(cv, 0, 0, RP.cv.width, RP.cv.height);
+    if (RP.ko) return;
+    const pinch = running && RP_MIME && prefs.replays !== false && [0, 1].some(q => state.players[q].team.filter(x => x.hp > 0).length === 1);
+    if (!pinch) { if (RP.stream) rpReset(); return; }
+    const now = rpNow();
+    if (!RP.stream) {
+      RP.cv = RP.cv || document.createElement('canvas');
+      RP.cv.width = VW; RP.cv.height = VH;              // the virtual resolution keeps every art pixel
+      RP.g = RP.cv.getContext('2d');
+      RP.g.imageSmoothingQuality = 'high';
+      RP.g.drawImage(cv, 0, 0, VW, VH);
+      try { RP.stream = RP.cv.captureStream(30); } catch (e) { return; }
+      RP.slots = [rpSlot(), null];
+      RP.offT = now + RP_SEG / 2;
+      return;
+    }
+    if (!RP.slots[1] && now >= RP.offT) RP.slots[1] = rpSlot();
+    RP.slots.forEach((s, i) => { if (s && now - s.t0 > RP_SEG) { rpDrop(s); RP.slots[i] = rpSlot(); } });
+  }
+  // the last Pokémon just fell: keep the recorder with the most lead-up and close it shortly after the hit
+  function rpMark(f) {
+    const s = RP.slots.filter(Boolean).sort((a, b) => a.t0 - b.t0)[0];
+    if (!s) return;
+    const by = foeOf(f), m = by && by.state === 'idle' && by.lastMove;
+    RP.ko = { t: rpNow(), label: m ? `${by.mon.name}'s ${m.name}` : 'Knockout', type: (m && m.type) || 'Normal' };
+    RP.slots.forEach(x => x !== s && rpDrop(x));
+    RP.slots = []; RP.keep = s;
+    const hit = RP.ko.t - s.t0;
+    RP.clip = new Promise(res => setTimeout(() => {
+      if (RP.keep !== s) return res(null);
+      s.rec.onstop = () => { RP.keep = null; res(s.chunks.length ? { url: URL.createObjectURL(new Blob(s.chunks, { type: RP_MIME })), hit } : null); };
+      try { s.rec.stop(); } catch (e) { res(null); }
+    }, 1000));
+  }
+  async function playReplay(tk) {
+    const clip = RP.clip && await RP.clip; chk(tk);
+    if (!clip || clip.hit < 0.8) return;
+    const ko = RP.ko;
+    const v = document.createElement('video');
+    v.className = 'rreplay'; v.muted = true; v.playsInline = true; v.src = clip.url; v.style.opacity = 0;
+    const deco = document.createElement('div');
+    deco.className = 'rrp';
+    deco.innerHTML = `<div class="rrp-bar t"></div><div class="rrp-bar b"></div><div class="rrp-tag"><i></i>REPLAY</div>
+      <div class="rrp-cap">FINAL BLOW<b style="--tc:${TYPE_COLORS[ko.type] || '#6b7280'}">${esc(ko.label)}</b></div>`;
+    root.insertBefore(v, hudEl);
+    root.insertBefore(deco, hudEl);
+    root.classList.add('replaying');
+    big('REPLAY', 'replay', 1100); SFX.banner();
+    try {
+      v.playbackRate = 4;                              // fast-forward (hidden) to 1.4 s before the hit
+      await v.play();
+      await new Promise(res => {
+        let phase = 0;
+        const quit = setTimeout(res, 9000);
+        const done = () => { clearTimeout(quit); res(); };
+        v.onended = done;
+        const step = () => {
+          if (tk !== token || v.ended) return done();
+          if (PAUSED !== v.paused) { if (PAUSED) v.pause(); else v.play().catch(() => {}); }
+          const t = v.currentTime;
+          if (phase === 0 && t >= clip.hit - 1.4) { phase = 1; v.playbackRate = 1; v.style.opacity = 1; }
+          if (phase === 1 && t >= clip.hit - 0.55) { phase = 2; v.playbackRate = 0.3; AudioFX.Crowd.gasp(); }
+          if (phase === 2 && t >= clip.hit) { phase = 3; v.playbackRate = 0.8; SFX.impact(ko.type, 1.6, 2); cheer = 1; AudioFX.Crowd.cheer(1); }
+          requestAnimationFrame(step);
+        };
+        step();
+      });
+    } catch (e) { console.warn('retro replay', e); }
+    v.remove(); deco.remove();
+    root.classList.remove('replaying');
+    URL.revokeObjectURL(clip.url);
+    RP.clip = null;
+    chk(tk);
+  }
+
+  // ---------------------------------------------------------------------
+  //  Sudden death: after the chosen time (Settings), hits land harder and
+  //  come faster so short-form battles always reach a climax
+  // ---------------------------------------------------------------------
+  const SD_DMG = 1.5, SD_CD = 0.7;
+  let sd = false, firstOut = -1;                       // firstOut: the side whose last Pokémon fell first
+  const sdTime = () => +(prefs.suddenDeath ?? 60) || 0;
+  function suddenDeath() {
+    sd = true;
+    root.classList.add('sd');
+    big('SUDDEN DEATH!', 'sd', 2200);
+    SFX.banner(); flash('#ff2a2a', 0.35); shakeIt(8);
+    AudioFX.Music.setLevel(2);
+    cheer = 1; AudioFX.Crowd.cheer(1);
+    for (const f of F) if (f && f.state === 'idle') { f.aura = '#ff3a3a'; f.auraT = FT + 1.5; f.bump(-6); }
+  }
+  const clockText = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  function timerTick() {
+    const el = document.getElementById('rTimer');
+    if (!el) return;
+    const at = sdTime(), left = at && !sd ? Math.max(0, Math.ceil(at - clockT)) : -1;
+    const label = sd ? 'SUDDEN DEATH' : clockText(left >= 0 ? left : Math.floor(clockT));
+    if (label === lastTimer) return;
+    lastTimer = label;
+    el.textContent = label;
+    el.classList.toggle('low', running && left >= 0 && left <= 5);
+    el.classList.toggle('sd', sd);
+    if (running && left > 0 && left <= 3) SFX.beep(false);
+  }
+
+  // the closing card: MVP, how close it was, and a prompt for the comments
+  function endCard(w) {
+    const team = state.players[w].team;
+    const mvp = team.reduce((b, m) => (m.kos || 0) * 1000 + (m.dmgDealt || 0) > (b.kos || 0) * 1000 + (b.dmgDealt || 0) ? m : b, team[0]);
+    const alive = team.filter(m => m.hp > 0), lost = team.length - alive.length;
+    const close = alive.length === 1 && alive[0].hp / alive[0].maxhp <= 0.15;
+    const tag = close ? `WON WITH ${Math.ceil(alive[0].hp)} HP LEFT!` : lost === 0 && team.length > 1 ? 'FLAWLESS VICTORY!' : '';
+    const ch = Broadcast.opts.channel;
+    const card = document.createElement('div');
+    card.className = 'rend';
+    card.innerHTML = `${tag ? `<div class="re-tag">${tag}</div>` : ''}
+      <div class="re-mvp"><img src="${mvp.sprite}" alt=""><div><small>MVP</small><b>${esc(mvp.name)}</b><span>${mvp.dmgDealt || 0} DMG · ${mvp.kos || 0} KO</span></div></div>
+      <div class="re-ask">WHO SHOULD FIGHT NEXT? <span>COMMENT 👇</span></div>
+      ${ch ? `<div class="re-ch">FOLLOW ${esc(ch)} FOR BATTLE #${Stats.battleNo() + 1}</div>` : ''}`;
+    hudEl.append(card);
+  }
   function endBattle(timeUp) {
     if (ended) return;
     ended = true; running = false;
     const tk = token;
     const hpLeft = q => state.players[q].team.reduce((a, m) => a + Math.max(0, m.hp) / m.maxhp, 0);
     const alive = q => state.players[q].team.some(m => m.hp > 0);
-    const w = !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
+    // a double knockout goes to the side whose last Pokémon fell second (matches the replayed blow)
+    const w = !alive(0) && !alive(1) ? 1 - Math.max(0, firstOut) : !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
     (async () => {
       if (timeUp) { big('TIME UP!', '', 1600); await waitN(1600); chk(tk); }
       await waitN(700); chk(tk);
+      if (!timeUp) await playReplay(tk);
       AudioFX.Music.victory();
       cheer = 1; AudioFX.Crowd.cheer(1);
       big(`${PLAYER[w].toUpperCase()} WINS!`, 'win', 3600);
@@ -4179,7 +4331,9 @@ const Retro = (() => {
       confetti();
       const endL = state.meta.endLines;
       if (endL) { speech(w, endL[w] && endL[w].win, 2800); speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2800); }
-      await waitN(3800); chk(tk);
+      await waitN(1300); chk(tk);
+      endCard(w);
+      await waitN(3400); chk(tk);
       const res = resolveBattle;
       resolveBattle = rejectBattle = null;
       if (res) res(w);
@@ -4188,23 +4342,26 @@ const Retro = (() => {
   async function intro(opts, tk) {
     AudioFX.Crowd.start(); AudioFX.Music.start(0);
     const team = p => state.players[p].team.map(m => `<img src="${m.sprite}" alt="">`).join('');
+    const who = p => `<div class="rc-name">${esc(PLAYER[p])}</div><div class="rc-rec">${esc(Stats.recordText(PLAYER[p]))}</div><div class="rc-team">${team(p)}</div>`;
     const card = document.createElement('div');
     card.className = 'rcard';
     card.innerHTML = `<div class="rc-no">BATTLE #${Stats.battleNo()}${Broadcast.opts.channel ? ' · ' + esc(Broadcast.opts.channel) : ''}</div>
       <div class="rc-row">
-        <div class="rc-side p0"><img class="rc-tr" src="${TR[0].portrait}" alt=""><div><div class="rc-name">${esc(PLAYER[0])}</div><div class="rc-team">${team(0)}</div></div></div>
+        <div class="rc-side p0"><img class="rc-tr" src="${TR[0].portrait}" alt=""><div>${who(0)}</div></div>
         <div class="rc-vs">VS</div>
-        <div class="rc-side p1"><div><div class="rc-name">${esc(PLAYER[1])}</div><div class="rc-team">${team(1)}</div></div><img class="rc-tr" src="${TR[1].portrait}" alt=""></div>
+        <div class="rc-side p1"><div>${who(1)}</div><img class="rc-tr" src="${TR[1].portrait}" alt=""></div>
       </div>
-      <div class="rc-sub">${opts.subtitle ? esc(opts.subtitle) + ' · ' : ''}${TH.name}</div>`;
+      <div class="rc-sub">${opts.subtitle ? esc(opts.subtitle) + ' · ' : ''}${TH.name}</div>
+      <div class="rc-ask">WHO WINS? <span>COMMENT 👇</span></div>`;
     fxEl.append(card);
     SFX.banner();
+    later(() => SFX.beep(true), 700);
     const lines = opts.lines;
     if (lines) { later(() => speech(0, lines[0], 1800), 900); later(() => speech(1, lines[1], 1800), 1700); }
     await waitN(3000); chk(tk);
     card.classList.add('out');
     later(() => card.remove(), 450);
-    for (const n of ['3', '2', '1']) { big(n, 'count', 650); SFX.beep(false); await waitN(620); chk(tk); }
+    for (const n of ['3', '2', '1']) { big(n, 'count', 480); SFX.beep(false); await waitN(440); chk(tk); }
     big('FIGHT!', 'count', 900); SFX.beep(true); SFX.start();
     cheer = 1; AudioFX.Crowd.cheer(0.8);
   }
@@ -4215,20 +4372,21 @@ const Retro = (() => {
   function update(dt) {
     if (!on) return;
     T += dt;
-    if (running) { clockT += dt; if (clockT > 600) endBattle(true); }
+    if (running) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && F.every(f => f && f.state === 'idle')) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
     ambient(dt);
     stepFx(dt / FX_SLOW);
     render();
-    const sec = Math.floor(clockT);
-    if (sec !== lastTimer) { lastTimer = sec; const el = document.getElementById('rTimer'); if (el) el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+    rpTick();
+    timerTick();
   }
   updaters.push(update);
   addEventListener('resize', () => {
     if (!on) return;
     const oldW = VW, oldH = VH;
+    if (!RP.ko) rpReset();
     resize(); layout();
     buildTheme(Object.keys(THEMES).find(k => THEMES[k] === TH) || 'plaza');
     TR.forEach((t, p) => { if (t) { t.x = spots.trainer[p].x; t.y = spots.trainer[p].y; } });
@@ -4244,6 +4402,9 @@ const Retro = (() => {
     const rj = rejectBattle;
     resolveBattle = rejectBattle = null;
     on = false; running = false; ended = true; token++;
+    rpReset(); sd = false;
+    root.classList.remove('sd', 'replaying');
+    root.querySelectorAll('.rreplay, .rrp').forEach(n => n.remove());
     parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = terrain.length = 0;
     F[0] = F[1] = null;
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
@@ -4257,7 +4418,7 @@ const Retro = (() => {
     FX_TIME = 1;
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camFocus = null; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camFocus = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
     resize(); layout(); camX = VW / 2; camY = VH / 2;

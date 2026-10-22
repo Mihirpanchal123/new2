@@ -1275,6 +1275,7 @@ $('setSfx').value = prefs.sfx ?? 0.85; AudioFX.setVolume('sfx', +$('setSfx').val
 $('setHpBars').checked = prefs.hpBars !== false; Broadcast.opts.hpBars = $('setHpBars').checked;
 $('setHighlights').checked = prefs.highlights !== false;
 $('setReplays').checked = prefs.replays !== false;
+$('setSudden').value = String(prefs.suddenDeath ?? 60);
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
 // battle style: full 3D or the retro top-down pixel mode
 const applyMode = mode => {
@@ -1307,6 +1308,7 @@ $('setSfx').oninput = e => { prefs.sfx = +e.target.value; AudioFX.setVolume('sfx
 $('setHpBars').onchange = e => { prefs.hpBars = e.target.checked; Broadcast.opts.hpBars = prefs.hpBars; savePrefs(); };
 $('setHighlights').onchange = e => { prefs.highlights = e.target.checked; savePrefs(); };
 $('setReplays').onchange = e => { prefs.replays = e.target.checked; savePrefs(); };
+$('setSudden').onchange = e => { prefs.suddenDeath = +e.target.value; savePrefs(); };
 $('setShorts').onchange = e => { prefs.shorts = e.target.checked; applyShorts(prefs.shorts); savePrefs(); };
 $('setChannel').oninput = e => { prefs.channel = e.target.value.trim(); Broadcast.opts.channel = prefs.channel; savePrefs(); };
 $('setLength').onchange = e => { settings.hpMult = +e.target.value; };
