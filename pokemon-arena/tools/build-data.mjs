@@ -19,24 +19,40 @@ const ROOTS = [
   'caterpie', 'weedle', 'nidoran-f', 'nidoran-m', 'vulpix', 'igglybuff', 'zubat', 'oddish', 'growlithe', 'poliwag',
   'geodude', 'ponyta', 'slowpoke', 'magnemite', 'onix', 'cubone', 'rhyhorn', 'horsea', 'staryu', 'lapras',
   'aerodactyl', 'articuno', 'zapdos', 'moltres', 'mew', 'porygon', 'tyrogue', 'elekid', 'magby',
+  'cleffa', 'bellsprout', 'pinsir', 'meowth', 'psyduck', 'mankey', 'sandshrew', 'diglett', 'tentacool', 'ditto',
   // Gen 2
   'chikorita', 'cyndaquil', 'totodile', 'togepi', 'heracross', 'sneasel', 'skarmory', 'raikou', 'entei', 'suicune',
-  'lugia', 'ho-oh', 'phanpy', 'wooper',
+  'lugia', 'ho-oh', 'phanpy', 'wooper', 'celebi', 'murkrow', 'misdreavus', 'gligar',
   // Gen 3
   'wingull', 'shroomish', 'slakoth', 'trapinch', 'swablu', 'feebas', 'duskull', 'snorunt', 'spheal',
   'kyogre', 'groudon', 'latias', 'latios',
+  'mawile', 'meditite', 'electrike', 'shuppet', 'sableye', 'carvanha', 'numel', 'chingling',
+  'regirock', 'regice', 'registeel', 'jirachi', 'deoxys',
   // Gen 4
   'turtwig', 'chimchar', 'piplup', 'shinx', 'starly', 'buneary', 'dialga', 'palkia', 'giratina', 'darkrai',
+  'snover', 'happiny', 'spiritomb', 'rotom', 'croagunk',
+  'uxie', 'mesprit', 'azelf', 'heatran', 'regigigas', 'cresselia', 'shaymin', 'arceus',
   // Gen 5
   'snivy', 'tepig', 'oshawott', 'zorua', 'axew', 'deino', 'litwick',
+  'audino', 'drilbur', 'venipede', 'scraggy', 'tynamo', 'golett', 'larvesta', 'sandile', 'pawniard', 'rufflet', 'vullaby',
+  'victini', 'cobalion', 'terrakion', 'virizion', 'tornadus', 'thundurus', 'landorus', 'reshiram', 'zekrom', 'kyurem',
+  'keldeo', 'meloetta', 'genesect',
   // Gen 6
   'froakie', 'fennekin', 'chespin', 'honedge', 'goomy',
+  'litleo', 'flabebe', 'espurr', 'inkay', 'binacle', 'skrelp', 'hawlucha', 'noibat',
+  'xerneas', 'yveltal', 'zygarde', 'diancie', 'hoopa', 'volcanion',
   // Gen 7
   'rowlet', 'litten', 'popplio', 'rockruff', 'mimikyu',
+  'crabrawler', 'wimpod', 'drampa',
+  'tapu-koko', 'tapu-lele', 'tapu-bulu', 'tapu-fini', 'cosmog', 'necrozma', 'magearna', 'marshadow', 'zeraora', 'meltan',
   // Gen 8
   'grookey', 'scorbunny', 'sobble', 'dreepy',
+  'toxel', 'rookidee', 'impidimp', 'falinks', 'applin', 'duraludon',
+  'zacian', 'zamazenta', 'eternatus', 'kubfu', 'calyrex', 'zarude',
   // Gen 9
-  'sprigatito', 'fuecoco', 'quaxly', 'tinkatink'
+  'sprigatito', 'fuecoco', 'quaxly', 'tinkatink',
+  'charcadet', 'gimmighoul', 'nacli', 'capsakid', 'glimmet', 'tatsugiri', 'frigibax',
+  'koraidon', 'miraidon', 'wo-chien', 'chien-pao', 'ting-lu', 'chi-yu', 'ogerpon', 'terapagos', 'pecharunt'
 ];
 const EXCLUDE = new Set(['kleavor']);
 // moves taught by TM / move tutor (game.js tmMoves) that no level-up learnset includes
@@ -60,10 +76,45 @@ const MEGA_STONES = {
   'latios-mega': 'Latiosite', 'lopunny-mega': 'Lopunnite', 'starmie-mega': 'Starminite', 'skarmory-mega': 'Skarmorite',
   'feraligatr-mega': 'Feraligite', 'staraptor-mega': 'Staraptite', 'darkrai-mega': 'Darkranite', 'meganium-mega': 'Meganiumite',
   'emboar-mega': 'Emboarite', 'froslass-mega': 'Froslassite', 'chandelure-mega': 'Chandelurite', 'greninja-mega': 'Greninjite',
-  'delphox-mega': 'Delphoxite', 'chesnaught-mega': 'Chesnaughtite'
+  'delphox-mega': 'Delphoxite', 'chesnaught-mega': 'Chesnaughtite',
+  // X/Y, Omega Ruby / Alpha Sapphire
+  'pinsir-mega': 'Pinsirite', 'mawile-mega': 'Mawilite', 'medicham-mega': 'Medichamite', 'manectric-mega': 'Manectite',
+  'banette-mega': 'Banettite', 'abomasnow-mega': 'Abomasite', 'sableye-mega': 'Sablenite', 'audino-mega': 'Audinite',
+  'sharpedo-mega': 'Sharpedonite', 'diancie-mega': 'Diancite', 'camerupt-mega': 'Cameruptite',
+  // Legends: Z-A
+  'clefable-mega': 'Clefablite', 'victreebel-mega': 'Victreebelite', 'excadrill-mega': 'Excadrite', 'scolipede-mega': 'Scolipite',
+  'scrafty-mega': 'Scraftinite', 'eelektross-mega': 'Eelektrossite', 'pyroar-mega': 'Pyroarite', 'floette-mega': 'Floettite',
+  'malamar-mega': 'Malamarite', 'barbaracle-mega': 'Barbaracite', 'dragalge-mega': 'Dragalgite', 'hawlucha-mega': 'Hawluchanite',
+  'zygarde-mega': 'Zygardite', 'drampa-mega': 'Drampanite', 'falinks-mega': 'Falinksite'
 };
 
-const VERSION_PREF = ['scarlet-violet', 'sword-shield', 'ultra-sun-ultra-moon', 'sun-moon',
+// PokéAPI has no effect data yet for many newer moves (meta is null); fill in what the battle engine reads.
+// A few variable-power moves get a fixed typical power (noted).
+const MOVE_FIX = {
+  'make-it-rain': { metaCat: 'damage-raise', statChance: 100 },           // lowers the user's Sp. Atk (stat_changes)
+  'armor-cannon': { metaCat: 'damage-raise', statChance: 100 },           // lowers the user's Def / Sp. Def
+  'electro-shot': { metaCat: 'damage-raise', statChance: 100 },           // Sp. Atk +1 while it charges
+  'mystical-power': { metaCat: 'damage-raise', stats: [['special-attack', 1]], statChance: 100 },
+  'bitter-blade': { metaCat: 'damage-heal', drain: 50 },
+  'malignant-chain': { metaCat: 'damage-ailment', ailment: 'poison', ailmentChance: 50 },
+  'mortal-spin': { metaCat: 'damage-ailment', ailment: 'poison', ailmentChance: 100 },
+  'sandsear-storm': { metaCat: 'damage-ailment', ailment: 'burn', ailmentChance: 20 },
+  'wildbolt-storm': { metaCat: 'damage-ailment', ailment: 'paralysis', ailmentChance: 20 },
+  'bleakwind-storm': { metaCat: 'damage-lower', stats: [['speed', -1]], statChance: 30 },
+  'syrup-bomb': { metaCat: 'damage-lower' },
+  'ivy-cudgel': { metaCat: 'damage', crit: 1 },
+  'collision-course': { metaCat: 'damage' }, 'electro-drift': { metaCat: 'damage' }, 'glaive-rush': { metaCat: 'damage' },
+  'kowtow-cleave': { metaCat: 'damage' }, 'tera-starstorm': { metaCat: 'damage' }, 'fickle-beam': { metaCat: 'damage' },
+  'salt-cure': { metaCat: 'damage' },
+  'rage-fist': { metaCat: 'damage', power: 75 },                           // grows with every hit taken in the games
+  'ruination': { metaCat: 'damage', power: null },                         // halves the target's HP (FIXED_DAMAGE in game.js)
+  'spicy-extract': { metaCat: 'net-good-stats' },                          // foe: Attack +2, Defense -2
+  'lunar-blessing': { metaCat: 'heal', healing: 25, target: 'user' },
+  'thousand-arrows': { ailment: 'none', ailmentChance: 0 },
+  'crush-grip': { power: 100 }, 'grass-knot': { power: 80 }                // HP / weight based in the games
+};
+
+const VERSION_PREF =['scarlet-violet', 'sword-shield', 'ultra-sun-ultra-moon', 'sun-moon',
   'omega-ruby-alpha-sapphire', 'x-y', 'black-2-white-2'];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -188,7 +239,9 @@ async function main() {
       if (!vn.includes('-mega')) continue;
       const mp = await getJSON(`${API}/pokemon/${vn}`);
       const suffix = vn.endsWith('-x') ? ' X' : vn.endsWith('-y') ? ' Y' : vn.endsWith('-z') ? ' Z' : '';
-      const mega = { name: vn, display: `Mega ${display}${suffix}`, types: typesOf(mp), base: statsOf(mp),
+      // forms that each have a Mega (meowstic-female-mega, tatsugiri-droopy-mega...) keep the form in the name
+      const form = vn.slice(name.length).replace(/-mega(-[xyz])?$/, '').replace(/^-/, '');
+      const mega = { name: vn, display: `Mega ${display}${suffix}${form ? ` (${cap(form)})` : ''}`, types: typesOf(mp), base: statsOf(mp),
         stone: MEGA_STONES[vn] || display.replace(/[^A-Za-z]/g, '').replace(/[aeiou]$/i, '') + 'ite' + suffix, sprite: null, cry: null };
       entry.megas.push(mega);
       sprites.push([mega, mp]);
@@ -207,11 +260,13 @@ async function main() {
       if (await download(url, path.join(ROOT, file))) entry.sprite = file;
     }
     const cry = p.cries?.latest || p.cries?.legacy;
-    if (cry) {
+    if (cry && entry.sprite) {
       const file = `cries/${entry.name}.ogg`;
       if (await download(cry, path.join(ROOT, file))) entry.cry = file;
     }
   });
+  // a Mega with no artwork yet (e.g. Mega Zygarde) can't be shown, so leave it out
+  for (const s of Object.values(species)) s.megas = s.megas.filter(m => m.sprite || console.log(`  skipped ${m.name}: no sprite`));
 
   // 4. moves
   EXTRA_MOVES.forEach(m => allMoves.add(m));
@@ -235,7 +290,8 @@ async function main() {
       healing: meta.healing || 0,         // % of max HP
       minHits: meta.min_hits || null, maxHits: meta.max_hits || null,
       statChance: meta.stat_chance || 0,
-      stats: m.stat_changes.map(s => [s.stat.name, s.change])
+      stats: m.stat_changes.map(s => [s.stat.name, s.change]),
+      ...MOVE_FIX[name]
     };
   });
 

@@ -1,6 +1,6 @@
 # Pokémon Arena
 
-Pokémon battles in Retro 2D pixel art or 3D with 299 Pokémon from all nine generations (full evolution lines, starters of every generation and the major legendaries) and 55 Mega Evolutions, real stats, level-up movesets plus classic TM / tutor moves, 340 usable moves and the official damage formula.
+Pokémon battles in Retro 2D pixel art or 3D with 491 Pokémon from all nine generations (full evolution lines, starters of every generation, every legendary and mythical box/trio Pokémon, and every Pokémon that has a Mega) and 96 Mega Evolutions, real stats, level-up movesets plus classic TM / tutor moves, 440 usable moves and the official damage formula.
 
 - **Real 3D Pokémon:** animated 3D models for the original 111 forms (Pokémon added later appear as their animated sprite in 3D until a model is downloaded) with a procedural rig — breathing, walking, lunging, recoiling, roaring, fainting. Models with full game animations use them.
 - **Trainers:** a 3D trainer per player (outfits: Red, Blue, Leaf, May, Dawn, Ethan; custom names). They throw the Poké Ball, point to command, raise their Key Stone for Mega Evolution, cheer and despair.
@@ -30,7 +30,7 @@ The game must run through that server (the 3D engine loads as modules); opening 
 The game starts in light **Retro 2D** mode: only the 2D engine loads (no three.js, no WebGL, about 2 MB of memory). The 3D engine (three.js, renderer, 3D arena and trainers) loads the first time you pick **🎮 3D**, or at startup if 3D was your last choice; the 3D models only download when a 3D battle starts.
 
 ## Play
-1. **Team builder:** click Pokémon to add them to the highlighted player. Set level, Mega Stone, 4 moves, or evolve/de-evolve each slot.
+1. **Team builder:** browse the Pokédex by generation tab (All, Gen 1–9) or search, then click Pokémon to add them to the highlighted player. On a phone the settings fold behind **⚙ Settings**. Set level, Mega Stone, 4 moves, or evolve/de-evolve each slot.
    Evolved forms can't go below their real evolution level (Charizard ≥ 36). Pick Human or CPU for each player.
 2. **Battle:** choose a move, or switch. If your Pokémon holds a Mega Stone, toggle **Mega Evolve** before picking a move (once per battle).
 3. **Auto-play:** tick "Auto-play next random battle" for endless CPU vs CPU battles.

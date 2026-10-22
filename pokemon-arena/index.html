@@ -107,6 +107,39 @@
     .teams { flex: none; overflow: visible; }
     .footer { position: sticky; bottom: -14px; background: rgba(15, 23, 42, .97); padding: 10px 0 14px; margin: 0 -18px -14px; }
   }
+  /* generation tabs above the Pokédex grid (scroll sideways when they don't fit) */
+  .gentabs { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+  .gentabs button { flex: none; background: #1e293b; color: #cbd5e1; border: 1px solid #475569; border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .gentabs button small { opacity: .7; margin-left: 4px; font-weight: 700; }
+  .gentabs button:hover { border-color: #facc15; }
+  .gentabs button[aria-selected="true"] { background: #facc15; color: #111827; border-color: #facc15; }
+  #settingsToggle { display: none; }
+  /* phones: settings fold away behind a button, compact footer, smaller cards */
+  @media (max-width: 700px) {
+    #builder { padding: 10px 12px; gap: 8px; }
+    h1.logo { font-size: 24px; text-shadow: 2px 2px 0 #1d4ed8; flex-basis: 100%; }
+    .topbar { gap: 8px 12px; }
+    #settingsToggle { display: inline-block; padding: 7px 12px; }
+    #settingsToggle[aria-expanded="true"] { background: #2563eb; }
+    #builder .gentabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px; }
+    #builder .gentabs::-webkit-scrollbar { display: none; }
+    #builder .slot.empty { min-height: 56px; }
+    #builder:not(.showSettings) .topbar > label:not(.keep), #builder:not(.showSettings) .broadcast-row { display: none; }
+    .topbar label { font-size: 12px; }
+    .topbar select, .topbar input[type=number] { padding: 6px; }
+    #builder .pane { padding: 10px; border-radius: 12px; }
+    #builder #search { width: 100%; flex: 1 1 140px; }
+    #builder #dex { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; max-height: 52vh; }
+    #builder .dexcard { padding: 4px; }
+    #builder .dexcard .spr { height: 50px; } #builder .dexcard .spr img { max-height: 50px; }
+    #builder .dexcard .nm { font-size: 11px; }
+    #builder .dexcard .meta { display: none; }
+    #builder .teamhead { flex-wrap: wrap; gap: 6px; }
+    #builder .slots { grid-template-columns: 1fr; }
+    #builder .footer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 10px 10px; margin: 0 -12px -10px; bottom: -10px; }
+    #builder .footer .btn { font-size: 13px; padding: 9px 4px; border-radius: 10px; box-shadow: 0 3px 0 #64748b; }
+    #builder .footer #startBtn { grid-column: span 2; font-size: 16px; box-shadow: 0 3px 0 #a16207; }
+  }
   .dexcard { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; position: relative; }
   .dexcard:hover { border-color: #facc15; }
   .dexcard .spr { height: 64px; display: flex; align-items: flex-end; justify-content: center; }
@@ -559,7 +592,8 @@
   <div class="topbar">
     <h1 class="logo">POKéMON ARENA</h1>
     <div class="seg modeSeg" title="How battles are shown"><button id="mode3d">🎮 3D</button><button id="modeRetro">👾 Retro 2D</button></div>
-    <label>Team size <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
+    <button class="small" id="settingsToggle" aria-expanded="false">⚙ Settings</button>
+    <label class="keep">Team size <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <label>Default level <input type="number" id="setLevel" min="1" max="100" value="50"></label>
     <label>Arena <select id="setTheme"><option value="random">Random</option></select></label>
     <label>Battle speed <select id="setSpeed"><option value="1">Normal</option><option value="0.6">Fast</option><option value="0.35">Turbo</option></select></label>
@@ -586,6 +620,7 @@
         <select id="typeFilter"><option value="">All types</option></select>
         <label class="chk"><input type="checkbox" id="megaOnly"> Can Mega Evolve</label>
       </div>
+      <div class="gentabs" id="genTabs" role="tablist" aria-label="Generation"></div>
       <div id="dex"></div>
     </section>
     <section class="pane">

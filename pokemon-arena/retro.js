@@ -3686,6 +3686,325 @@ const Retro = (() => {
   });
 
   // ---------------------------------------------------------------------
+  //  The legendaries and lines of the big roster update: signature moves
+  //  get their own animation, the rest a style or strike that fits
+  // ---------------------------------------------------------------------
+  Object.assign(BM, {
+    coin: ['.333.', '31123', '31213', '31123', '.333.'],
+    apple: ['...3.', '..3..', '.111.', '12111', '11111', '11111', '.111.'],
+    arrow: ['..2..', '.222.', '..1..', '..1..', '..1..', '.3.3.', '3...3'],
+    gem: ['.222.', '21112', '.212.', '..2..']
+  });
+  const COIN_C = ['#f2c230', '#fff3a0', '#8a5a08'], GEM_C = ['#ff9bd6', '#ffffff', '#c0307e'], ARROW_C = ['#3ad06a', '#d8ffb0', '#1a1a22'];
+  const C_BLUEFIRE = ['#ffffff', '#c8f0ff', '#5ab4ff', '#1e5ad6', '#0c2a7a'], C_SOULFIRE = ['#ffffff', '#ead0ff', '#a85af0', '#3a1060'];
+  Object.assign(CT, {
+    'storm-throw': { v: 'slam', c: C_FIGHT, el: 'Fighting' },
+    'submission': { v: 'slam', c: C_FIGHT, el: 'Fighting', size: 1.2 },
+    'vice-grip': { v: 'fang', c: C_WHITE },
+    'crush-grip': { v: 'fang', c: C_WHITE, size: 1.45, aura: true },
+    'crush-claw': { v: 'claw', c: C_WHITE, size: 1.25 },
+    'crabhammer': { v: 'fist', c: C_WATER, el: 'Water', size: 1.4, overhead: true },
+    'ice-hammer': { v: 'fist', c: C_ICE, el: 'Ice', size: 1.45, overhead: true },
+    'body-press': { v: 'slam', c: C_FIGHT, el: 'Fighting', size: 1.35 },
+    'flying-press': { v: 'slam', c: C_FIGHT, el: 'Fighting', size: 1.35 },
+    'avalanche': { v: 'slam', c: C_ICE, el: 'Ice', size: 1.3 },
+    'power-trip': { v: 'charge', c: C_DARK, el: 'Dark', aura: true },
+    'v-create': { v: 'charge', c: C_FIRE, el: 'Fire', size: 1.8, aura: true, blur: true, head: true },
+    'fusion-bolt': { v: 'charge', c: C_ELEC, el: 'Electric', size: 1.5, aura: true, blur: true },
+    'bolt-strike': { v: 'charge', c: C_ELEC, el: 'Electric', size: 1.7, aura: true, blur: true },
+    'secret-sword': { v: 'blade', c: ['#ffffff', '#e6f2ff', '#7ab8ff', '#2a50c8'], el: 'Fighting', size: 1.55, aura: true },
+    'first-impression': { v: 'charge', c: C_BUG, el: 'Bug', fast: true, blur: true, size: 1.3 },
+    'sunsteel-strike': { v: 'charge', c: ['#ffffff', '#fff6c0', '#ffc83a', '#a86a10'], el: 'Steel', size: 1.7, aura: true, blur: true },
+    'power-up-punch': { v: 'fist', c: C_FIGHT, el: 'Fighting' },
+    'spectral-thief': { v: 'claw', c: C_GHOST, el: 'Ghost', fast: true, blur: true, size: 1.3 },
+    'plasma-fists': { v: 'fist', c: C_ELEC, el: 'Electric', n: 3, size: 1.2, aura: true },
+    'double-iron-bash': { v: 'fist', c: C_STEEL, el: 'Steel', n: 2, size: 1.3 },
+    'spirit-break': { v: 'fist', c: C_FAIRY, el: 'Fairy', size: 1.3 },
+    'false-surrender': { v: 'claw', c: C_DARK, el: 'Dark', fast: true },
+    'wicked-blow': { v: 'fist', c: C_DARK, el: 'Dark', size: 1.5, aura: true },
+    'collision-course': { v: 'charge', c: ['#ffffff', '#ffd0a0', '#ff5a2a', '#7a1a08'], el: 'Fire', size: 1.8, aura: true, blur: true, head: true },
+    'electro-drift': { v: 'charge', c: C_ELEC, el: 'Electric', fast: true, blur: true, size: 1.5 },
+    'glaive-rush': { v: 'charge', c: C_DRAGON, el: 'Dragon', size: 1.65, aura: true, blur: true, head: true },
+    'kowtow-cleave': { v: 'blade', c: C_DARK, el: 'Dark', size: 1.5 },
+    'ivy-cudgel': { v: 'slam', c: C_GRASS, el: 'Grass', size: 1.45 },
+    'bitter-blade': { v: 'blade', c: C_SOULFIRE, el: 'Ghost', size: 1.5, aura: true },
+    'rage-fist': { v: 'fist', c: C_GHOST, el: 'Ghost', size: 1.4, aura: true },
+    'mortal-spin': { v: 'spin', c: C_POISON, el: 'Poison', size: 1.3 },
+    'salt-cure': { v: 'slam', c: ['#ffffff', '#ffffff', '#e8e4dc', '#8a8478'], el: 'Rock', size: 1.2 }
+  });
+  Object.assign(LOOKUP, {
+    'thousand-waves': 'quake', 'lands-wrath': 'quake', 'steam-eruption': 'geyser', 'glaciate': 'wave', 'fiery-dance': 'wave', 'expanding-force': 'wave',
+    'psycho-boost': 'orb:big', 'fusion-flare': 'orb:big', 'searing-shot': 'orb:big', 'armor-cannon': 'orb:big',
+    'overdrive': 'sound', 'struggle-bug': 'multi', 'techno-blast': 'beam', 'core-enforcer': 'beam', 'oblivion-wing': 'beam'
+  });
+  Object.assign(BEAM, {
+    'dynamax-cannon': { c: ['#ffffff', '#ffb0c8', '#e0306a', '#5a0a2a'], deco: 'rings', w: 32, dim: 0.5, shake: 6 },
+    'moongeist-beam': { c: ['#ffffff', '#e0d0ff', '#8a5af0', '#2e1a5c'], deco: 'spiral', w: 30, dim: 0.5, shake: 5 },
+    'fleur-cannon': { c: ['#ffffff', '#ffe0f4', '#ff8ed0', '#a03070'], deco: 'gems', w: 30, dim: 0.35, shake: 5 },
+    'core-enforcer': { c: ['#ffffff', '#d8ffb0', '#3ad06a', '#0c5a2a'], deco: 'rings', w: 26, dim: 0.35, shake: 4 },
+    'oblivion-wing': { c: ['#ffffff', '#ffc0c8', '#e0304a', '#4a0a1a'], deco: 'dark', w: 24, dim: 0.4 },
+    'techno-blast': { c: ['#ffffff', '#e6edf6', '#9fb0c8', '#3e4550'], deco: 'rings', w: 26, dim: 0.3, shake: 4 },
+    'fickle-beam': { c: ['#ffffff', '#b8a8ff', '#6a4cf0', '#2e1a9a'], deco: 'spiral', w: 24, dim: 0.3 },
+    'electro-shot': { c: ['#ffffff', '#fff59a', '#ffd800', '#a07a00'], deco: 'rings', w: 32, dim: 0.45, shake: 6 },
+    'tera-starstorm': { c: ['#ffffff', '#fff0ff', '#b8e0ff', '#7a8aff'], deco: 'rainbow', w: 36, dim: 0.55, shake: 7 }
+  });
+  // things that drop out of the sky onto the target (coins, diamonds, arrows, light)
+  async function skyRain(f, d, m, o, hit, n, proj, gap = 40, spread = 50) {
+    const tx = d.cx + (o.miss ? 80 * side() : 0), ty = d.cy;
+    let first = null;
+    for (let i = 0; i < n; i++) {
+      if (!on) return;
+      const px = tx + R(-spread, spread), py = ty + R(-spread, spread) * 0.5;
+      const pr = shoot({ x: px + R(-60, 60), y: -60, toPt: { x: px, y: py }, speed: R(900, 1100), ...proj(i) });
+      pr.then(q => { if (!o.miss) impactAt(m.type || 'Normal', q.x, q.y, d.y, 0.4, { quiet: true }); });
+      if (!first) first = pr.then(() => hit());
+      await wait(gap);
+    }
+    await first;
+  }
+  // a ring of power closes in on the target and implodes (Ruination, Nature's Madness)
+  async function implode(f, d, m, o, hit, ring, mist) {
+    await charge(f, m, 0.4, { col: ring, dim: 0.6, size: 56, hold: 1.8 });
+    const tx = d.cx + (o.miss ? 80 * side() : 0), ty = d.cy;
+    SFX.status('confused');
+    for (let i = 0; i < 4; i++) ringP(tx, ty, 170 - i * 12, 8, ring, 0.55, { flat: 0.6, delay: i * 0.1, w: 2 });
+    for (let i = 0; i < 30; i++) { const an = R(0, 6.28), r0 = R(120, 180); spawn({ kind: 'smoke', c: mist, x: 0, y: 0, life: 0.6, delay: i * 0.012, s0: 4, s1: 2, a: 0.8, path: k => ({ x: tx + Math.cos(an) * r0 * (1 - easeIn(k)), y: ty + Math.sin(an) * r0 * 0.6 * (1 - easeIn(k)) }) }); }
+    await wait(600);
+    flash(mist[2], 0.4); shakeIt(10); camPunch(tx, ty, 0.08, 0.35);
+    hit();
+    if (!o.miss) { glowP(tx, ty, 10, 120, ring, 0.5, 0.9); impactAt(m.type, tx, ty, d.y, 1.2); }
+    await wait(400);
+  }
+  SIG['ruination'] = (f, d, m, o, hit) => implode(f, d, m, o, hit, '#8f6ea3', IMP.Dark.mist);
+  SIG['natures-madness'] = (f, d, m, o, hit) => implode(f, d, m, o, hit, '#ff9bd6', ['#ffe0f4', '#ff9bd6', '#a03070']);
+  // Make It Rain: a fountain of coins goes up and pours down on the target
+  SIG['make-it-rain'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.35, { col: '#ffe066', dim: 0.25, size: 50 });
+    for (let i = 0; i < 24; i++) spawn({ bm: 'coin', c: COIN_C, x: f.cx, y: f.top, vx: R(-160, 160), vy: R(-520, -360), g2: 900, life: 0.7, delay: i * 0.015, s0: 2, s1: 2, spin: 12 });
+    SFX.pop();
+    await wait(350);
+    await skyRain(f, d, m, o, hit, 16, () => ({ bm: 'coin', c: COIN_C, s: 3, spin: 14, trail: q => { if (Math.random() < 0.3) sparkP(q.x, q.y, R(0, 6.28), 60, '#fff3a0', 0.2); } }), 35, 50);
+    if (!o.miss) for (let i = 0; i < 14; i++) spawn({ bm: 'coin', c: COIN_C, x: d.x + R(-50, 50), y: d.y + R(-10, 10), vx: R(-90, 90), vy: R(-260, -120), g2: 900, life: 0.6, s0: 2, s1: 2, spin: 10 });
+    lightAt(d.x, d.y, 180, '#ffd84a', 0.7, 0.8);
+    await wait(300);
+  };
+  SIG['pay-day'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.15, { col: '#ffe066', motes: 8, size: 22, recoil: 30 });
+    let first = null;
+    for (let i = 0; i < 5; i++) {
+      const mo = f.mouth();
+      const pr = shoot({ x: mo.x, y: mo.y, to: d, miss: o.miss, missOff: R(50, 80) * side(), speed: 820, bm: 'coin', c: COIN_C, s: 3, spin: 16, arc: R(-30, 30), trail: q => sparkP(q.x, q.y - q.arcK, R(0, 6.28), 50, '#fff3a0', 0.15) });
+      if (!first) first = pr.then(() => hit());
+      SFX.pop();
+      await wait(80);
+    }
+    await first; await wait(200);
+  };
+  // Judgment: a halo of light, then shafts of light rain down on the target
+  SIG['judgment'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.55, { col: '#fff3c0', dim: 0.5, size: 70, hold: 2, motes: 30 });
+    for (let i = 0; i < 3; i++) ringP(f.cx, f.top - 20, 10, 90 + i * 20, '#fff3c0', 0.5, { flat: 0.4, delay: i * 0.1 });
+    shapes.push({ kind: 'column', x: f.x, y: f.y, w: 30, col: '#fff3c0', life: 0.6, age: 0 });
+    SFX.beam('Normal', 0.6);
+    await wait(350);
+    await skyRain(f, d, m, o, hit, 18, () => ({ bm: 'shard', c: ['#fff3c0', '#ffffff', '#c8a040'], s: 4, rotAlong: true, trail: q => moteP(q.x, q.y, '#fff3c0', { life: 0.25 }) }), 30, 70);
+    flash('#fff8e0', 0.3); shakeIt(8); camPunch(d.cx, d.cy, 0.07, 0.35);
+    await wait(300);
+  };
+  SIG['diamond-storm'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.4, { col: '#ffc8ec', dim: 0.3, size: 56 });
+    for (let i = 0; i < 20; i++) spawn({ bm: 'gem', c: GEM_C, x: f.cx + R(-60, 60), y: f.cy + R(-40, 40), vx: R(-60, 60), vy: R(-200, -80), life: 0.6, delay: i * 0.02, s0: 2, s1: 2, spin: 8 });
+    await skyRain(f, d, m, o, hit, 14, () => ({ bm: 'gem', c: GEM_C, s: 4, spin: 6, trail: q => sparkP(q.x, q.y, R(0, 6.28), 60, '#ffe0f4', 0.2) }), 40, 60);
+    shakeIt(7);
+    await wait(250);
+  };
+  // Thousand Arrows: a volley shot straight up comes down all around the target
+  SIG['thousand-arrows'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.35, { col: '#7ae86a', dim: 0.35, size: 50 });
+    for (let i = 0; i < 16; i++) spawn({ bm: 'arrow', c: ARROW_C, x: f.cx + R(-30, 30), y: f.top, vx: R(-40, 40), vy: -700, life: 0.5, delay: i * 0.02, s0: 3, s1: 3 });
+    SFX.whoosh();
+    await wait(400);
+    await skyRain(f, d, m, o, hit, 18, () => ({ bm: 'arrow', c: ARROW_C, s: 3, rotAlong: true, trail: q => moteP(q.x, q.y, '#7ae86a', { life: 0.2 }) }), 30, 60);
+    shakeIt(8);
+    if (!o.miss) for (let i = 0; i < 5; i++) addDecal('crack', d.x + R(-40, 40), d.y + R(-14, 14), 0.6);
+    await wait(250);
+  };
+  // Grav Apple: a huge apple drops out of the sky onto the target
+  SIG['grav-apple'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.3, { col: '#ff6a5a', dim: 0.25 });
+    const tx = d.x + (o.miss ? 80 * side() : 0);
+    SFX.whoosh();
+    await shoot({ x: tx, y: -60, toPt: { x: tx, y: d.cy }, speed: 1100, bm: 'apple', c: ['#e23b3b', '#ff9a8a', '#3a7a2a'], s: 7, shadow: true, groundOff: d.y - d.cy });
+    hit();
+    crater(tx, d.y, 34); dust(tx, d.y, 2.5); shakeIt(10); camPunch(tx, d.cy, 0.08, 0.35); SFX.quake();
+    for (let i = 0; i < 12; i++) spawn({ kind: 'blob', c: ['#ffd0c0', '#e23b3b'], x: tx, y: d.cy, vx: R(-200, 200), vy: R(-260, -60), g2: 800, life: 0.6, s0: 2, s1: 1 });
+    await wait(300);
+  };
+  // V-create: a blazing V flares on its brow before the burning charge
+  SIG['v-create'] = async (f, d, m, o, hit) => {
+    dimTo(0.45, 1.6); SFX.cast('Fire');
+    for (let i = 0; i < 26; i++) later(() => { if (f.state !== 'idle') return; const k = (i % 13) / 12, s = i < 13 ? -1 : 1; flameP(f.cx + s * (1 - k) * 34, f.top - 6 - (1 - k) * 38, 0, R(-80, -40), R(3, 5), 0.5); }, i * 18);
+    lightAt(f.x, f.y, 180, '#ff8a2a', 1, 0.9, () => ({ x: f.x, y: f.y }));
+    await wait(520);
+    let landed = false;
+    await S.contact(f, d, m, o, () => { landed = true; hit(); }, 'charge');
+    if (landed && !o.miss) { for (let i = 0; i < 4; i++) terrainAdd('fire', d.x + R(-40, 40), d.y + R(-12, 12), 18, R(2, 3.5)); flash('#ffb347', 0.2); }
+  };
+  // Bolt Strike / Fusion Bolt: cloaked in lightning it rockets in, and a bolt from the sky follows
+  SIG['bolt-strike'] = SIG['fusion-bolt'] = async (f, d, m, o, hit) => {
+    dimTo(0.4, 1.4); SFX.zap();
+    for (let i = 0; i < 8; i++) later(() => { if (f.state === 'idle') boltFx({ ax: f.cx + R(-f.w, f.w) * 0.6, ay: f.cy + R(-f.h, f.h) * 0.6, bx: f.cx + R(-f.w, f.w) * 0.6, by: f.cy + R(-f.h, f.h) * 0.6, jag: 12, c: TP.Electric.c, life: 0.22, w: 0.8 }); }, i * 50);
+    f.aura = '#fff59a'; f.auraT = FT + 1.2;
+    await wait(400);
+    let landed = false;
+    await S.contact(f, d, m, o, () => { landed = true; hit(); }, 'charge');
+    if (landed && !o.miss && d.state === 'idle') { boltFx({ ax: d.cx + R(-20, 20), ay: -40, bx: d.cx, by: d.cy, jag: 30, c: TP.Electric.c, life: 0.4, w: 1.4 }); SFX.thunder(); flash('#fffbe0', 0.25); }
+  };
+  SIG['electro-drift'] = async (f, d, m, o, hit) => {
+    SFX.zap(); f.aura = '#fff59a'; f.auraT = FT + 1;
+    for (let i = 0; i < 5; i++) later(() => { if (f.state === 'idle') boltFx({ ax: f.cx - 40, ay: f.cy + R(-20, 20), bx: f.cx + 40, by: f.cy + R(-20, 20), jag: 10, c: TP.Electric.c, life: 0.2, w: 0.7 }); }, i * 60);
+    await wait(300);
+    let landed = false;
+    await S.contact(f, d, m, o, () => { landed = true; hit(); }, 'charge');
+    if (landed && !o.miss) for (let i = 0; i < 6; i++) boltFx({ ax: d.cx, ay: d.cy, bx: d.cx + R(-120, 120), by: d.cy + R(-80, 60), jag: 18, c: TP.Electric.c, life: 0.35, w: 0.9 });
+  };
+  // Sunsteel Strike: sunlight pours into it, then it slams in like a meteor
+  SIG['sunsteel-strike'] = async (f, d, m, o, hit) => {
+    shapes.push({ kind: 'sunpour', f, life: 1.1, age: 0 });
+    glowP(f.cx, f.top - 30, 10, 90, '#ffe680', 0.9, 0.9);
+    lightAt(f.x, f.y, 220, '#ffd84a', 1.2, 1, () => ({ x: f.x, y: f.y }));
+    dimTo(0.45, 1.6); SFX.beam('Steel', 0.4);
+    await wait(600);
+    let landed = false;
+    await S.contact(f, d, m, o, () => { landed = true; hit(); }, 'charge');
+    if (landed && !o.miss) { crater(d.x, d.y, 30); flash('#fff6c0', 0.25); }
+  };
+  // Collision Course: wreathed in fire, it smashes in and blasts a crater
+  SIG['collision-course'] = async (f, d, m, o, hit) => {
+    dimTo(0.45, 1.6); SFX.rumble();
+    for (let i = 0; i < 24; i++) flameP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h), R(-20, 20), R(-160, -70), R(3, 5), 0.6, { delay: i * 0.012, c: ['#fff0e0', '#ffd0a0', '#ff5a2a', '#a01a08', '#3a0a04'] });
+    await wait(350);
+    let landed = false;
+    await S.contact(f, d, m, o, () => { landed = true; hit(); }, 'charge');
+    if (landed && !o.miss) { crater(d.x, d.y, 40); for (let i = 0; i < 4; i++) ringP(d.x, d.y, 10, 120 + i * 30, '#ffb070', 0.5, { delay: i * 0.07, w: 2 }); shakeIt(12); flash('#ffd0a0', 0.25); }
+  };
+  // Blue Flare: blue fire swirls up around the target, then erupts in a pillar
+  SIG['blue-flare'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.5, { col: '#8fd0ff', dim: 0.45, size: 64, hold: 1.6 });
+    const tx = d.x + (o.miss ? 80 * side() : 0);
+    SFX.stream('Fire', 0.8);
+    for (let i = 0; i < 60; i++) { const an = R(0, 6.28), rr = R(20, 60); later(() => { if (on) flameP(tx + Math.cos(an) * rr, d.y + Math.sin(an) * rr * 0.35, 0, R(-180, -90), R(3, 6), 0.7, { c: C_BLUEFIRE }); }, i * 12); }
+    await wait(350);
+    shapes.push({ kind: 'pillar', x: tx, y: d.y + 4, w: 70, h: 190, n: 7, c: C_BLUEFIRE.slice(0, 4), life: 0.8, age: 0 });
+    lightAt(tx, d.y, 240, '#5ab4ff', 1, 1); flash('#c8f0ff', 0.25); shakeIt(9); camPunch(tx, d.cy, 0.07, 0.35);
+    SFX.impact('Fire', 1.6, 1);
+    hit();
+    if (!o.miss) terrainAdd('fire', tx, d.y, 26, 3);
+    await wait(500);
+  };
+  // Seed Flare: a shockwave of light and seeds bursts out of its body
+  SIG['seed-flare'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.5, { col: '#c8ff9a', dim: 0.4, size: 60, hold: 1.5 });
+    flash('#f0ffe0', 0.3); SFX.impact('Grass', 1.4, 1);
+    for (let i = 0; i < 5; i++) ringP(f.x, f.y, 10, 260 + i * 40, i % 2 ? '#c8ff9a' : '#ffffff', 0.7, { delay: i * 0.08, w: 2 });
+    for (let i = 0; i < 50; i++) { const an = R(0, 6.28); spawn({ bm: 'seed', c: ['#ffffff', '#e8ffd0', '#7ad84a'], x: f.cx, y: f.cy, vx: Math.cos(an) * R(300, 600), vy: Math.sin(an) * R(200, 420), drag: 1.5, life: 0.8, delay: i * 0.004, s0: 2, s1: 1 }); }
+    await wait(300);
+    hit();
+    if (!o.miss) { impactAt('Grass', d.cx, d.cy, d.y, 1.4); for (let i = 0; i < 5; i++) sprout(d.x + R(-40, 40), d.y + R(-16, 16)); }
+    await wait(400);
+  };
+  // Hyperspace Hole: a ring portal opens beside the target and the blow comes out of it
+  SIG['hyperspace-hole'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.35, { col: '#e0b0ff', dim: 0.4 });
+    const dir = side(), px = d.cx + dir * 70, py = d.cy - 20;
+    shapes.push({ kind: 'portal', x: px, y: py, life: 1.1, age: 0 });
+    SFX.status('confused');
+    await wait(450);
+    for (let i = 0; i < 18; i++) spawn({ kind: 'streak', c: ['#ffd0ff'], x: px, y: py, vx: -dir * R(500, 800), vy: R(-80, 80), life: 0.25, len: 50, ang: dir > 0 ? Math.PI : 0, delay: i * 0.01 });
+    await wait(80);
+    hit();
+    if (!o.miss) { impactAt('Psychic', d.cx, d.cy, d.y, 1.1); shakeIt(8); }
+    await wait(500);
+  };
+  SHAPE2.portal = (s, k) => {
+    const a = k < 0.2 ? k / 0.2 : k > 0.8 ? (1 - k) / 0.2 : 1, rx = 46 * a, ry = 58 * a;
+    ctx.fillStyle = '#12061e'; ctx.beginPath(); ctx.ellipse(s.x, s.y, rx * 0.85, ry * 0.85, 0, 0, 6.28); ctx.fill();
+    ctx.lineWidth = PX * 2; ctx.strokeStyle = '#ffd36a'; ctx.beginPath(); ctx.ellipse(s.x, s.y, rx, ry, 0, 0, 6.28); ctx.stroke();
+    ctx.lineWidth = PX; ctx.strokeStyle = '#c87aff'; ctx.beginPath(); ctx.ellipse(s.x, s.y, rx * 0.9, ry * 0.9, T * 2, 0, 6.28); ctx.stroke();
+  };
+  // Photon Geyser: a pillar of light bursts up under the target
+  SIG['photon-geyser'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.5, { col: '#fff6c0', dim: 0.55, size: 70, hold: 1.6 });
+    const tx = d.x + (o.miss ? 80 * side() : 0);
+    ringFx(tx, d.y, 10, 70, '#fff6c0', 0.4);
+    await wait(250);
+    shapes.push({ kind: 'column', x: tx, y: d.y, w: 64, col: '#fff2a0', life: 0.9, age: 0 });
+    lightAt(tx, d.y, 280, '#fff2a0', 1, 1); flash('#ffffff', 0.35); shakeIt(10); SFX.beam('Psychic', 0.7);
+    for (let i = 0; i < 30; i++) spawn({ bm: 'star', c: ['#ffffff', '#fff6c0'], x: tx + R(-30, 30), y: d.y - R(0, 200), vx: R(-60, 60), vy: R(-200, -60), life: 0.7, delay: i * 0.02, s0: 2, s1: 1 });
+    await wait(120); hit(); await wait(600);
+  };
+  // Malignant Chain: poisonous chains lash out and bind the target
+  SIG['malignant-chain'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.3, { col: '#c56bf0', dim: 0.35 });
+    const bx = d.cx + (o.miss ? 80 * side() : 0), by = d.cy;
+    for (let i = 0; i < 3; i++) { const mo = f.mouth(); shapes.push({ kind: 'chain', ax: mo.x, ay: mo.y, bx: bx + R(-14, 14), by: by + R(-16, 16), bend: (i - 1) * 60, life: 0.7, age: 0 }); SFX.slash(); await wait(110); }
+    hit();
+    if (!o.miss) { for (let i = 0; i < 3; i++) ringP(d.cx, d.cy, d.r * 1.2, d.r * 0.7, '#a54ad8', 0.5, { flat: 0.5, w: 2, delay: i * 0.1 }); impactAt('Poison', d.cx, d.cy, d.y, 0.9); }
+    await wait(450);
+  };
+  SHAPE2.chain = (s, k) => {
+    const n = 16, grow = Math.min(1, k / 0.25), dx = s.bx - s.ax, dy = s.by - s.ay, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+    ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
+    for (let i = 0; i <= n * grow; i++) {
+      const t = i / n, off = Math.sin(t * Math.PI) * s.bend, x = sn(s.ax + dx * t + nx * off), y = sn(s.ay + dy * t + ny * off);
+      ctx.fillStyle = '#2a0a3a'; ctx.fillRect(x - PX * 2, y - PX * 1.5, PX * 4, PX * 3);
+      ctx.fillStyle = i % 2 ? '#a54ad8' : '#e7b0ff'; ctx.fillRect(x - PX * 1.5, y - PX, PX * 3, PX * 2);
+    }
+    ctx.globalAlpha = 1;
+  };
+  // Terapagos' Tera Starstorm: stars of every colour gather, then a prismatic beam
+  SIG['tera-starstorm'] = async (f, d, m, o, hit) => {
+    text(f, 'STELLAR FORM!', 'info');
+    for (let i = 0; i < 36; i++) { const sx = f.cx + R(-140, 140), sy = R(-40, f.top - 30), col = ['#ff9ad6', '#9ad6ff', '#fff59a', '#b8ffb0'][i % 4]; spawn({ bm: 'star', c: ['#ffffff', col], x: 0, y: 0, life: 0.7, delay: i * 0.018, s0: 2, s1: 1, path: k => ({ x: sx + (f.cx - sx) * easeIn(k), y: sy + (f.cy - sy) * easeIn(k) }) }); }
+    await wait(500);
+    return S.beam(f, d, m, o, hit);
+  };
+  SIG['electro-shot'] = async (f, d, m, o, hit) => {
+    text(f, 'ABSORBED ELECTRICITY!', 'info');
+    BUFF_X.charge(f);
+    await wait(500);
+    return S.beam(f, d, m, o, hit);
+  };
+  SIG['dynamax-cannon'] = SIG['moongeist-beam'] = SIG['fleur-cannon'] = S.beam;
+  // the Forces of Nature: a storm of their element wraps the target
+  SIG['bleakwind-storm'] = SIG['sandsear-storm'] = SIG['wildbolt-storm'] = async (f, d, m, o, hit) => {
+    await charge(f, m, 0.3, { dim: 0.35 });
+    const tx = d.x + (o.miss ? 80 * side() : 0);
+    tornado(tx, d.y, m, 1.6, m.type === 'Ground' ? ['#fff0d0', '#e8c890', '#c8a060', '#8a6a3a'] : m.type === 'Electric' ? TP.Electric.c : null);
+    if (m.type === 'Electric') for (let i = 0; i < 6; i++) later(() => { if (on) boltFx({ ax: tx + R(-50, 50), ay: d.y - R(120, 180), bx: tx + R(-30, 30), by: d.y - R(0, 60), jag: 16, c: TP.Electric.c, life: 0.25, w: 0.9 }); }, 150 + i * 110);
+    if (m.type === 'Ground') for (let i = 0; i < 30; i++) later(() => { if (on) flameP(tx + R(-40, 40), d.y - R(0, 120), R(-60, 60), R(-80, -20), R(2, 4), 0.5); }, i * 25);
+    SFX.whoosh(); SFX.rumble();
+    await wait(350); hit();
+    if (!o.miss) tw(0.6, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 45; }).then(() => { d.jz = 0; });
+    await wait(700);
+  };
+  SIG['magma-storm'] = async (f, d, m, o, hit) => { await S.vortex(f, d, m, o, hit); if (!o.miss && d.state === 'idle') terrainAdd('lava', d.x, d.y, 30, 6); };
+  SIG['grass-knot'] = SIG['vine-whip'];
+  Object.assign(BUFF_X, {
+    'geomancy': f => { dimTo(0.4, 1.2); for (let i = 0; i < 30; i++) { const col = ['#ff9ad6', '#9ad6ff', '#fff59a', '#b8ffb0', '#d0a8ff'][i % 5], sx = f.cx + R(-160, 160), sy = f.cy + R(-120, 80); spawn({ kind: 'glow', c: [col], x: 0, y: 0, s0: 6, s1: 2, life: 0.8, a: 0.9, delay: i * 0.02, path: k => ({ x: sx + (f.cx - sx) * easeIn(k), y: sy + (f.cy - sy) * easeIn(k) }) }); } },
+    'shift-gear': f => { for (let i = 0; i < 2; i++) ringP(f.cx, f.cy, 10, f.w * 0.8, i ? '#c3cedd' : '#ffd36a', 0.6, { flat: 1, w: 3, delay: i * 0.15 }); for (let i = 0; i < 10; i++) sparkP(f.cx, f.cy, R(0, 6.28), R(80, 180), '#ffffff', 0.3); },
+    'no-retreat': f => { f.bump(-8); for (let i = 0; i < 18; i++) flameP(f.x + R(-f.w / 2, f.w / 2), f.y - R(0, f.h), 0, R(-140, -60), R(2, 4), 0.6, { c: ['#ffffff', '#ffe0a0', '#ff9a2a', '#a03a10', '#3a1a08'], delay: i * 0.02 }); }
+  });
+  Object.assign(HEAL_X, {
+    'lunar-blessing': f => HEAL_X['moonlight'](f),
+    'soft-boiled': f => { glowP(f.cx, f.cy, 10, 80, '#fff6d0', 0.6, 0.8); for (let i = 0; i < 10; i++) spawn({ bm: 'star', c: ['#ffffff', '#fff6d0'], x: f.cx + R(-f.w, f.w) * 0.4, y: f.cy + R(-f.h, f.h) * 0.4, vy: -60, life: 0.7, delay: i * 0.04, s0: 2, s1: 1, fade: true }); }
+  });
+  Object.assign(DEBUFF_X, {
+    'spicy-extract': (f, d) => { d.white = 0.6; d.whiteCol = '#ff5a3a'; for (let i = 0; i < 20; i++) flameP(d.x + R(-d.w / 2, d.w / 2), d.y - R(0, d.h * 0.7), R(-20, 20), R(-120, -50), R(2, 4), 0.6, { delay: i * 0.02 }); },
+    'tickle': (f, d) => { d.shiver = 0.6; }
+  });
+
+  // ---------------------------------------------------------------------
   //  Hit reactions
   // ---------------------------------------------------------------------
   function impactFx(d, m, eff, crit, frac = 0.2) {
@@ -3814,7 +4133,7 @@ const Retro = (() => {
     for (let h = 0; h < hits && t.hp > 0; h++) {
       const critStage = (m.crit || 0) + (m.id === 'aqua-cutter' ? 1 : 0);
       const c = FIXED_DAMAGE[m.id] === undefined && Math.random() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
-      let dmg = Math.floor(calcDamage(u, t, m, c, (85 + Math.floor(Math.random() * 16)) / 100) * mult * (sd ? SD_DMG : 1));
+      let dmg = Math.floor(calcDamage(u, t, m, c, (85 + Math.floor(Math.random() * 16)) / 100) * mult * (sd && FIXED_DAMAGE[m.id] === undefined ? SD_DMG : 1));
       dmg = Math.min(t.hp, Math.max(1, dmg));
       if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
       t.hp -= dmg; total += dmg; landed++;

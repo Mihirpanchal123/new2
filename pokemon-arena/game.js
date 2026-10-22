@@ -74,7 +74,7 @@ function tmMoves(species) {
 }
 const UNIQUE_OK = new Set(['rest', 'protect', 'detect', 'shell-smash', 'wave-crash', 'aqua-cutter']);
 const OK_META = new Set(['damage', 'ailment', 'net-good-stats', 'heal', 'damage-ailment', 'damage-raise', 'damage-lower', 'damage-heal', 'unique']);
-const FIXED_DAMAGE = { 'seismic-toss': 'level', 'night-shade': 'level', 'dragon-rage': 40, 'sonic-boom': 20 };
+const FIXED_DAMAGE = { 'seismic-toss': 'level', 'night-shade': 'level', 'dragon-rage': 40, 'sonic-boom': 20, 'super-fang': 'half', 'natures-madness': 'half', 'ruination': 'half' };
 const POWDER = new Set(['sleep-powder', 'stun-spore', 'poison-powder', 'spore', 'cotton-spore', 'rage-powder']);
 const SELF_TARGETS = new Set(['user', 'users-field', 'user-and-allies', 'ally', 'user-or-ally']);
 const STAT_KEY = { attack: 'atk', defense: 'def', 'special-attack': 'spa', 'special-defense': 'spd', speed: 'spe', accuracy: 'acc', evasion: 'eva' };
@@ -384,7 +384,8 @@ function chooseActionHuman(p) {
 function calcDamage(u, t, m, crit = false, roll = 0.925) {
   if (FIXED_DAMAGE[m.id] !== undefined) {
     if (effectiveness(m.type, t.types) === 0) return 0;
-    return FIXED_DAMAGE[m.id] === 'level' ? u.level : FIXED_DAMAGE[m.id];
+    const fx = FIXED_DAMAGE[m.id];
+    return fx === 'level' ? u.level : fx === 'half' ? Math.max(1, Math.floor(t.hp / 2)) : fx;
   }
   const phys = m.cat === 'physical';
   let aSt = u.stages[phys ? 'atk' : 'spa'], dSt = t.stages[phys ? 'def' : 'spd'];
@@ -1121,16 +1122,35 @@ function randomTeam() {
 }
 function randomizeTeams() { teams[0] = randomTeam(); teams[1] = randomTeam(); }
 
+// Pokédex generation tabs: national dex number ranges of each generation
+const GENS = [[1, 151], [152, 251], [252, 386], [387, 493], [494, 649], [650, 721], [722, 809], [810, 905], [906, 1025]];
+const genOf = id => GENS.findIndex(([a, b]) => id >= a && id <= b) + 1;
+let dexGen = +prefs.dexGen || 0;                     // 0 = all generations
+function renderGenTabs(counts) {
+  $('genTabs').innerHTML = ['All', ...GENS.map((_, i) => `Gen ${i + 1}`)]
+    .map((label, g) => `<button role="tab" data-gen="${g}" aria-selected="${g === dexGen}">${label}<small>${counts[g]}</small></button>`).join('');
+  $('genTabs').querySelectorAll('button').forEach(b => b.onclick = () => {
+    dexGen = +b.dataset.gen; prefs.dexGen = dexGen; savePrefs();
+    renderDex();
+    $('dex').scrollTop = 0;
+    $('genTabs').querySelector('[aria-selected="true"]').scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  });
+}
+
 function renderDex() {
   const q = $('search').value.trim().toLowerCase(), tf = $('typeFilter').value, megaOnly = $('megaOnly').checked;
-  $('dex').innerHTML = '';
-  let shown = 0;
-  for (const n of DEX.order) {
+  const match = DEX.order.filter(n => {
     const s = DEX.species[n];
-    if (q && !s.display.toLowerCase().includes(q)) continue;
-    if (tf && !s.types.includes(tf)) continue;
-    if (megaOnly && !s.megas.length) continue;
-    shown++;
+    return (!q || s.display.toLowerCase().includes(q)) && (!tf || s.types.includes(tf)) && (!megaOnly || s.megas.length);
+  });
+  // each tab counts what the search / type / Mega filters leave in that generation
+  const counts = new Array(GENS.length + 1).fill(0);
+  for (const n of match) { counts[0]++; counts[genOf(DEX.species[n].id)]++; }
+  renderGenTabs(counts);
+  const list = match.filter(n => !dexGen || genOf(DEX.species[n].id) === dexGen).sort((a, b) => DEX.species[a].id - DEX.species[b].id);
+  $('dex').innerHTML = '';
+  for (const n of list) {
+    const s = DEX.species[n];
     const c = document.createElement('div');
     c.className = 'dexcard';
     const evo = s.evoFrom ? `from ${DEX.species[s.evoFrom].display} · ${s.evoMethod}` : 'Base form';
@@ -1147,7 +1167,7 @@ function renderDex() {
     };
     $('dex').append(c);
   }
-  $('dexCount').textContent = `${shown} of ${DEX.order.length}`;
+  $('dexCount').textContent = `${list.length} of ${DEX.order.length}`;
 }
 
 function renderTeams() {
@@ -1252,6 +1272,8 @@ Object.keys(TYPE_COLORS).forEach(t => $('typeFilter').insertAdjacentHTML('before
 $('search').oninput = renderDex;
 $('typeFilter').onchange = renderDex;
 $('megaOnly').onchange = renderDex;
+// phones: the settings fold away behind a button
+$('settingsToggle').onclick = () => { const open = $('builder').classList.toggle('showSettings'); $('settingsToggle').setAttribute('aria-expanded', open); };
 $('edit0').onclick = () => setEditing(0);
 $('edit1').onclick = () => setEditing(1);
 $('setSize').onchange = e => {
