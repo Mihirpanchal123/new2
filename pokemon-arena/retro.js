@@ -250,7 +250,8 @@ const Retro = (() => {
     const ox = ((b.x0 + b.x1 + 1) / 2) * s, oy = (b.y1 + 1) * s;
     ctx.save();
     ctx.globalAlpha = o.alpha ?? 1;
-    ctx.translate(Math.round(x), Math.round(y));
+    const q = SC * camZ;                               // snap the sprite's anchor to whole device pixels
+    ctx.translate(Math.round(x * q) / q, Math.round(y * q) / q);
     if (o.skew) ctx.transform(1, 0, o.skew, 1, 0, 0);
     if (o.rot) ctx.rotate(o.rot);
     ctx.scale(o.sx ?? (flip ? -1 : 1), o.sy || 1);
@@ -651,6 +652,15 @@ const Retro = (() => {
     mouth() { return { x: this.x + this.face * this.w * 0.3, y: this.cy - this.h * 0.08 }; }
     bump(v) { this.sqv += v; }                 // + squashes flat, - stretches tall
   }
+  // how a Pokémon carries itself, from its Speed and its size on screen (re-read after a Mega Evolution)
+  function motionOf(f) {
+    if (f.prof && f.prof.anim === f.anim) return f.prof;
+    // base Speed (the Mega's after a Mega Evolution), not the level-scaled stat: a huge, slow-footed legend stays heavy
+    const m = f.mon, sp = DEX.species[m.species], base = (m.isMega && m.megaForm ? m.megaForm.base : sp ? sp.base : null), bs = base ? base[5] : spd(m);
+    // on-field sizes run roughly 85 (Pichu) to 160+ (Garchomp, legends)
+    const big = f.h > 125 || f.w > 150, small = f.h < 95 && f.w < 100, heavy = big && bs < 95, fast = bs >= 100 && !heavy;
+    return (f.prof = { anim: f.anim, heavy, small, accel: fast ? 1.45 : heavy ? 0.6 : small ? 1.2 : 1, stop: heavy ? 0.65 : 1, stride: small ? 0.75 : heavy ? 1.25 : 1, hop: heavy ? 0.45 : small ? 1.3 : 1 });
+  }
   const center = f => ({ x: f.cx, y: f.cy });
   const clampField = f => { f.x = clamp(f.x, field.x0, field.x1); f.y = clamp(f.y, field.y0, field.y1); };
   // everything about timing comes from the real stats
@@ -782,18 +792,26 @@ const Retro = (() => {
       }
     }
     if (!f.dashing) {
-      const k = 1 - Math.exp(-dt * (canWalk ? 4.5 : 9));
+      // personality: fast ones snap into motion, heavy ones take a while to get going and to stop
+      const P = motionOf(f), speeding = Math.hypot(tvx, tvy) > f.speed;
+      const k = 1 - Math.exp(-dt * (canWalk ? 4.5 * (speeding ? P.accel : P.stop) : 9));
       f.vx += (tvx - f.vx) * k; f.vy += (tvy - f.vy) * k;
       f.x += f.vx * dt; f.y += f.vy * dt;
     }
     f.speed = Math.hypot(f.vx, f.vy);
     // hop-walk: one hop per stride, a little squash on each footfall
-    const stride = 24 + f.h * 0.2, prev = f.walkPh;
+    const P = motionOf(f), stride = (24 + f.h * 0.2) * P.stride, prev = f.walkPh;
     if (f.speed > 14 && !f.hover) f.walkPh += f.speed * dt / stride;
     else f.walkPh += (Math.ceil(f.walkPh) - f.walkPh) * Math.min(1, dt * 10);
-    if (Math.floor(f.walkPh) !== Math.floor(prev) && f.speed > 40) { f.bump(1.4); if (f.speed > 115) dust(f.x, f.y, 0.5); }
-    const hop = f.hover ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70);
-    f.z = bob + f.jz + hop;
+    if (Math.floor(f.walkPh) !== Math.floor(prev) && f.speed > 40) {
+      // footfalls: heavy Pokémon land with weight (a deeper squash, dust and a faint tremor)
+      f.bump(P.heavy ? 2.6 : 1.4);
+      if (f.speed > 115 || P.heavy) dust(f.x, f.y, P.heavy ? 0.9 : 0.5);
+      if (P.heavy && f.speed > 70) shakeIt(1.2);
+    }
+    const hop = f.hover ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70) * P.hop;
+    // flyers lift a little as they pick up speed (take-off) and settle when they slow down
+    f.z = bob + f.jz + hop + (f.hover ? Math.min(14, f.speed * 0.06) : 0);
     f.lean += (clamp(f.vx / 240, -1, 1) * (f.hover ? 0.2 : 0.1) - f.lean) * Math.min(1, dt * 8);
     f.tilt += ((f.hover ? clamp(f.vx / 300, -1, 1) * 0.12 : 0) - f.tilt) * Math.min(1, dt * 6);
     const foe = foeOf(f);
@@ -868,7 +886,7 @@ const Retro = (() => {
   //  punch-in, hit-stop and a scene dim for big moves
   // ---------------------------------------------------------------------
   const lightsFx = [];
-  let camX = 0, camY = 0, camZ = 1, camT = null, dimA = 0, dimTarget = 0, dimUntil = 0, hsTimer = null;
+  let camX = 0, camY = 0, camZ = 1, dimA = 0, dimTarget = 0, dimUntil = 0, hsTimer = null;
   const discCache = new Map();
   function disc(r, col) {
     r = clamp(Math.round(r), 1, 26);
@@ -908,7 +926,7 @@ const Retro = (() => {
     if (add) ctx.globalCompositeOperation = 'source-over';
   }
   function lightAt(x, y, r, col, life = 0.4, a = 0.8, follow = null) { lightsFx.push({ x, y, r, col, life, a, age: 0, follow }); }
-  function camPunch(x, y, amt = 0.06, dur = 0.35) { if (calm()) return; camT = { x, y, z: 1 + amt, until: T + dur * FX_SLOW }; }
+  function camPunch(x, y, amt = 0.06, dur = 0.35) { if (calm()) return; camShot('impact', { x, y, z: 1 + amt, w: 0.6, hold: dur * FX_SLOW }); }
   function dimTo(a, sec) { if (calm()) a *= 0.35; dimTarget = a; dimUntil = FT + sec; }
   function hitStop(ms) {
     if (calm()) return;
@@ -1255,16 +1273,55 @@ const Retro = (() => {
     shake = Math.max(0, shake - dt * 30);
     flashA = Math.max(0, flashA - dt * 2.5);
     dimA += ((FT < dimUntil ? dimTarget : 0) - dimA) * Math.min(1, dt * (FT < dimUntil ? 8 : 3));
-    // camera: punch toward the action, then settle back
-    const punch = camT && T < camT.until, want = punch ? camT : directorView();
-    const kc = Math.min(1, dt * (punch ? (want.z > camZ ? 10 : 3.2) : 2.2));
-    camZ += (want.z - camZ) * kc; camX += (want.x - camX) * kc; camY += (want.y - camY) * kc;
+    cameraStep(dt);
   }
 
   // the camera frames both Pokémon (and anything flying between them): it pushes in when they
   // close in, pulls back when they spread out, leans toward the current action, and drifts gently
-  let camFocus = null;
-  function focusOn(x, y, sec = 0.6) { camFocus = { x, y, until: T + sec }; }
+  // ---------------------------------------------------------------------
+  //  Camera director. The base framing (directorView) keeps every fighter and
+  //  projectile in view; on top of it, battle events request shots:
+  //    focus 1       lean toward whoever is acting
+  //    anticipate 2  push in on a big wind-up
+  //    track 3       follow a dash
+  //    impact 4      a short punch-in on the hit
+  //    finish 5      the battle-deciding knockout
+  //  The highest-priority live shot wins (newest on a tie), so two events never
+  //  tug the camera back and forth. Every change is eased by a critically damped
+  //  spring, and shots expire back to the overview on their own.
+  // ---------------------------------------------------------------------
+  const CAM_PRIO = { focus: 1, anticipate: 2, track: 3, impact: 4, finish: 5 };
+  const CAM_EASE = { base: 0.42, focus: 0.35, anticipate: 0.22, track: 0.1, impact: 0.06, finish: 0.18 };   // smoothing time (s)
+  const camShots = [], camV = { x: 0, y: 0, z: 0 };
+  function camShot(kind, o) {
+    camRelease(kind);
+    camShots.push({ kind, prio: CAM_PRIO[kind], w: 0.5, z: 1, ...o, t0: T, until: T + (o.hold ?? 0.5) });
+  }
+  function camRelease(kind) { for (let i = camShots.length - 1; i >= 0; i--) if (camShots[i].kind === kind) camShots.splice(i, 1); }
+  // critically damped spring toward a target: no snapping, no overshoot
+  function damp(cur, target, key, smooth, dt) {
+    const w = 2 / smooth, x = w * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const ch = cur - target, tmp = (camV[key] + w * ch) * dt;
+    camV[key] = (camV[key] - w * tmp) * e;
+    return target + (ch + tmp) * e;
+  }
+  function cameraStep(dt) {
+    for (let i = camShots.length - 1; i >= 0; i--) { const s = camShots[i]; if (T > s.until || (s.f && s.f.state === 'gone')) camShots.splice(i, 1); }
+    const base = directorView();
+    let top = null;
+    for (const s of camShots) if (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0)) top = s;
+    let want = base, ease = CAM_EASE.base;
+    if (top) {
+      const px = top.f ? top.f.cx : top.x, py = top.f ? top.f.cy : top.y;
+      // a shot's zoom is relative to the framing it starts from, so a punch-in still reads when the fighters are already close
+      want = { x: base.x + (px - base.x) * top.w, y: base.y + (py - base.y) * top.w, z: Math.min(1.45, base.z * top.z) };
+      ease = CAM_EASE[top.kind];
+    }
+    if (dt <= 0) return;
+    camX = damp(camX, want.x, 'x', ease, dt); camY = damp(camY, want.y, 'y', ease, dt); camZ = damp(camZ, want.z, 'z', ease, dt);
+  }
+  function cameraReset() { camShots.length = 0; camV.x = camV.y = camV.z = 0; camX = VW / 2; camY = VH / 2; camZ = 1; shake = 0; }
+  function focusOn(x, y, sec = 0.6) { camShot('focus', { x, y, w: 0.4, hold: sec }); }
   function directorView() {
     const pts = [];
     // spotlight: frame just the featured duel, and push in closer
@@ -1275,7 +1332,6 @@ const Retro = (() => {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
     let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    if (camFocus && T < camFocus.until) { cx += (camFocus.x - cx) * 0.4; cy += (camFocus.y - cy) * 0.4; }
     const z = clamp(Math.min(VW / (x1 - x0 + 620), VH / (y1 - y0 + 480)), 1.0, duo && duo.length ? 1.3 : 1.12);
     // keep the action a little below centre (the HUD sits on top)
     cy -= VH * 0.07 / z;
@@ -1605,8 +1661,10 @@ const Retro = (() => {
   function render() {
     const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
     const cx = clamp(camX, hw, VW - hw), cy = clamp(camY, hh, VH - hh);
-    const ox = VW / 2 - cx * z + (shake > 0 ? R(-shake, shake) : 0), oy = VH / 2 - cy * z + (shake > 0 ? R(-shake, shake) : 0);
-    ctx.setTransform(SC * z, 0, 0, SC * z, SC * ox, SC * oy);
+    // smooth (not per-frame random) shake; the final offset snaps to whole device pixels so pixel art doesn't shimmer
+    const sx = shake > 0 ? shake * (Math.sin(T * 61.3) * 0.7 + Math.sin(T * 23.1 + 2) * 0.3) : 0, sy = shake > 0 ? shake * (Math.sin(T * 47.9 + 1.3) * 0.7 + Math.sin(T * 19.7) * 0.3) : 0;
+    const tx = Math.round(SC * (VW / 2 - cx * z + sx)), ty = Math.round(SC * (VH / 2 - cy * z + sy)), ox = tx / SC, oy = ty / SC;
+    ctx.setTransform(SC * z, 0, 0, SC * z, tx, ty);
     fxEl.style.transform = z > 1.001 || shake > 0 ? `translate(${ox * UNIT}px, ${oy * UNIT}px) scale(${z})` : '';
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
@@ -1933,6 +1991,8 @@ const Retro = (() => {
   async function charge(f, m, sec = 0.3, o = {}) {
     sec = Math.max(0.2, sec * 1.6 / tempo(f));
     const P = PAL(m), col = o.col || P.c[1];
+    // a big wind-up (it dims the scene, or takes a while) gets a gentle push-in on the attacker
+    if ((o.dim >= 0.25 || sec > 0.7) && !calm()) camShot('anticipate', { f, w: 0.3, z: 1.06, hold: sec + 0.2 });
     f.crouchT = 1; f.aura = col; f.auraT = FT + sec + 0.15;
     if (o.dim) dimTo(o.dim, sec + (o.hold ?? 0.7));
     for (let i = 0; i < (o.motes || 18) * 1.6; i++) {
@@ -2648,6 +2708,7 @@ const Retro = (() => {
   const GUM = { Fire: '#a8281a', Ice: '#2f6fb0', Electric: '#a07a00', Dark: '#3a1846', Poison: '#5a1a70', Psychic: '#8a1f5c' };
   // ---- strike choreography: wind-up -> lunge -> strike(s) -> recover ----
   function strikeImpact(f, d, at, spec, size = 1) {
+    if (f.whiff) { dust(at.x, d.y, 0.8); return; }          // missed, blocked or no effect: no impact burst
     const c = spec.c, pc = spec.el || spec.v === 'fist' || spec.v === 'kick' ? [c[0], c[1], c[2], c[3]] : POW_C;
     powAt(at.x, at.y, 30 * size * (spec.size || 1), pc);
     shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 20 * size, r1: 70 * size, col: '#ffffff', n: 10, life: 0.18, age: 0, rot: R(0, 1) });
@@ -2656,6 +2717,7 @@ const Retro = (() => {
   }
   async function windup2(f, d, spec, big) {
     const dir = Math.sign(d.x - f.x) || f.face, x0 = f.x;
+    if (big && !calm()) camShot('anticipate', { f, w: 0.3, z: 1.05, hold: 0.45 });
     f.face = dir; f.crouchT = 1;
     await tw((big ? 0.3 : 0.22) / tempo(f), k => { const e = easeOut(k); f.x = x0 - dir * (big ? 30 : 22) * e; f.rotA = -dir * 0.16 * e; f.crouchT = 1; });
     f.crouchT = 0;
@@ -2826,9 +2888,65 @@ const Retro = (() => {
       if ((spec.size || 1) >= 1.3) { ringFx(d.x, d.y, 10, 120, spec.c[1], 0.4, { w: 2 }); dust(d.x, d.y, 1.8); }
     }
   };
+  // ---- dash strikes (Quick Attack, Extreme Speed, Aqua Jet...): the whole sequence
+  //  anticipation -> acceleration -> contact -> impact -> recoil -> follow-through -> recovery.
+  //  Damage still happens once, through hit(); the target's recoil comes from the battle code (knock).
+  async function dashStrike(f, d, m, o, hit, spec) {
+    const dir = Math.sign(d.x - f.x) || f.face, tp = tempo(f), sz = spec.size || 1, c = spec.c, heavy = sz > 1.2;
+    f.face = dir;
+    // 1. anticipation: it digs in low and leans back, a glint flashes in its eye
+    const x0 = f.x, e = eyeOf(f);
+    if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.05, hold: 0.35 });
+    shapes.push({ kind: 'glint', x: e.x, y: e.y, r: 20, col: '#ffffff', life: 0.3, age: 0 });
+    await tw(0.15 / tp, k => { const q = easeOut(k); f.crouchT = 1; f.x = x0 - dir * 12 * q; f.rotA = -dir * 0.14 * q; });
+    if (!on || f.state !== 'idle') return;
+    dust(f.x - dir * 8, f.y, 1.4);
+    SFX.whoosh();
+    // 2-3. acceleration: a slightly curved dash that speeds up into the target, with afterimages and speed lines
+    const sx = f.x, sy = f.y, bend = R(24, 44) * side();
+    const tx = d.x - dir * (f.r + d.r) * 0.55, ty = d.y + R(-6, 6), mx = (sx + tx) / 2, my = (sy + ty) / 2 + bend;
+    const sec = clamp(0.17 / tp, 0.1, 0.22) * (heavy ? 1.15 : 1);
+    f.crouchT = 0; f.dashing = true; f.after = sec + 0.4; f.afterCol = c[1]; f.bump(-6);
+    if (!calm()) camShot('track', { f, w: 0.45, z: 1.06, hold: sec + 0.15 });
+    const trail = spec.el ? elementTrail(spec.el) : null;
+    await tw(sec, k => {
+      const t = k * k, u = 1 - t;                                  // accelerating along a curve
+      f.x = u * u * sx + 2 * u * t * mx + t * t * tx; f.y = u * u * sy + 2 * u * t * my + t * t * ty;
+      f.rotA = dir * 0.28 * t;
+      if (Math.random() < 0.6) spawn({ kind: 'streak', c: ['#ffffff'], x: f.x - dir * 14, y: f.cy + R(-f.h / 3, f.h / 3), vx: -dir * 260, vy: 0, drag: 4, life: 0.2, len: 40, ang: dir > 0 ? 0 : Math.PI });
+      if (trail) trail(f); else if (!f.hover && Math.random() < 0.4) dust(f.x, f.y, 0.5);
+    });
+    if (!on) return;
+    // 4. contact and impact: hit-stop, a burst, and a punch-in sized by the damage the battle code actually dealt
+    const hp0 = d.mon.hp;
+    hit();
+    const landed = d.mon.hp < hp0;                                  // a miss, Protect or an immunity deals nothing
+    if (landed) {
+      const at = { x: d.cx - dir * d.w * 0.2, y: d.cy };
+      strikeImpact(f, d, at, spec, sz);
+      ringP(at.x, at.y, 8, 70 * sz, c[1], 0.3, { flat: 1, w: 2 });
+      camPunch(at.x, at.y, 0.035 + clamp(d.lastFrac || 0, 0, 0.6) * 0.12, 0.28);
+    } else { SFX.whoosh(); dust(f.x, f.y, 1); }
+    // 5. follow-through: momentum carries it past the target and it skids to a stop
+    const fx0 = f.x, fy0 = f.y, over = (landed ? 46 : 110) * (heavy ? 0.8 : 1);
+    const fx1 = clamp(fx0 + dir * over, field.x0, field.x1), fy1 = clamp(fy0 + Math.sign(bend) * d.r * 0.95, field.y0, field.y1);   // pass beside it, not through it
+    await tw((landed ? 0.16 : 0.22) / tp, k => {
+      const q = easeOut(k);
+      f.x = fx0 + (fx1 - fx0) * q; f.y = fy0 + (fy1 - fy0) * q; f.rotA = dir * (0.28 * (1 - q) - 0.1 * q);
+      if (!f.hover && Math.random() < 0.7) dust(f.x - dir * 6, f.y, 0.7);
+    });
+    // 6. recovery: a light hop back out to fighting range, a squash on landing, then idle again
+    f.face = Math.sign(d.x - f.x) || dir;
+    const rx0 = f.x, ry0 = f.y, bx = clamp(rx0 + (sx - rx0) * 0.55, field.x0, field.x1), by = clamp(ry0 + (sy - ry0) * 0.55, field.y0, field.y1);
+    await tw(0.3 / tp, k => { const q = ease(k); f.x = rx0 + (bx - rx0) * q; f.y = ry0 + (by - ry0) * q; f.jz = Math.sin(k * Math.PI) * (f.hover ? 10 : 24); f.rotA = -f.face * 0.12 * Math.sin(k * Math.PI); });
+    f.jz = 0; f.rotA = 0; f.dashing = false; f.bump(7);
+    if (!f.hover) dust(f.x, f.y, 0.9);
+    camRelease('track');
+  }
   S.contact = async (f, d, m, o, hit, variant) => {
     const t = m.type || 'Normal';
     const spec = CT[m.id] || { v: { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail' }[variant] || 'charge', c: TYPE_CT[t] || C_WHITE, el: t !== 'Normal' ? t : null };
+    if (spec.fast && spec.v === 'charge' && !(spec.n > 1)) return dashStrike(f, d, m, o, hit, spec);
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
     if (spec.aura || big) { f.aura = c[1]; f.auraT = FT + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
     if (!spec.fast) await windup2(f, d, spec, big);
@@ -2840,14 +2958,17 @@ const Retro = (() => {
       const landed = () => {
         if (landed.done) return;
         landed.done = true;
-        if (h === 0) hit();
+        if (h === 0) { const hp = d.mon.hp; hit(); f.whiff = !(d.mon.hp < hp); }
+        else if (f.whiff) return;
         else { impactAt(spec.el || t, d.cx, d.cy, d.y, 0.5, { quiet: true }); d.white = 1; d.bump(3); SFX.impact(t, 0.6, 1); }
       };
       await strike(f, d, spec, h, landed);
       landed();
       if (n > 1 && h < n - 1) await wait(70);
     }
-    if (big) camPunch(d.cx, d.cy, 0.06, 0.3);
+    // impact camera sized by the damage the battle code actually dealt
+    if (!f.whiff) camPunch(d.cx, d.cy, 0.03 + clamp(d.lastFrac || 0, 0, 0.6) * 0.12, big ? 0.32 : 0.24);
+    f.whiff = false;
     await wait(big ? 300 : 200);                                  // hold the impact pose a beat
     await recover(f, s, big);
   };
@@ -4375,7 +4496,7 @@ const Retro = (() => {
     try { r = await fx(f, selfT ? f : d, m, { miss }, hit, style === 'orb' && !SIG[m.id] ? variant === 'big' : variant); }
     catch (e) { if (e instanceof BattleAbort) throw e; console.warn('retro fx', m.id, e); }
     chk(tk);
-    f.dashing = false; f.crouchT = 0; f.jz = 0;
+    f.dashing = false; f.crouchT = 0; f.jz = 0; f.whiff = false;
     if (f.state === 'idle') { f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; }
     if (r !== 'nohit') hit();
     if (controllers[p] === 'human') humanRow(p);
@@ -4583,7 +4704,7 @@ const Retro = (() => {
     trainerPose(p, 'dismay', 2.4);
     if (by && by !== f) trainerPose(by.p, 'cheer', 1.6); else if (!multi) trainerPose(1 - p, 'cheer', 1.6);
     const last = multi ? sidesAlive().length <= 1 : !state.players[p].team.some(x => x.hp > 0);
-    if (last) { World.slowmo(0.35, 1300); rpMark(f, by); if (firstOut < 0) firstOut = p; }
+    if (last) { World.slowmo(0.35, 1300); rpMark(f, by); if (firstOut < 0) firstOut = p; camShot('finish', { x: f.cx, y: f.cy, z: 1.2, w: 0.8, hold: 1.5 }); }
     else if (multi && multi.mode === 'royale') { const n = sidesAlive().length; if (n <= 4) later(() => { if (!ended) big(`${n} LEFT!`, 'small', 1300); }, 400); }
     camPunch(f.cx, f.cy, last ? 0.12 : 0.07, last ? 1.2 : 0.6);
     later(() => Broadcast.captureThumb(last ? 5 : 3, last ? 'KNOCKOUT!' : `${mon.name.toUpperCase()} FAINTED!`), 40);
@@ -4961,7 +5082,7 @@ const Retro = (() => {
     acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
     root.classList.remove('multi');
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
-    camT = null; camZ = 1; dimA = dimTarget = 0;
+    cameraReset(); dimA = dimTarget = 0;
     root.classList.add('hidden');
     World.skip3D = false; World.captureSource = null;
     if (rj) rj(new BattleAbort());
@@ -4971,7 +5092,7 @@ const Retro = (() => {
     FX_TIME = 1;
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; camFocus = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; cameraReset();
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
     resize(); layout(); camX = VW / 2; camY = VH / 2;
