@@ -70,6 +70,11 @@ const Retro = (() => {
     return portrait ? { x: field.x0 + fw * k, y: s ? field.y0 + fh * 0.2 : field.y1 - fh * 0.2 } : { x: s ? field.x1 - fw * 0.18 : field.x0 + fw * 0.18, y: field.y0 + fh * k };
   }
   const foeOf = f => multi ? targetOf(f) : F[1 - f.p];
+  // pacing: at most two attacks play at once, and a big move takes the stage alone (the spotlight)
+  let acting = 0, spot = null, spotFoe = null, pendingSpot = null, pendingT = 0, loudUntil = 0, spotEndT = -99;
+  const calm = () => !!multi && !spot && T > loudUntil;            // ordinary hits get toned-down screen effects
+  const inSpot = f => f === spot || f === spotFoe;
+  const engaged = (e, f) => F.filter(o => o && o !== f && o.state === 'idle' && o.target === e).length;
   // pick an enemy to go after: close, weakened, or one it hits hard; stay on it for a few seconds
   function targetOf(f) {
     const t = f.target;
@@ -81,9 +86,11 @@ const Retro = (() => {
       const dist = Math.hypot(e.x - f.x, (e.y - f.y) / 0.6);
       const hurt = 1 - e.mon.hp / e.mon.maxhp;
       const dmg = Math.min(1, Math.max(0, ...f.mon.moves.filter(mv => mv.ppLeft > 0).map(mv => expectedFrac(f.mon, e.mon, mv))));
-      const s = -dist / 500 + hurt * 0.8 + dmg + (e === t ? 0.5 : 0) + (e.target === f ? 0.3 : 0) + R(0, 0.5);
+      // duels: answer whoever is fighting it, leave alone those already under attack, Team Brawl lanes pair Pokémon up
+      const s = -dist / 500 + hurt * 0.8 + dmg + (e === t ? 0.5 : 0) + (e.target === f ? 0.8 : 0) - engaged(e, f) * 1.1 + (multi.lane && multi.lane[f.p] === e.p ? 1 : 0) + R(0, 0.5);
       if (s > bs) { bs = s; best = e; }
     }
+    if (best !== t) shapes.push({ kind: 'lockon', f: best, by: f, life: 0.8, age: 0 });
     f.target = best; f.retargetT = T + R(3, 6);
     return best;
   }
@@ -701,6 +708,7 @@ const Retro = (() => {
       else if (mode === 'press') sc = -travel * 0.2 + R(0, 20);
       else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - (edge < 30 ? 70 : 0) + R(0, 50);
       if (df < space(f, foe)) sc -= 600;                                // never pick a spot right next to the foe
+      if (multi) for (const o of F) if (o && o !== f && o !== foe && o.state === 'idle') { const dd = Math.hypot(g.x - o.x, (g.y - o.y) / 0.6); if (dd < 260) sc -= (260 - dd) * 1.4; }   // keep duels apart
       if (sc > bs) { bs = sc; best = g; }
     }
     return best;
@@ -724,6 +732,8 @@ const Retro = (() => {
     }
     for (const g of f.trail) g.a -= dt * 2.8 / FX_SLOW;
     while (f.trail.length && f.trail[0].a <= 0) f.trail.shift();
+    // spotlight: everyone not in the featured duel steps back into the shade
+    f.fadeA = (f.fadeA ?? 1) + ((multi && spot && !inSpot(f) ? 0.4 : 1) - (f.fadeA ?? 1)) * Math.min(1, dt * 8);
     const bob = f.hover ? f.hover + Math.sin(T * 2.6 + f.p * 2) * 5 : 0;
     if (f.state !== 'idle') { f.z = bob * (1 - f.sink) + f.jz; return; }
     // knockback slide
@@ -731,7 +741,7 @@ const Retro = (() => {
     const fr = Math.exp(-dt * 6); f.kx *= fr; f.ky *= fr;
     if (Math.hypot(f.kx, f.ky) > 110 && !f.hover && Math.random() < dt * 40) dust(f.x - Math.sign(f.kx) * 8, f.y, 0.8);
     let tvx = 0, tvy = 0;
-    const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0));
+    const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0)) && !megaHold();
     if (canWalk) {
       f.goalT -= dt;
       if (!f.goal && !(f.pauseT > 0)) f.goal = pickGoal(f);
@@ -798,7 +808,9 @@ const Retro = (() => {
       if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
     }
     clampField(f);
-    if (!running || m.hp <= 0) return;
+    // everyone else turns to watch a Mega Evolution, and status effects wait for it to finish
+    if (megaHold() && megaF && f !== megaF && Math.abs(megaF.x - f.x) > 12) f.face = Math.sign(megaF.x - f.x);
+    if (!running || m.hp <= 0 || megaHold()) return;
     // status over time (one "turn" = 3 s)
     if (m.status === 'slp') {
       f.sleepT -= dt;
@@ -896,9 +908,10 @@ const Retro = (() => {
     if (add) ctx.globalCompositeOperation = 'source-over';
   }
   function lightAt(x, y, r, col, life = 0.4, a = 0.8, follow = null) { lightsFx.push({ x, y, r, col, life, a, age: 0, follow }); }
-  function camPunch(x, y, amt = 0.06, dur = 0.35) { camT = { x, y, z: 1 + amt, until: T + dur * FX_SLOW }; }
-  function dimTo(a, sec) { dimTarget = a; dimUntil = FT + sec; }
+  function camPunch(x, y, amt = 0.06, dur = 0.35) { if (calm()) return; camT = { x, y, z: 1 + amt, until: T + dur * FX_SLOW }; }
+  function dimTo(a, sec) { if (calm()) a *= 0.35; dimTarget = a; dimUntil = FT + sec; }
   function hitStop(ms) {
+    if (calm()) return;
     if (TIME_SCALE < 0.2) return;
     const prev = TIME_SCALE;
     TIME_SCALE = 0.04;
@@ -930,8 +943,8 @@ const Retro = (() => {
   function smoke(at, n = 6, col = ['#8a7a76', '#6a5e5c', '#4a4240'], s = 3) { for (let i = 0; i < n; i++) smokeP(at.x + R(-14, 14), at.y + R(-8, 8), s, R(0.6, 1.1), col); }
   function star(at, type, size = 4, life = 0.28) { const P = tp(type); powAt(at.x, at.y, size * 8, [P.c[0], P.c[1], P.c[2], P.c[4] || P.c[3]], { life }); }
   function ringFx(x, y, r0, r1, col, life = 0.45, o = {}) { rings.push({ x, y, r0, r1, col, life, age: -(o.delay || 0), flat: o.flat ?? 0.45, w: o.w || 1 }); }
-  function flash(col = '#fff', a = 0.5) { flashCol = col; flashA = Math.max(flashA, a); }
-  function shakeIt(a) { shake = Math.max(shake, a); }
+  function flash(col = '#fff', a = 0.5) { if (calm()) a *= 0.35; flashCol = col; flashA = Math.max(flashA, a); }
+  function shakeIt(a) { if (calm()) a *= 0.35; shake = Math.max(shake, a); }
   function beamFx(o) { o.age = 0; o.len = 0; beams.push(o); return o; }
   function boltFx(o) { o.age = 0; o.ptT = -1; bolts.push(o); return o; }
   function shoot(o) {
@@ -1254,14 +1267,16 @@ const Retro = (() => {
   function focusOn(x, y, sec = 0.6) { camFocus = { x, y, until: T + sec }; }
   function directorView() {
     const pts = [];
-    for (const f of F) if (f && f.state !== 'gone') pts.push({ x: f.x, y: f.y - f.h * 0.5 });
+    // spotlight: frame just the featured duel, and push in closer
+    const duo = multi && spot ? [spot, spotFoe].filter(o => o && o.state !== 'gone') : null;
+    for (const f of (duo && duo.length ? duo : F)) if (f && f.state !== 'gone') pts.push({ x: f.x, y: f.y - f.h * 0.5 });
     if (!pts.length) return { x: VW / 2, y: VH / 2, z: 1 };
     for (const o of projs) pts.push({ x: o.x, y: o.y });
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
     let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     if (camFocus && T < camFocus.until) { cx += (camFocus.x - cx) * 0.4; cy += (camFocus.y - cy) * 0.4; }
-    const z = clamp(Math.min(VW / (x1 - x0 + 620), VH / (y1 - y0 + 480)), 1.0, 1.12);
+    const z = clamp(Math.min(VW / (x1 - x0 + 620), VH / (y1 - y0 + 480)), 1.0, duo && duo.length ? 1.3 : 1.12);
     // keep the action a little below centre (the HUD sits on top)
     cy -= VH * 0.07 / z;
     return { x: cx + Math.sin(T * 0.37) * 7, y: cy + Math.sin(T * 0.29 + 1) * 5, z: z + Math.sin(T * 0.21) * 0.01 };
@@ -1581,10 +1596,11 @@ const Retro = (() => {
     const jit = f.white > 0.5 || f.shiver > 0 ? R(-2.5, 2.5) : 0;
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
-    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * f.alpha, white: 1, whiteCol: f.afterCol });
+    const fa = f.alpha * (f.fadeA ?? 1);
+    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
-      { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: f.alpha, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
+      { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
   function render() {
     const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
@@ -1612,6 +1628,13 @@ const Retro = (() => {
       const rx = f.w * 0.36 * (f.hover ? 0.75 : 1) * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6);
       ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill();
     }
+    // Team Brawl: a ring in the team colour under every Pokémon
+    if (multi && multi.mode === 'brawl') for (const f of F) if (f && f.state !== 'gone') {
+      const rx = f.w * 0.42 * (0.2 + 0.8 * f.pop);
+      ctx.globalAlpha = 0.9 * f.alpha * (f.fadeA ?? 1); ctx.strokeStyle = sideOf(f.p) ? '#ff5a7a' : '#5a8aff'; ctx.lineWidth = PX;
+      ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(0,0,0,.25)';
     for (const q of parts) if (q.age >= 0 && q.z > 8 && (q.kind === 'debris' || q.kind === 'drop' || q.kind === 'blob' || q.bm === 'rock' || q.bm === 'shard')) { const r = 3 + 4 * (q.s0 || 2) / (1 + q.z / 140); ctx.beginPath(); ctx.ellipse(q.x, q.y, r, r * 0.4, 0, 0, 6.28); ctx.fill(); }
     for (const o of projs) if (o.arcK > 6 || o.shadow) { ctx.beginPath(); ctx.ellipse(o.x, o.y + (o.groundOff || 30), 8, 3, 0, 0, 6.28); ctx.fill(); }
@@ -1650,12 +1673,22 @@ const Retro = (() => {
       }
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
-    if (multi) for (const f of F) if (f && f.state === 'idle' && f.alpha > 0.5 && !f.invuln) drawTag(f);
+    if (multi) {
+      // name tags stack upward instead of overlapping when Pokémon stand close together
+      const placed = [];
+      for (const f of F.filter(f => f && f.state === 'idle' && f.alpha > 0.5 && (f.fadeA ?? 1) > 0.7 && !f.invuln).sort((a, b) => a.top - b.top)) {
+        const w = Math.max(20 * PX, f.mon.name.length * 4.2 * PX);
+        let y = sn(f.top - 8);
+        for (let n = 0; n < 6 && placed.some(r => Math.abs(r.x - f.x) < (r.w + w) / 2 && Math.abs(r.y - y) < 10 * PX); n++) y -= 10 * PX;
+        placed.push({ x: f.x, y, w });
+        drawTag(f, y);
+      }
+    }
     if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, VW + 80, VH + 80); ctx.globalAlpha = 1; }
   }
   // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl)
-  function drawTag(f) {
-    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX, x = sn(f.x - w / 2), y = sn(f.top - 8);
+  function drawTag(f, y = sn(f.top - 8)) {
+    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX, x = sn(f.x - w / 2);
     ctx.fillStyle = '#1b1530'; ctx.fillRect(x - PX, y - PX, w + PX * 2, PX * 3);
     ctx.fillStyle = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'; ctx.fillRect(x, y, Math.max(PX, Math.round(w * k / PX) * PX), PX);
     ctx.font = `${6 * PX}px Tiny5, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -1813,6 +1846,7 @@ const Retro = (() => {
   const stacks = [];
   const stackOf = p => stacks[p] || (stacks[p] = { t: -9, n: 0 });
   function text(f, s, cls = 'info') {
+    if (multi && !inSpot(f) && ['weak', 'miss', 'up', 'down', 'info'].includes(cls)) return;   // busy field: only the texts that matter
     const st = stackOf(f.p);
     if (T - st.t > 0.7) st.n = 0;
     st.t = T;
@@ -1820,7 +1854,8 @@ const Retro = (() => {
     floatAt(clamp(f.x + awayX(f) * 85, 130, VW - 130), Math.max(f.top - 20 - n * 28, VH * 0.25), s, cls, 1300);
   }
   function awayX(f) { const o = foeOf(f); return o && o.state === 'idle' && Math.abs(o.x - f.x) < 260 ? (Math.sign(f.x - o.x) || (f.p ? 1 : -1)) : 0; }
-  function number(f, amt, i = 0, kind = '') { floatAt(f.x + awayX(f) * 62 + R(-8, 8) + i * 12, Math.max(f.top + 16 - i * 14, VH * 0.25 + 42), String(amt), 'dmg ' + kind, 1000); }
+  function number(f, amt, i = 0, kind = '') {
+    if (multi && !inSpot(f) && kind !== 'crit' && kind !== 'super' && kind !== 'heal') return; floatAt(f.x + awayX(f) * 62 + R(-8, 8) + i * 12, Math.max(f.top + 16 - i * 14, VH * 0.25 + 42), String(amt), 'dmg ' + kind, 1000); }
   function big(s, cls = '', ms = 2200) {
     const el = document.createElement('div');
     el.className = 'rbig ' + cls; el.textContent = s;
@@ -4029,6 +4064,19 @@ const Retro = (() => {
     if (!o.miss) { impactAt('Psychic', d.cx, d.cy, d.y, 1.1); shakeIt(8); }
     await wait(500);
   };
+  // multi battles: corner brackets snap onto the Pokémon that was just picked as a target
+  SHAPE2.lockon = (s, k) => {
+    const t = s.f; if (!t || t.state !== 'idle') return;
+    const col = multi && multi.mode === 'brawl' ? (sideOf(s.by.p) ? '#ff5a7a' : '#5a8aff') : '#ff4a4a';
+    const r = Math.max(t.w, t.h) * 0.5 * (1.5 - easeOut(Math.min(1, k * 3)) * 0.5), L = 5 * PX;
+    ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1; ctx.fillStyle = col;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const x = sn(t.cx + sx * r), y = sn(t.cy + sy * r * 0.9);
+      ctx.fillRect(sx > 0 ? x - L : x, sy > 0 ? y - PX : y, L, PX);
+      ctx.fillRect(sx > 0 ? x - PX : x, sy > 0 ? y - L : y, PX, L);
+    }
+    ctx.globalAlpha = 1;
+  };
   SHAPE2.portal = (s, k) => {
     const a = k < 0.2 ? k / 0.2 : k > 0.8 ? (1 - k) / 0.2 : 1, rx = 46 * a, ry = 58 * a;
     ctx.fillStyle = '#12061e'; ctx.beginPath(); ctx.ellipse(s.x, s.y, rx * 0.85, ry * 0.85, 0, 0, 6.28); ctx.fill();
@@ -4281,7 +4329,11 @@ const Retro = (() => {
   }
   async function act(f, tk) {
     const p = f.p, u = f.mon, d = foeOf(f);
-    if (canMega(p)) { await doMega(f, tk); return; }
+    if (canMega(p)) {
+      try { await doMega(f, tk); }
+      finally { if (cinemaUntil > T) cinemaUntil = T + 0.25; megaF = null; }
+      return;
+    }
     const planned = f.plan != null && f.plan >= 0 && u.moves[f.plan] && u.moves[f.plan].ppLeft > 0 ? f.plan : null;
     let idx = f.forceMove ?? f.queued ?? planned ?? chooseMove(f, d);
     f.forceMove = f.queued = f.plan = null;
@@ -4307,7 +4359,7 @@ const Retro = (() => {
     f.lastMove = m;
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
-    callout(f, m.name, m.type);
+    if (!multi || spot === f) callout(f, m.name, m.type);
     trainerPose(p, 'throw', 0.6);
     if (!multi && Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
     if (m.cat !== 'status') react(d, f, m);
@@ -4328,9 +4380,12 @@ const Retro = (() => {
     if (r !== 'nohit') hit();
     if (controllers[p] === 'human') humanRow(p);
   }
-  let cinemaUntil = 0;
+  // Mega Evolution owns the battle: it reserves the stage (megaPending), waits until no attack is playing,
+  // then everything holds still - no attacks, no walking, no status damage, the clock stops - until it is done
+  let cinemaUntil = 0, megaF = null, megaPending = null, megaPendT = 0;
+  const megaHold = () => T < cinemaUntil;
   async function doMega(f, tk) {
-    cinemaUntil = T + 3.9;
+    cinemaUntil = 1e9; megaF = f; megaPending = null;     // released in act() once the whole sequence has played
     const p = f.p, u = f.mon, fm = u.megaForm;
     state.players[p].usedMega = true;
     const tr = trOf(p), ks = tr ? { x: tr.x + (tr.p ? -12 : 12), y: tr.y - 84 } : { x: f.cx, y: f.top - 36 };   // no trainer (Battle Royale): the Key Stone shines above it
@@ -4385,8 +4440,35 @@ const Retro = (() => {
     for (let i = 0; i < 3; i++) later(() => { if (f.state === 'idle') { f.bump(-5); ringP(f.x, f.y, 8, f.r * 2.4, col, 0.4); } }, i * 180);
     await wait(500);
   }
+  // multi battles: may f attack now? Two attacks at most; a big move (power 100+, a knockout blow, Mega
+  // Evolution) waits until the stage is clear and then plays alone. Status moves (Protect...) never wait.
+  function takeTurn(f, foe) {
+    const i = f.forceMove ?? f.queued ?? f.plan, m = i != null && i >= 0 ? f.mon.moves[i] : null;
+    if (m && m.cat === 'status') return !spot || inSpot(f);
+    // a reservation lapses if its Pokémon can't take it (fainted, asleep, frozen...) within 2.5 s
+    if (pendingSpot && (pendingSpot.state !== 'idle' || F[pendingSpot.p] !== pendingSpot || T - pendingT > 2.5)) pendingSpot = null;
+    if (spot || (pendingSpot && pendingSpot !== f)) return false;
+    // Mega Evolution and the blow that can decide the battle always get the stage; other clear knockouts
+    // and huge moves (power 120+) at most once every 4 s so the fades and zooms stay special
+    const ko = m && expectedFrac(f.mon, foe.mon, m) >= 1.15;
+    const decider = ko && sidesAlive().length === 2 && sideMons(sideOf(foe.p)).filter(x => x.hp > 0).length === 1;
+    if (canMega(f.p) && pendingSpot && pendingSpot !== f) pendingSpot = null;   // Mega Evolution takes precedence
+    const big = canMega(f.p) || decider || ((ko || (m && (m.power || 0) >= 120)) && T - spotEndT > 4);
+    if (big) {
+      if (acting > 0) { if (pendingSpot !== f) { pendingSpot = f; pendingT = T; } return false; }
+      pendingSpot = null; spot = f; spotFoe = foe;
+      dimTo(0.4, 1.6);
+    } else if (acting >= 2) return false;
+    acting++; f.acting = true;
+    return true;
+  }
   function think(f, dt) {
-    if (f.state !== 'idle' || f.busy || T < cinemaUntil) return;
+    if (f.state !== 'idle' || f.busy || megaHold()) return;
+    // someone is about to Mega Evolve: everybody else holds their next move until it has played
+    if (megaPending && megaPending !== f) {
+      if (megaPending.state === 'idle' && F[megaPending.p] === megaPending && canMega(megaPending.p) && T - megaPendT < 4) return;
+      megaPending = null;
+    }
     if (f.stuck) {
       if (f.mon.status === 'frz' && (f.thawT += dt) > 2.5) { f.thawT = 0; if (Math.random() < 0.3) { f.mon.status = null; text(f, 'THAWED OUT!', 'info'); hud(f.p); f.bump(-5); for (let i = 0; i < 10; i++) spawn({ bm: 'shard', c: ['#ffffff', '#e2f8ff', '#4fa9e6'], x: f.cx, y: f.cy, vx: R(-200, 200), vy: R(-200, 80), drag: 2, life: 0.5, s0: 2, s1: 2, rot: R(0, 6), spin: 10 }); } }
       return;
@@ -4414,6 +4496,12 @@ const Retro = (() => {
       return;
     }
 
+    if (canMega(f.p)) {
+      if (megaPending !== f) { megaPending = f; megaPendT = T; }
+      // wait for attacks already in motion (animations, projectiles) to finish before the Mega Evolution starts
+      if (F.some(o => o && o !== f && o.busy) || projs.length) { f.cd = R(0.08, 0.16); return; }
+    }
+    if (multi && !takeTurn(f, foe)) { f.cd = R(0.15, 0.4); return; }   // wait for a free stage
     f.approach = 0;
     f.ready = false;
     document.getElementById('rrow' + f.p)?.classList.remove('ready');
@@ -4422,6 +4510,7 @@ const Retro = (() => {
     const tk = token;
     act(f, tk).catch(swallow).finally(() => {
       if (tk !== token) return;
+      if (f.acting) { f.acting = false; acting = Math.max(0, acting - 1); if (spot === f) { spot = spotFoe = null; spotEndT = T; } }
       f.busy = false;
       f.cd = actionGap(f.mon) + R(-0.25, 0.4) + (f.extraCd || 0);
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
@@ -4478,6 +4567,7 @@ const Retro = (() => {
   }
   function koFighter(f, by) {
     if (f.state !== 'idle') return;
+    loudUntil = T + 0.8;                               // a knockout always gets the full punch
     f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
     f.state = 'faint';
     const p = f.p, mon = f.mon, tk = token;
@@ -4711,7 +4801,7 @@ const Retro = (() => {
   let sd = false, firstOut = -1;                       // firstOut: the side whose last Pokémon fell first
   const sdTime = () => +(prefs.suddenDeath ?? 60) || 0;
   function suddenDeath() {
-    sd = true;
+    sd = true; loudUntil = T + 1;
     root.classList.add('sd');
     big('SUDDEN DEATH!', 'sd', 2200);
     SFX.banner(); flash('#ff2a2a', 0.35); shakeIt(8);
@@ -4752,7 +4842,7 @@ const Retro = (() => {
   }
   function endBattle(timeUp) {
     if (ended) return;
-    ended = true; running = false;
+    ended = true; running = false; loudUntil = 1e9;
     const tk = token;
     const hpLeft = q => state.players[q].team.reduce((a, m) => a + Math.max(0, m.hp) / m.maxhp, 0);
     const alive = q => state.players[q].team.some(m => m.hp > 0);
@@ -4832,7 +4922,7 @@ const Retro = (() => {
   function update(dt) {
     if (!on) return;
     T += dt;
-    if (running) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
+    if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
@@ -4868,6 +4958,7 @@ const Retro = (() => {
     parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = terrain.length = 0;
     F.length = 0; F.push(null, null);
     multi = null; elim = [];
+    acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
     root.classList.remove('multi');
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
     camT = null; camZ = 1; dimA = dimTarget = 0;
@@ -4880,7 +4971,7 @@ const Retro = (() => {
     FX_TIME = 1;
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; camFocus = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; camFocus = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; camX = VW / 2; camY = VH / 2; camZ = 1; camT = null;
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
     resize(); layout(); camX = VW / 2; camY = VH / 2;
@@ -4892,6 +4983,12 @@ const Retro = (() => {
       const n = state.players.length;
       multi = { ...state.multi, spr: n > 4 ? 0.78 : 0.9, space: (n > 4 ? 0.5 : 0.65) * (state.multi.mode === 'brawl' ? 1.2 : 1) };
       F.length = 0; for (let p = 0; p < n; p++) F.push(null);
+      if (multi.mode === 'brawl') {                    // lanes: each Pokémon is paired with one on the other team
+        const s0 = multi.side.flatMap((s, p) => s ? [] : [p]), s1 = multi.side.flatMap((s, p) => s ? [p] : []);
+        multi.lane = [];
+        s0.forEach((p, i) => { multi.lane[p] = s1[i % s1.length]; });
+        s1.forEach((p, i) => { multi.lane[p] = s0[i % s0.length]; });
+      }
       root.classList.add('multi');
     }
     TR[0] = TR[1] = null;
@@ -4913,7 +5010,7 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, VW, VH, field, SW, cam: { x: camX, y: camY, z: camZ } }),
+  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, field, SW, cam: { x: camX, y: camY, z: camZ } }),
     // test hook: play one move's effect (no damage) with the battle paused
     _fxMap: () => Object.keys(MOVES).filter(moveSupported).map(id => { const m = { id, ...MOVES[id] }; const [st, v] = classify(m).split(':'); return [id, SIG[id] ? 'sig' : st === 'contact' ? 'ct:' + (CT[id] ? CT[id].v : 'default-' + (v || '')) : st, m.type, m.cat]; }),
     _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
