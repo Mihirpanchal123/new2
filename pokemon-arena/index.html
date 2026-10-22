@@ -379,7 +379,8 @@
   .modeSeg button.on0 { background: linear-gradient(#f59e0b, #d97706); }
   #retro { position: absolute; inset: 0; z-index: 4; background: #1a1220; overflow: hidden; --u: 1px; font-family: 'Tiny5', 'Segoe UI', sans-serif; font-weight: 400; color: #fff; }
   #rcv { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-  #rHud, #rFx { position: absolute; inset: 0; pointer-events: none; }
+  #rHud, #rFx, #rTop { position: absolute; inset: 0; pointer-events: none; }
+  #rFx { transform-origin: 0 0; }             /* world-anchored texts: the camera transform maps world units to the screen */
   #rHud .rctl { pointer-events: auto; }
   .rp { position: absolute; top: calc(var(--u) * 10); width: calc(var(--u) * 440); height: calc(var(--u) * 180); }
   .rp.p0 { left: calc(var(--u) * 14); } .rp.p1 { right: calc(var(--u) * 14); }
@@ -660,6 +661,7 @@
     <label><input type="checkbox" id="setHighlights" checked> Highlights reel</label>
     <label><input type="checkbox" id="setReplays" checked> Final-blow replay</label>
     <label title="Retro 2D: after this time hits land 1.5× harder and come faster, so short videos always reach a climax">⏱ Sudden death <select id="setSudden"><option value="0">Off</option><option value="30">30 s</option><option value="45">45 s</option><option value="60">60 s</option><option value="90">90 s</option></select></label>
+    <label title="Retro 2D: Pokémon with a pre-rendered 2.5D sprite sheet (sprites25d/) use it instead of the pixel sprite"><input type="checkbox" id="set25" checked> 🧊 2.5D Pokémon (beta)</label>
     <label><input type="checkbox" id="setShorts"> 📱 Shorts mode (9:16)</label>
     <label>Channel <input id="setChannel" type="text" placeholder="your channel name" maxlength="28"></label>
   </div>

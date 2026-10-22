@@ -1327,6 +1327,8 @@ $('setHpBars').checked = prefs.hpBars !== false; Broadcast.opts.hpBars = $('setH
 $('setHighlights').checked = prefs.highlights !== false;
 $('setReplays').checked = prefs.replays !== false;
 $('setSudden').value = String(prefs.suddenDeath ?? 60);
+$('set25').checked = prefs.p25 !== false;
+$('set25').onchange = e => { prefs.p25 = e.target.checked; savePrefs(); };
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
 // battle style: full 3D or the retro top-down pixel mode
 const applyMode = mode => {

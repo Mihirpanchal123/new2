@@ -14,9 +14,33 @@ const Retro = (() => {
   const ctx = cv.getContext('2d');
   const hudEl = document.getElementById('rHud');
   const fxEl = document.getElementById('rFx');
+  // screen-space overlay above the world (intro card, big announcements before the HUD is up)
+  const topEl = document.createElement('div'); topEl.id = 'rTop'; root.append(topEl);
   const PX = 3;                        // one art pixel in virtual units
   const SPR = 1.7;                     // sprite scale on the field
   let VW = 1280, VH = 720, portrait = false, SC = 1;
+  // ---------------------------------------------------------------------
+  //  World vs view. The view (VW x VH virtual units, 720 on the short side) is
+  //  what fits on screen at zoom 1; the world (WW x WH) is the whole arena. The
+  //  battlefield is ARENA.scale times the original one-screen field on each axis
+  //  (about 5x the area); the scenery bands around it keep their original size.
+  // ---------------------------------------------------------------------
+  const ARENA = {
+    scale: Math.sqrt(5),   // battlefield vs the original one-screen field, per axis (landscape)
+    portraitW: 1.7,        // 9:16: the field grows 1.7x across and 5/1.7 = 2.94x in depth (same 5x area, shaped for a tall screen)
+    spawnSep: 1.5,         // 1v1 start separation vs the original
+    spacing: 1.3,          // preferred fighting distance vs the original
+    roam: 2.2,             // repositioning runs stay within this many fighting distances of the foe
+    pad: 70,               // camera: world units kept around the framed group
+    zMax: 1.35,            // closest camera (a tight duel)
+    zMin: 0.4,             // widest the camera may go when a spread-out group needs it (fitting everyone beats the world edge)
+    zHold: 0.1,            // zoom dead zone: the framing re-targets only past a 10% change
+    hold: 24,              // pan dead zone in world units
+    lead: 0.18,            // the camera looks this many seconds ahead of the group's motion
+    near: 220,             // combatants this close (world units) get the closest shot...
+    zDist: 1500            // ...and every zDist units further apart takes 1.0 off the zoom (fitting the group still wins)
+  };
+  let WW = 1280, WH = 720;
   let on = false, token = 0, running = false, ended = false;
   let T = 0, clockT = 0;
   let resolveBattle = null, rejectBattle = null;
@@ -65,7 +89,7 @@ const Retro = (() => {
   // starting spots: Battle Royale in a ring, Team Brawl in two lines facing each other
   function multiSpot(p) {
     const n = state.players.length, cx = (field.x0 + field.x1) / 2, cy = (field.y0 + field.y1) / 2, fw = field.x1 - field.x0, fh = field.y1 - field.y0;
-    if (multi.mode === 'royale') { const a = -Math.PI / 2 + (p + 0.5) / n * Math.PI * 2; return { x: cx + Math.cos(a) * fw * 0.36, y: cy + Math.sin(a) * fh * 0.36 }; }
+    if (multi.mode === 'royale') { const a = -Math.PI / 2 + (p + 0.5) / n * Math.PI * 2; return { x: cx + Math.cos(a) * fw * 0.3, y: cy + Math.sin(a) * fh * 0.3 }; }
     const s = sideOf(p), mates = state.players.map((_, q) => q).filter(q => sideOf(q) === s), k = (mates.indexOf(p) + 1) / (mates.length + 1);
     return portrait ? { x: field.x0 + fw * k, y: s ? field.y0 + fh * 0.2 : field.y1 - fh * 0.2 } : { x: s ? field.x1 - fw * 0.18 : field.x0 + fw * 0.18, y: field.y0 + fh * k };
   }
@@ -111,14 +135,35 @@ const Retro = (() => {
     root.classList.toggle('port', portrait);
   }
   function layout() {
+    // margins around the field are the original one-screen ones (scenery band, side posts, crowd strip);
+    // the field itself grows by ARENA.scale on each axis and the world is built around it
+    const m = portrait
+      ? { l: 0.18 * VW, r: 0.18 * VW, t: 0.33 * VH, b: 0.23 * VH, fw: 0.78 * VW, fh: 0.44 * VH }
+      : { l: 0.16 * VW, r: 0.16 * VW, t: 0.355 * VH, b: 0.155 * VH, fw: 0.68 * VW, fh: 0.49 * VH };
+    const area = ARENA.scale * ARENA.scale, sx = portrait ? ARENA.portraitW : ARENA.scale, fw = m.fw * sx, fh = m.fh * area / sx;
+    // the scenery around the field grows if needed so that framing the whole field never shows past the world
+    // (fit the field plus sprite room into the free part of the screen, then make the world at least that view)
+    const ins = frameInsetsFor(portrait, false), aw = VW - ins.l - ins.r, ah = VH - ins.t - ins.b;
+    const zf = Math.max(ARENA.zMin, Math.min(aw / (fw + 2 * ARENA.pad + 180), ah / (fh + 2 * ARENA.pad + 220)));
+    const exW = Math.max(0, VW / zf - (m.l + fw + m.r)) / 2, exH = Math.max(0, VH / zf - (m.t + fh + m.b)) / 2;
+    m.l += exW; m.r += exW; m.t += exH; m.b += exH;
+    WW = Math.round(m.l + fw + m.r); WH = Math.round(m.t + fh + m.b);
+    field = { x0: m.l, x1: m.l + fw, y0: m.t, y1: m.t + fh };
+    const cx = (field.x0 + field.x1) / 2, cy = (field.y0 + field.y1) / 2;
     if (!portrait) {
-      field = { x0: VW * 0.16, x1: VW * 0.84, y0: VH * 0.355, y1: VH * 0.845 };
-      spots = { trainer: [{ x: VW * 0.105, y: VH * 0.6 }, { x: VW * 0.895, y: VH * 0.6 }], start: [{ x: VW * 0.3, y: VH * 0.6 }, { x: VW * 0.7, y: VH * 0.6 }] };
+      const sep = 0.2 * VW * ARENA.spawnSep;
+      spots = { trainer: [{ x: field.x0 - 0.055 * VW, y: cy }, { x: field.x1 + 0.055 * VW, y: cy }], start: [{ x: cx - sep, y: cy }, { x: cx + sep, y: cy }] };
     } else {
-      // keep the action clear of the Reels / Shorts overlays: caption (bottom ~20%) and buttons (bottom right)
-      field = { x0: VW * 0.09, x1: VW * 0.87, y0: VH * 0.33, y1: VH * 0.77 };
-      spots = { trainer: [{ x: VW * 0.16, y: VH * 0.8 }, { x: VW * 0.84, y: VH * 0.3 }], start: [{ x: VW * 0.4, y: VH * 0.67 }, { x: VW * 0.6, y: VH * 0.45 }] };
+      // the trainers stand just outside the field's bottom-left and top-right corners
+      const sx = 0.1 * VW * ARENA.spawnSep, sy = 0.11 * VH * ARENA.spawnSep;
+      spots = { trainer: [{ x: field.x0 + 0.07 * VW, y: field.y1 + 0.03 * VH }, { x: field.x1 - 0.03 * VW, y: field.y0 - 0.03 * VH }], start: [{ x: cx - sx, y: cy + sy }, { x: cx + sx, y: cy - sy }] };
     }
+  }
+  // the part of the world currently on screen
+  function viewRect() {
+    const hw = VW / 2 / camZ, hh = VH / 2 / camZ;
+    const cx = hw * 2 >= WW ? WW / 2 : clamp(camX, hw, WW - hw), cy = hh * 2 >= WH ? WH / 2 : clamp(camY, hh, WH - hh);
+    return { x0: cx - hw, x1: cx + hw, y0: cy - hh, y1: cy + hh };
   }
 
   // ---------------------------------------------------------------------
@@ -234,6 +279,51 @@ const Retro = (() => {
     ANIM.set(src, pr);
     return pr;
   }
+  // ---------------------------------------------------------------------
+  //  2.5D sprites: animated sheets pre-rendered from the 3D models by
+  //  tools/bake-25d.mjs (idle / move / attack / hurt / down). Plain 2D images
+  //  at runtime - no 3D engine. Pokémon without a sheet, Mega forms, or a
+  //  sheet that fails to load keep their normal pixel sprite.
+  // ---------------------------------------------------------------------
+  let MAN25 = null;
+  function get25(species) {
+    if (prefs.p25 === false || !species) return Promise.resolve(null);
+    if (!MAN25) MAN25 = fetch('sprites25d/manifest.json').then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    const key = '25:' + species;
+    if (ANIM.has(key)) return ANIM.get(key);
+    const pr = MAN25.then(async man => {
+      const e = man[species];
+      if (!e || !e.clips || !e.clips.idle) return null;
+      const img = new Image(); img.src = e.file; await img.decode();
+      const set = {};
+      for (const [kind, c] of Object.entries(e.clips)) {
+        const frames = [];
+        for (let i = 0; i < c.n; i++) frames.push({ img: await createImageBitmap(img, i * e.fw, c.row * e.fh, e.fw, e.fh), dur: 1 / c.fps });
+        set[kind] = { frames, total: frames.reduce((a, f) => a + f.dur, 0), w: e.fw, h: e.fh, loop: c.loop, src: e.file + '#' + kind };
+      }
+      // one anchor box (the standing pose) shared by every clip, so size and feet never jump between animations
+      let box = null;
+      for (let i = 0; i < set.idle.frames.length; i += Math.max(1, set.idle.frames.length >> 2)) {
+        const b = opaqueBox(set.idle.frames[i].img, e.fw, e.fh);
+        box = box ? { x0: Math.min(box.x0, b.x0), y0: Math.min(box.y0, b.y0), x1: Math.max(box.x1, b.x1), y1: Math.max(box.y1, b.y1) } : b;
+      }
+      for (const a of Object.values(set)) Object.assign(a, { box, bw: box.x1 - box.x0 + 1, bh: box.y1 - box.y0 + 1, foot: e.foot || null });
+      return set;
+    }).catch(e => { console.warn('2.5D sprite unavailable for', species, e); return null; });
+    ANIM.set(key, pr);
+    return pr;
+  }
+  // which baked animation a fighter is showing, and how far into it
+  function clipOf(f, t) {
+    const s = f.set25;
+    if (!s) return null;
+    const one = (c, t0) => [c, clamp(T - t0, 0, c.total - 1e-3)];
+    if (f.state === 'faint' && s.down) return one(s.down, f.faintT);
+    if (s.hurt && T - (f.hurtT ?? -99) < s.hurt.total) return one(s.hurt, f.hurtT);
+    if (s.attack && T - (f.atkT ?? -99) < s.attack.total) return one(s.attack, f.atkT);
+    if (s.move && f.state === 'idle' && (f.dashing || f.speed > 60)) return [s.move, t];
+    return [s.idle, t];
+  }
   function frameAt(a, t) {
     if (a.frames.length === 1) return a.frames[0].img;
     let k = t % a.total;
@@ -247,7 +337,8 @@ const Retro = (() => {
   function drawSprite(a, t, x, y, s, flip, o = {}) {
     const img = frameAt(a, t), b = a.box;
     const w = a.w * s, h = a.h * s;
-    const ox = ((b.x0 + b.x1 + 1) / 2) * s, oy = (b.y1 + 1) * s;
+    // anchor: the feet (baked 2.5D sheets know exactly where they are), else the bottom centre of the opaque area
+    const ox = (a.foot ? a.foot[0] : (b.x0 + b.x1 + 1) / 2) * s, oy = (a.foot ? a.foot[1] : b.y1 + 1) * s;
     ctx.save();
     ctx.globalAlpha = o.alpha ?? 1;
     const q = SC * camZ;                               // snap the sprite's anchor to whole device pixels
@@ -451,6 +542,39 @@ const Retro = (() => {
     }
     P_(g, '#1c1312', 0, top - 8, W, 3);
   }
+  // painted field markings so the (now large) playable ground reads as an arena: boundary, centre line, centre circle
+  function fieldMarks(g, x0, y0, x1, y1) {
+    const c = { fan: 'rgba(255,240,220,.32)', basalt: 'rgba(255,150,70,.22)', grass: 'rgba(255,255,255,.26)', sand: 'rgba(110,80,40,.22)', snow: 'rgba(110,140,185,.28)' }[TH.ground] || 'rgba(255,255,255,.25)';
+    if (TH.ground === 'grass') for (let x = x0; x < x1; x += 48) P_(g, 'rgba(255,255,255,.035)', x, y0, 24, y1 - y0);   // mown stripes
+    for (let x = x0; x < x1; x += 5) { P_(g, c, x, y0 - 4, 3, 1); P_(g, c, x, y1 + 4, 3, 1); }
+    for (let y = y0 - 4; y < y1 + 4; y += 5) { P_(g, c, x0 - 6, y, 1, 3); P_(g, c, x1 + 6, y, 1, 3); }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, r = Math.min(x1 - x0, (y1 - y0) * 1.6) * 0.12;
+    for (let y = y0; y < y1; y += 6) P_(g, c, cx, y, 1, 3);
+    for (let a = 0; a < 6.283; a += 0.05) P_(g, c, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, 1, 1);
+  }
+  // one themed prop standing on the ground at (x, y) (art pixels; y is where it touches the ground)
+  function prop(g, kind, x, y) {
+    const sh = (w) => P_(g, 'rgba(0,0,0,.22)', x - w, y, w * 2, 2);
+    const pick2 = Math.random();
+    if (kind === 'grass') {
+      if (pick2 < 0.55) { sh(7); P_(g, '#6e4a2a', x - 1, y - 7, 3, 8); pixCircle(g, '#2f6a2a', x, y - 13, 7); pixCircle(g, '#3f7f35', x - 1, y - 14, 5); pixCircle(g, '#5a9a48', x - 2, y - 16, 2); }
+      else { sh(5); pixCircle(g, '#356b2d', x, y - 3, 5, 3); for (let i = 0; i < 4; i++) P_(g, pick(['#fff', '#ffe066', '#ff8ac4']), x + R(-4, 4), y - R(2, 6), 1, 1); }
+    } else if (kind === 'sand') {
+      if (pick2 < 0.4) { sh(6); for (let k = 0; k < 16; k++) P_(g, '#8a6a44', x + Math.round(Math.sin(k * 0.2) * 2), y - k, 2, 1); for (let a = 0; a < 6; a++) { const an = a / 6 * Math.PI * 2; pixLine(g, '#2e8b3a', x + 1, y - 16, x + 1 + Math.cos(an) * 9, y - 16 + Math.sin(an) * 4 + 2, 1); } }
+      else if (pick2 < 0.75) { umbrella(g, x, y - 7, 7, pick(['#d63031', '#2d5fa8', '#e17055']), '#f5f0e6'); P_(g, pick(['#ff7675', '#74b9ff', '#fdcb6e']), x + 3, y - 1, 8, 4); }
+      else { sh(5); P_(g, '#d9b878', x - 4, y - 5, 9, 5); P_(g, '#c9a466', x - 3, y - 8, 7, 3); P_(g, '#e8cc90', x - 1, y - 10, 3, 2); }
+    } else if (kind === 'snow') {
+      if (pick2 < 0.6) { sh(6); P_(g, '#5a4030', x, y - 3, 2, 3); for (let k = 0; k < 14; k++) { const w = Math.round(k * 0.45) + 1; P_(g, k % 5 < 2 ? '#e8f1fb' : '#1f5a3e', x + 1 - w, y - 17 + k, w * 2, 1); } }
+      else { sh(4); pixCircle(g, '#f5f9fd', x, y - 4, 4); pixCircle(g, '#ffffff', x, y - 10, 3); P_(g, '#2a2a30', x - 1, y - 11, 1, 1); P_(g, '#2a2a30', x + 1, y - 11, 1, 1); P_(g, '#ff8a2a', x, y - 10, 2, 1); }
+    } else if (kind === 'basalt') {
+      if (pick2 < 0.55) { sh(6); pixCircle(g, '#2e2422', x, y - 4, 6, 4); pixCircle(g, '#4a3a38', x - 1, y - 5, 4, 3); P_(g, '#6a5450', x - 2, y - 7, 2, 1); }
+      else { pixCircle(g, '#7a1e08', x, y - 2, 6, 3); pixCircle(g, '#ff6a10', x, y - 2, 4, 2); P_(g, '#ffd060', x - 1, y - 2, 2, 1); }
+    } else {
+      if (pick2 < 0.35) { sh(3); P_(g, '#3a3040', x, y - 18, 2, 18); P_(g, '#5a4a58', x - 2, y - 19, 6, 2); P_(g, '#ffe9a8', x - 1, y - 22, 4, 3); }
+      else if (pick2 < 0.7) { sh(6); P_(g, '#6e4a2a', x - 6, y - 4, 12, 4); for (let k = 0; k < 6; k++) P_(g, pick(['#e84393', '#fdcb6e', '#ff7675', '#a29bfe']), x - 5 + k * 2, y - 6, 1, 2); P_(g, '#2e8b57', x - 6, y - 5, 12, 1); }
+      else cafeTable(g, x, y - 2);
+    }
+  }
   function sideDecor(g, kind, x, y0, y1) {
     for (let y = y0; y < y1; y += 8) {
       if (kind === 'posts') { P_(g, '#2e2430', x, y, 2, 5); P_(g, '#5a4a58', x, y, 2, 1); if (y + 8 < y1) pixLine(g, '#3e3440', x + 1, y + 4, x + 1, y + 8); }
@@ -461,7 +585,8 @@ const Retro = (() => {
   }
   function buildTheme(key) {
     TH = THEMES[key];
-    const AW = Math.ceil(VW / PX), AH = Math.ceil(VH / PX);
+    // world-sized art (procedural, so nothing is stretched); the scenery bands keep their one-screen size
+    const AW = Math.ceil(WW / PX), AH = Math.ceil(WH / PX), AW0 = VW / PX, AH0 = VH / PX, more = AW * AH / (AW0 * AH0);
     bg = newCanvas(AW, AH); front = newCanvas(AW, AH);
     const g = bg.getContext('2d'), fg = front.getContext('2d');
     const img = g.createImageData(AW, AH);
@@ -469,16 +594,20 @@ const Retro = (() => {
     else if (TH.ground === 'basalt') groundFan(img.data, AW, AH, TH, 11);
     else groundNoise(img.data, AW, AH, TH, TH.ground);
     g.putImageData(img, 0, 0);
-    const top = Math.round(AH * (portrait ? 0.15 : 0.215)), bot = Math.round(AH * (portrait ? 0.9 : 0.865));
+    // the field in art pixels; the scenery band ends just above it and the stands start just below it, as in the
+    // one-screen layout (the band and the stands grow to fill whatever extra world there is)
+    const fx0 = field.x0 / PX, fx1 = field.x1 / PX, fy0 = field.y0 / PX, fy1 = field.y1 / PX;
+    const top = Math.round(fy0 - AH0 * (portrait ? 0.18 : 0.14)), bot = Math.round(fy1 + AH0 * (portrait ? 0.13 : 0.02));
     // grass tufts / flowers, basalt lava cracks
     if (TH.ground === 'grass') for (let i = 0; i < AW * AH / 90; i++) { const x = R(0, AW), y = R(top, bot); P_(g, '#3f7f35', x, y, 1, 2); P_(g, '#3f7f35', x + 2, y, 1, 2); P_(g, '#78c060', x + 1, y - 1, 1, 2); if (Math.random() < 0.08) P_(g, pick(['#fff', '#ffe066', '#ff8ac4']), x + 4, y - 2, 1, 1); }
-    if (TH.ground === 'basalt') for (let i = 0; i < 9; i++) { let x = R(0, AW), y = R(top, bot); for (let s = 0; s < 40; s++) { x += R(-1.5, 1.5); y += R(-1, 1); P_(g, s % 5 ? '#ff6a10' : '#ffd060', x, y, 1, 1); } }
+    if (TH.ground === 'basalt') for (let i = 0; i < 9 * more; i++) { let x = R(0, AW), y = R(top, bot); for (let s = 0; s < 40; s++) { x += R(-1.5, 1.5); y += R(-1, 1); P_(g, s % 5 ? '#ff6a10' : '#ffd060', x, y, 1, 1); } }
     // worn centre + darker rim (gives the field a soft spotlight)
     const vg = g.createRadialGradient(AW / 2, AH * 0.6, AH * 0.1, AW / 2, AH * 0.6, Math.max(AW, AH) * 0.7);
     vg.addColorStop(0, 'rgba(255,230,190,0.10)'); vg.addColorStop(0.6, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(20,0,30,0.35)');
     g.fillStyle = vg; g.fillRect(0, 0, AW, AH);
     // old scuffs on the field
-    for (let i = 0; i < 14; i++) scorch(g, R(AW * 0.2, AW * 0.8), R(top + 10, bot - 6), R(2, 5), 0.18);
+    for (let i = 0; i < 14 * more; i++) scorch(g, R(AW * 0.12, AW * 0.88), R(top + 10, bot - 6), R(2, 5), 0.18);
+    fieldMarks(g, fx0, fy0, fx1, fy1);
     // top band
     if (TH.top === 'town') { buildingRow(g, AW, top); towerBase(g, Math.round(AW / 2), top); for (let i = 0; i < AW / 40; i++) { const x = R(10, AW - 10); if (Math.abs(x - AW / 2) < 40) continue; cafeTable(g, x, top - 4); } }
     else if (TH.top === 'trees') trees(g, AW, top, '#24461f', '#356b2d', '#4f8f3e');
@@ -486,8 +615,18 @@ const Retro = (() => {
     else if (TH.top === 'pines') pinesTop(g, AW, top);
     else if (TH.top === 'lava') lavaTop(g, AW, top);
     // sides
-    const sx = portrait ? [AW * 0.05, AW * 0.95] : [AW * 0.075, AW * 0.925];
-    sx.forEach(x => sideDecor(g, TH.side, Math.round(x), top + 6, bot - 4));
+    // the side fences / posts / ropes / torches frame the field itself
+    for (const x of [fx0 - 16, fx1 + 16]) sideDecor(g, TH.side, Math.round(x), Math.round(fy0 - 12), Math.round(fy1 + 12));
+    // props on the ground between the field and the world edge (kept off the field and away from the trainers)
+    const placed = [], want = Math.round(AW * AH / 1500);
+    for (let i = 0; i < want * 4 && placed.length < want; i++) {
+      const x = R(8, AW - 8), y = R(top + 14, bot - 8);
+      if (x > fx0 - 30 && x < fx1 + 30 && y > fy0 - 36 && y < fy1 + 18) continue;
+      if (placed.some(p => Math.hypot(p.x - x, p.y - y) < 20)) continue;
+      if (spots.trainer.some(t => Math.hypot(t.x / PX - x, t.y / PX - y) < 26)) continue;
+      placed.push({ x: Math.round(x), y: Math.round(y) });
+    }
+    placed.sort((a, b) => a.y - b.y).forEach(p => prop(g, TH.ground, p.x, p.y));
     // bottom: a paved strip with the crowd, planters and umbrellas
     P_(g, TH.edge, 0, bot, AW, AH - bot);
     for (let i = 0; i < AW; i += 5) P_(g, 'rgba(0,0,0,.12)', i, bot + 1, 1, AH - bot);
@@ -498,15 +637,21 @@ const Retro = (() => {
     for (let i = 0; i < AW / 60; i++) { const x = R(8, AW - 8), y = bot + 2; P_(fg, '#6e4a2a', x, y, 10, 4); for (let k = 0; k < 5; k++) P_(fg, pick(['#e84393', '#fdcb6e', '#ff7675', '#a29bfe']), x + 1 + k * 2, y - 2, 1, 2); P_(fg, '#2e8b57', x, y - 1, 10, 1); }
     // crowd
     crowd = [];
-    const rowsY = [bot + 9, AH - 2];
-    for (const ry of rowsY) for (let x = R(0, 10); x < AW - 6; x += R(10, 19)) if (Math.random() < 0.8) crowd.push({ x, y: ry + R(-2, 2), c: personCanvas(), ph: R(0, 6.28), sp: R(7, 11) });
+    // stands: crowd rows all the way down the strip below the field
+    const rowsY = [];
+    for (let y = bot + 9; y <= AH - 2; y += 12) rowsY.push(y);
+    // the two rows nearest the field cheer (animated every frame); the rows behind them are painted into the
+    // static foreground once (the larger world has thousands of spectators - drawing each every frame is too slow)
+    rowsY.forEach((ry, i) => { for (let x = R(0, 10); x < AW - 6; x += R(10, 19)) if (Math.random() < 0.8) {
+      const p = { x, y: ry + R(-2, 2), c: personCanvas(), ph: R(0, 6.28), sp: R(7, 11) };
+      if (i < 2) crowd.push(p); else fg.drawImage(p.c, Math.round(p.x), Math.round(p.y - 15), 9, 15);
+    } });
     if (TH.top === 'town') for (let i = 0; i < AW / 55; i++) { const x = R(8, AW - 8); if (Math.abs(x - AW / 2) > 36) crowd.push({ x, y: top - 6, c: personCanvas(), ph: R(0, 6.28), sp: R(6, 9) }); }
     crowd.sort((a, b) => a.y - b.y);
     // string lights (wires baked, bulbs animated)
     lights = [];
     if (TH.lights) {
       const yTop = top * PX + 6, yBot = bot * PX - 22;
-      const xs = portrait ? [[0.1, 0.1], [0.34, 0.4], [0.66, 0.6], [0.9, 0.9]] : [[0.14, 0.14], [0.32, 0.39], [0.68, 0.61], [0.86, 0.86]];
       const strand = (pts) => {
         for (let i = 0; i < pts.length - 1; i++) pixLine(g, 'rgba(50,30,34,.45)', pts[i].x / PX, pts[i].y / PX, pts[i + 1].x / PX, pts[i + 1].y / PX);
         let acc = 0;
@@ -516,8 +661,11 @@ const Retro = (() => {
           acc -= L;
         }
       };
-      for (const [a, b] of xs) { const pts = []; for (let i = 0; i <= 24; i++) { const k = i / 24; pts.push({ x: VW * (a + (b - a) * k) + Math.sin(k * Math.PI) * 10, y: yTop + (yBot - yTop) * k }); } strand(pts); }
-      const posts = xs.map(([, b]) => VW * b);
+      // laid out around the field (which is world-sized now): a strand down each long side, and swags between
+      // posts spaced evenly along the near edge - nothing crosses the battlefield itself
+      for (const x of [field.x0 - 60, field.x1 + 60]) { const pts = []; for (let i = 0; i <= 24; i++) { const k = i / 24; pts.push({ x: x + Math.sin(k * Math.PI) * 10, y: yTop + (yBot - yTop) * k }); } strand(pts); }
+      const nPost = Math.max(2, Math.round((field.x1 - field.x0) / 420)) + 1, posts = [];
+      for (let i = 0; i < nPost; i++) posts.push(field.x0 - 60 + (field.x1 - field.x0 + 120) * i / (nPost - 1));
       for (let i = 0; i < posts.length - 1; i++) { const pts = []; for (let k = 0; k <= 20; k++) { const t = k / 20; pts.push({ x: posts[i] + (posts[i + 1] - posts[i]) * t, y: yBot + 26 * (1 - (2 * t - 1) ** 2) }); } strand(pts); }
       for (const x of posts) { P_(g, '#2a2028', x / PX - 1, yBot / PX - 4, 2, 12); P_(g, '#ffe9a8', x / PX - 1, yBot / PX - 6, 3, 3); }
     }
@@ -688,7 +836,15 @@ const Retro = (() => {
   const crowdK = () => multi ? multi.space : 1;                                // a busy multi battle keeps tighter distances
   const space = (f, foe) => ((portrait ? 190 : 250) + (f.r + foe.r) * 0.5) * crowdK();      // personal space (in 0.6-squashed ground units)
   function wantDist(f, foe) {
-    return ((portrait ? 290 : 400) + (f.r + foe.r) * 0.4 + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0)) * crowdK();
+    return ((portrait ? 290 : 400) + (f.r + foe.r) * 0.4 + (f.mon.hp / f.mon.maxhp < 0.3 ? 60 : 0)) * crowdK() * ARENA.spacing;
+  }
+  // where the fight has already been (8 x 4 cells over the field): repositioning goals favour fresh ground,
+  // so a duel gradually travels around the whole battlefield instead of staying in one corner
+  const heat = new Float32Array(32);
+  const heatCell = (x, y) => clamp(Math.floor((x - field.x0) / (field.x1 - field.x0) * 8), 0, 7) + 8 * clamp(Math.floor((y - field.y0) / (field.y1 - field.y0) * 4), 0, 3);
+  function heatStep(dt) {
+    for (let i = 0; i < 32; i++) heat[i] *= 1 - dt * 0.03;
+    for (const f of F) if (f && f.state === 'idle') heat[heatCell(f.x, f.y)] += dt;
   }
   // each new goal comes from a tactic: sweep around the foe, cross to its other side,
   // reposition far across the field, retreat when hurt, or press in for a physical hit
@@ -699,7 +855,7 @@ const Retro = (() => {
     const want = wantDist(f, foe), low = f.mon.hp / f.mon.maxhp < 0.3, fast = spd(f.mon) > 90;
     const plan = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
     const r = Math.random();
-    let mode = low && r < 0.4 ? 'retreat' : r < (fast ? 0.34 : 0.2) ? 'flank' : r < 0.62 ? 'arc' : 'roam';
+    let mode = low && r < 0.4 ? 'retreat' : r < 0.1 ? 'cross' : r < (fast ? 0.38 : 0.26) ? 'flank' : r < 0.64 ? 'arc' : 'roam';
     if (f.hitRun) { mode = Math.random() < 0.5 ? 'roam' : 'flank'; f.hitRun = false; }
     f.mode = mode;
     if (mode !== 'flank' && Math.random() < 0.25) f.orbit *= -1;
@@ -708,16 +864,19 @@ const Retro = (() => {
       let g;
       if (mode === 'flank') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(1.3, 1.7); g = { x: foe.x + Math.cos(ang) * want * 1.1, y: foe.y + Math.sin(ang) * want * 0.66 }; }   // circle round the foe a quarter-turn at a time (never cut through it)
       else if (mode === 'arc') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(0.8, 1.7); g = { x: foe.x + Math.cos(ang) * want * R(0.9, 1.3), y: foe.y + Math.sin(ang) * want * 0.6 * R(0.9, 1.3) }; }
+      // cross: run past the foe to its far side (the steering keeps them from walking through it)
+      else if (mode === 'cross') { const ax = foe.x - f.x, ay = foe.y - f.y, L = Math.hypot(ax, ay) || 1; g = { x: foe.x + ax / L * want * R(0.8, 1.1) + R(-60, 60), y: foe.y + ay / L * want * 0.6 + R(-60, 60) }; }
       else if (mode === 'press') g = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40) + R(-20, 20), y: foe.y + R(-24, 24) };
-      else g = { x: R(field.x0, field.x1), y: R(field.y0, field.y1) };
+      else { const a = R(0, 6.283), rr = want * R(0.8, ARENA.roam); g = { x: foe.x + Math.cos(a) * rr, y: foe.y + Math.sin(a) * rr * 0.6 }; }   // reposition, but stay in the fight
       g = inField(g);
       const df = Math.hypot(g.x - foe.x, (g.y - foe.y) / 0.6), travel = Math.hypot(g.x - f.x, g.y - f.y);
       const edge = Math.min(g.x - field.x0, field.x1 - g.x, (g.y - field.y0) * 1.6, (field.y1 - g.y) * 1.6);
       let sc;
-      if (mode === 'retreat') sc = df * 0.8 - (edge < 24 ? 60 : 0) + R(0, 40);
+      if (mode === 'retreat') sc = Math.min(df, want * ARENA.roam) * 0.8 - (edge < 24 ? 60 : 0) + R(0, 40);
       else if (mode === 'press') sc = -travel * 0.2 + R(0, 20);
       else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - (edge < 30 ? 70 : 0) + R(0, 50);
       if (df < space(f, foe)) sc -= 600;                                // never pick a spot right next to the foe
+      if (!multi && mode !== 'press') sc -= heat[heatCell(g.x, g.y)] * 18;   // a duel prefers parts of the arena it hasn't used yet
       if (multi) for (const o of F) if (o && o !== f && o !== foe && o.state === 'idle') { const dd = Math.hypot(g.x - o.x, (g.y - o.y) / 0.6); if (dd < 260) sc -= (260 - dd) * 1.4; }   // keep duels apart
       if (sc > bs) { bs = sc; best = g; }
     }
@@ -762,7 +921,8 @@ const Retro = (() => {
       }
       const gx = f.goal ? f.goal.x : f.x, gy = f.goal ? f.goal.y : f.y;
       const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1;
-      const sp = (f.goal ? maxSpeed(f) * (d > 260 ? 1.3 : 1) : 0) * Math.min(1, d / 90);   // sprint on long runs, ease into the stop
+      const sp = (f.goal ? maxSpeed(f) * (d > 600 ? 1.65 : d > 260 ? 1.3 : 1) : 0) * Math.min(1, d / 90);   // sprint on long runs, ease into the stop
+      if (d > 600 && f.goal && motionOf(f).accel > 1.2) { f.after = Math.max(f.after, 0.08); f.afterCol = '#ffffff'; }   // fast ones blur across the arena
       if (d > 260 && f.speed > 180 && !f.hover && Math.random() < dt * 12) dust(f.x, f.y, 0.7);
       tvx = dx / d * sp; tvy = dy / d * sp;
       if (m.vol.conf) { tvx += Math.sin(T * 5 + f.p) * 70; tvy += Math.cos(T * 4.3) * 45; }
@@ -1305,37 +1465,118 @@ const Retro = (() => {
     camV[key] = (camV[key] - w * tmp) * e;
     return target + (ch + tmp) * e;
   }
+  let zHeld = 0, cHeld = null;
   function cameraStep(dt) {
     for (let i = camShots.length - 1; i >= 0; i--) { const s = camShots[i]; if (T > s.until || (s.f && s.f.state === 'gone')) camShots.splice(i, 1); }
-    const base = directorView();
+    const base = directorView(dt);
+    // is anyone already outside the current frame?
+    let out = false;
+    if (groupBox) {
+      // tested on the Pokémon themselves (most of the framing margin may be used up before it counts)
+      const ins = frameInsets(), s = ARENA.pad * 0.7;
+      out = groupBox.x0 + s < camX + (ins.l - VW / 2) / camZ || groupBox.x1 - s > camX + (VW / 2 - ins.r) / camZ || groupBox.y0 + s < camY + (ins.t - VH / 2) / camZ || groupBox.y1 - s > camY + (VH / 2 - ins.b) / camZ;
+    }
+    // dead zones keep the camera still while they circle; but zooming out to fit the group, or re-centring when
+    // someone is out of frame, happens at once (only tightening waits for a clear 10% change)
+    const mustOut = out || (base.fitZ !== undefined && base.fitZ < zHeld * 0.93);    // the group clearly no longer fits
+    if (!zHeld || mustOut || Math.abs(base.z - zHeld) / zHeld > ARENA.zHold) zHeld = base.z;
+    if (!cHeld || out || Math.hypot(base.x - cHeld.x, base.y - cHeld.y) > ARENA.hold) cHeld = { x: base.x, y: base.y };
     let top = null;
     for (const s of camShots) if (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0)) top = s;
-    let want = base, ease = CAM_EASE.base;
+    let want = { x: cHeld.x, y: cHeld.y, z: zHeld }, ease = CAM_EASE.base;
     if (top) {
       const px = top.f ? top.f.cx : top.x, py = top.f ? top.f.cy : top.y;
-      // a shot's zoom is relative to the framing it starts from, so a punch-in still reads when the fighters are already close
-      want = { x: base.x + (px - base.x) * top.w, y: base.y + (py - base.y) * top.w, z: Math.min(1.45, base.z * top.z) };
+      // a shot leans toward its subject and pushes in relative to the group framing, but never so far that an
+      // active Pokémon leaves the frame: the lean is halved until the group fits, then the zoom is capped to fit
+      for (let w = top.w; ; w *= 0.5) {
+        want = { x: cHeld.x + (px - cHeld.x) * w, y: cHeld.y + (py - cHeld.y) * w, z: zHeld * top.z };
+        if (!groupBox || w < 0.06) break;
+        const zf = fitZoomAround(groupBox, want.x, want.y);
+        if (zf >= Math.max(zFloor(), zHeld * 0.92)) { want.z = Math.min(want.z, zf); break; }
+      }
       ease = CAM_EASE[top.kind];
     }
+    // normally nothing outside the world is shown, unless that is the only way to keep every active Pokémon in frame
+    want.z = clamp(want.z, Math.min(zFloor(), zHeld || 1), 1.6);
+    // stay inside the world (the target is clamped, so the camera eases to a stop at the edges instead of hitting them)
+    const hw = VW / 2 / want.z, hh = VH / 2 / want.z;
+    want.x = hw * 2 >= WW ? WW / 2 : clamp(want.x, hw, WW - hw); want.y = hh * 2 >= WH ? WH / 2 : clamp(want.y, hh, WH - hh);
+    // keeping everyone in frame beats smoothness: if anyone is already outside the frame (a fast dash, a big
+    // knockback, a larger Mega sprite), the camera catches up quickly instead of drifting after them
+    if (out) ease = Math.min(ease, 0.08);
     if (dt <= 0) return;
+    dt = Math.min(dt, 0.05);                           // a long or throttled frame can't fling the camera
     camX = damp(camX, want.x, 'x', ease, dt); camY = damp(camY, want.y, 'y', ease, dt); camZ = damp(camZ, want.z, 'z', ease, dt);
   }
-  function cameraReset() { camShots.length = 0; camV.x = camV.y = camV.z = 0; camX = VW / 2; camY = VH / 2; camZ = 1; shake = 0; }
+  // start on an overview of the whole battlefield
+  function cameraReset() {
+    camShots.length = 0; camV.x = camV.y = camV.z = 0; zHeld = 0; cHeld = null; groupBox = null; spreadSm = null; shake = 0;
+    if (!field) { camX = VW / 2; camY = VH / 2; camZ = 1; return; }   // before the first layout
+    const o = overview(); camX = o.x; camY = o.y; camZ = o.z;
+  }
   function focusOn(x, y, sec = 0.6) { camShot('focus', { x, y, w: 0.4, hold: sec }); }
-  function directorView() {
-    const pts = [];
-    // spotlight: frame just the featured duel, and push in closer
-    const duo = multi && spot ? [spot, spotFoe].filter(o => o && o.state !== 'gone') : null;
-    for (const f of (duo && duo.length ? duo : F)) if (f && f.state !== 'gone') pts.push({ x: f.x, y: f.y - f.h * 0.5 });
-    if (!pts.length) return { x: VW / 2, y: VH / 2, z: 1 };
-    for (const o of projs) pts.push({ x: o.x, y: o.y });
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-    let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const z = clamp(Math.min(VW / (x1 - x0 + 620), VH / (y1 - y0 + 480)), 1.0, duo && duo.length ? 1.3 : 1.12);
-    // keep the action a little below centre (the HUD sits on top)
-    cy -= VH * 0.07 / z;
-    return { x: cx + Math.sin(T * 0.37) * 7, y: cy + Math.sin(T * 0.29 + 1) * 5, z: z + Math.sin(T * 0.21) * 0.01 };
+  // ---- group framing ----
+  // the free part of the screen (virtual units): clear of the HUD on top and, in 9:16, of the Reels caption at the bottom
+  function frameInsetsFor(port, mul) {
+    if (port) return { t: mul ? (multi && multi.mode === 'brawl' ? 300 : 250) : 290, b: VH * 0.2, l: 24, r: 70 };
+    return { t: mul ? 120 : 200, b: 60, l: 40, r: 40 };
+  }
+  const frameInsets = () => frameInsetsFor(portrait, !!multi);
+  // the lowest zoom: the view never shows anything outside the world
+  const zFloor = () => Math.max(VW / WW, VH / WH);
+  // zoom and camera centre that fit a world rectangle into the free part of the screen
+  function fitRect(x0, y0, x1, y1) {
+    const ins = frameInsets(), aw = VW - ins.l - ins.r, ah = VH - ins.t - ins.b;
+    const z = clamp(Math.min(aw / Math.max(1, x1 - x0), ah / Math.max(1, y1 - y0)), ARENA.zMin, ARENA.zMax);
+    return { x: (x0 + x1) / 2 - (ins.l + aw / 2 - VW / 2) / z, y: (y0 + y1) / 2 - (ins.t + ah / 2 - VH / 2) / z, z };
+  }
+  // the largest zoom that still keeps rectangle b in the free area with the camera centred at (cx, cy)
+  function fitZoomAround(b, cx, cy) {
+    const ins = frameInsets(); let z = ARENA.zMax * 1.3;
+    if (cx > b.x0) z = Math.min(z, (VW / 2 - ins.l) / (cx - b.x0));
+    if (b.x1 > cx) z = Math.min(z, (VW / 2 - ins.r) / (b.x1 - cx));
+    if (cy > b.y0) z = Math.min(z, (VH / 2 - ins.t) / (cy - b.y0));
+    if (b.y1 > cy) z = Math.min(z, (VH / 2 - ins.b) / (b.y1 - cy));
+    return z;
+  }
+  function overview() { return fitRect(field.x0 - 40, field.y0 - 140, field.x1 + 40, field.y1 + 40); }
+  // everything the camera must keep on screen: each active Pokémon (sprite, name tag, shadow)
+  let groupBox = null;
+  function groupBounds() {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, px0 = Infinity, px1 = -Infinity, py0 = Infinity, py1 = -Infinity;
+    for (const f of F) if (f && f.state !== 'gone') {
+      n++;
+      px0 = Math.min(px0, f.x); px1 = Math.max(px1, f.x); py0 = Math.min(py0, f.y); py1 = Math.max(py1, f.y);
+      x0 = Math.min(x0, f.x - f.w * 0.55); x1 = Math.max(x1, f.x + f.w * 0.55);
+      // the box ignores hop-walk bounce and hover bob (they would make the zoom breathe); real jumps still count
+      y0 = Math.min(y0, f.y - f.h - (f.hover ? f.hover + 8 : 0) - Math.max(0, f.jz - 30) - (multi ? 36 : 12)); y1 = Math.max(y1, f.y + 16);
+    }
+    if (!n) return null;
+    // projectiles are not part of the box: shots between fighters are already inside it, and effects that drop
+    // from the sky (Judgment, rock falls...) would otherwise yank the whole camera out for a moment
+    const p = ARENA.pad;
+    // spread: how far apart the combatants are (depth counts more: the ground is seen at a slant)
+    return { x0: x0 - p, y0: y0 - p, x1: x1 + p, y1: y1 + p, spread: Math.hypot(px1 - px0, (py1 - py0) * 1.6) };
+  }
+  // the base shot: fit the whole group (close duel = close camera, spread out = wide), looking a little ahead
+  let spreadSm = null;
+  function directorView(dt = 0) {
+    const b = groupBounds();
+    groupBox = b;
+    if (!b) { spreadSm = null; return overview(); }
+    // the distance that drives the zoom is smoothed (~0.9 s): a quick lunge or hop is left to the punch-in shots,
+    // only sustained approaches and retreats move the base framing
+    spreadSm = spreadSm == null ? b.spread : spreadSm + (b.spread - spreadSm) * Math.min(1, dt / 0.9);
+    const v = fitRect(b.x0, b.y0, b.x1, b.y1);
+    v.fitZ = v.z;                                      // the tightest zoom at which everyone still fits
+    // distance drives the shot: close combatants get a close camera, spreading out pulls it back even where a
+    // tighter frame would technically fit; the fitted zoom still wins when the group needs more room
+    v.z = Math.min(v.z, clamp(ARENA.zMax - (spreadSm - ARENA.near) / ARENA.zDist, zFloor(), ARENA.zMax));
+    let vx = 0, vy = 0, n = 0;
+    for (const f of F) if (f && f.state === 'idle') { vx += f.vx; vy += f.vy; n++; }
+    if (n) { v.x += clamp(vx / n * ARENA.lead, -50, 50); v.y += clamp(vy / n * ARENA.lead, -30, 30); }
+    v.x += Math.sin(T * 0.37) * 5; v.y += Math.sin(T * 0.29 + 1) * 3;      // handheld drift
+    return v;
   }
   // ---- drawing ----
   function drawBm(name, c, x, y, s, flip = false, rot = 0) {
@@ -1655,22 +1896,35 @@ const Retro = (() => {
     const fa = f.alpha * (f.fadeA ?? 1);
     for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
-    drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
+    const clip = clipOf(f, t + f.p * 0.37);
+    drawSprite(clip ? clip[0] : f.anim, clip ? clip[1] : t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
       { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
+  // draw the visible part of a world-sized art layer (1 art pixel = PX world units)
+  function drawLayer(img, v) {
+    const sx0 = Math.max(0, Math.floor(v.x0 / PX)), sy0 = Math.max(0, Math.floor(v.y0 / PX));
+    const sx1 = Math.min(img.width, Math.ceil(v.x1 / PX)), sy1 = Math.min(img.height, Math.ceil(v.y1 / PX));
+    if (sx1 > sx0 && sy1 > sy0) ctx.drawImage(img, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 * PX, sy0 * PX, (sx1 - sx0) * PX, (sy1 - sy0) * PX);
+  }
+  let lastTz = 0;
   function render() {
     const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
-    const cx = clamp(camX, hw, VW - hw), cy = clamp(camY, hh, VH - hh);
+    const cx = hw * 2 >= WW ? WW / 2 : clamp(camX, hw, WW - hw), cy = hh * 2 >= WH ? WH / 2 : clamp(camY, hh, WH - hh);
     // smooth (not per-frame random) shake; the final offset snaps to whole device pixels so pixel art doesn't shimmer
     const sx = shake > 0 ? shake * (Math.sin(T * 61.3) * 0.7 + Math.sin(T * 23.1 + 2) * 0.3) : 0, sy = shake > 0 ? shake * (Math.sin(T * 47.9 + 1.3) * 0.7 + Math.sin(T * 19.7) * 0.3) : 0;
     const tx = Math.round(SC * (VW / 2 - cx * z + sx)), ty = Math.round(SC * (VH / 2 - cy * z + sy)), ox = tx / SC, oy = ty / SC;
     ctx.setTransform(SC * z, 0, 0, SC * z, tx, ty);
-    fxEl.style.transform = z > 1.001 || shake > 0 ? `translate(${ox * UNIT}px, ${oy * UNIT}px) scale(${z})` : '';
+    // world-anchored texts ride the same camera; their lettering is counter-scaled so it stays readable when zoomed out
+    fxEl.style.transform = `translate(${(ox * UNIT).toFixed(2)}px, ${(oy * UNIT).toFixed(2)}px) scale(${z.toFixed(4)})`;
+    const tz = clamp(1 / z, 1, 1.7);
+    if (Math.abs(tz - lastTz) > 0.03) { lastTz = tz; fxEl.style.setProperty('--u', (UNIT * tz) + 'px'); }
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
-    const BW = bg.width * PX, BH = bg.height * PX;
-    ctx.drawImage(bg, 0, 0, BW, BH);
-    ctx.drawImage(decal, 0, 0, BW, BH);
+    // the arena is world-sized: draw only the part in view
+    const v = { x0: cx - hw - 8, x1: cx + hw + 8, y0: cy - hh - 8, y1: cy + hh + 8 };
+    // a spread-out group can need more than the whole world: the area beyond it is a dark backdrop
+    if (v.x0 < 0 || v.y0 < 0 || v.x1 > WW || v.y1 > WH) { ctx.fillStyle = '#120c18'; ctx.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0); }
+    drawLayer(bg, v); drawLayer(decal, v);
     drawTerrain();
     for (const r of rings) {
       if (r.age < 0) continue;
@@ -1701,7 +1955,7 @@ const Retro = (() => {
     for (const f of F) if (f && f.state !== 'gone') objs.push({ y: f.y, d: () => drawFighter(f) });
     objs.sort((a, b) => a.y - b.y).forEach(o => o.d());
     // scene dims for big moves so the effect carries the light
-    if (dimA > 0.01) { ctx.fillStyle = `rgba(8,4,20,${dimA})`; ctx.fillRect(-40, -40, VW + 80, VH + 80); }
+    if (dimA > 0.01) { ctx.fillStyle = `rgba(8,4,20,${dimA})`; ctx.fillRect(-40, -40, WW + 80, WH + 80); }
     // ground light pools (fire, lightning, beams light the floor)
     for (const l of lightsFx) {
       const k = l.age / l.life, a = l.a * (k < 0.1 ? k / 0.1 : Math.pow(1 - k, 1.4));
@@ -1718,13 +1972,15 @@ const Retro = (() => {
     for (const b of bolts) drawBolt(b);
     for (const s of shapes) if (s.kind !== 'pillar' && s.kind !== 'spike' && s.kind !== 'crystal') drawShape(s);
     for (const c of crowd) {
+      if (c.x * PX < v.x0 - 30 || c.x * PX > v.x1 + 30 || c.y * PX < v.y0 - 50 || c.y * PX > v.y1 + 50) continue;
       const bob = Math.max(0, Math.sin(T * c.sp + c.ph)) * (0.3 + cheer * 3.2);
       ctx.drawImage(c.c, Math.round(c.x) * PX, (Math.round(c.y - 15 - bob)) * PX, 9 * PX, 15 * PX);
     }
-    ctx.drawImage(front, 0, 0, BW, BH);
+    drawLayer(front, v);
     if (lights.length) {
       ctx.globalCompositeOperation = 'lighter';
       for (const l of lights) {
+        if (l.x < v.x0 || l.x > v.x1 || l.y < v.y0 || l.y > v.y1) continue;
         const tw2 = 0.65 + 0.35 * Math.sin(T * 2.5 + l.ph);
         ctx.globalAlpha = 0.16 * tw2; ctx.fillStyle = l.c; ctx.fillRect(sn(l.x) - 6, sn(l.y) - 6, 12, 12);
         ctx.globalAlpha = 0.85 * tw2; ctx.fillRect(sn(l.x) - 1.5, sn(l.y) - 1.5, 3, 3);
@@ -1742,7 +1998,7 @@ const Retro = (() => {
         drawTag(f, y);
       }
     }
-    if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, VW + 80, VH + 80); ctx.globalAlpha = 1; }
+    if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, WW + 80, WH + 80); ctx.globalAlpha = 1; }
   }
   // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl)
   function drawTag(f, y = sn(f.top - 8)) {
@@ -1760,8 +2016,9 @@ const Retro = (() => {
     const rate = { firefly: 3, snow: 26, ember: 9 }[TH.amb];
     let n = rate * dt; while (n > 0) {
       if (Math.random() < n) {
-        if (TH.amb === 'snow') spawn({ sq: 1, c: ['#ffffff'], x: R(0, VW), y: R(-20, VH * 0.3), vx: R(-15, 15), vy: R(40, 75), life: R(6, 12), s0: 1, s1: 1, fade: true });
-        else if (TH.amb === 'ember') spawn({ sq: 1, c: ['#ffd060', '#ff8a2a', '#ff5010'], ramp: true, add: true, x: R(0, VW), y: R(VH * 0.4, VH), vx: R(-10, 10), vy: R(-50, -25), life: R(2, 4), s0: 1, s1: 1, fade: true });
+        const v = viewRect();                          // ambient particles only where they can be seen
+        if (TH.amb === 'snow') spawn({ sq: 1, c: ['#ffffff'], x: R(v.x0, v.x1), y: R(v.y0 - 20, v.y0 + (v.y1 - v.y0) * 0.3), vx: R(-15, 15), vy: R(40, 75), life: R(6, 12), s0: 1, s1: 1, fade: true });
+        else if (TH.amb === 'ember') spawn({ sq: 1, c: ['#ffd060', '#ff8a2a', '#ff5010'], ramp: true, add: true, x: R(v.x0, v.x1), y: R(v.y0 + (v.y1 - v.y0) * 0.4, v.y1), vx: R(-10, 10), vy: R(-50, -25), life: R(2, 4), s0: 1, s1: 1, fade: true });
         else spawn({ sq: 1, c: ['#eaff8a'], add: true, x: R(field.x0, field.x1), y: R(field.y0, field.y1), vx: R(-12, 12), vy: R(-12, 12), life: R(2, 4), s0: 1, s1: 1, fade: true });
       }
       n -= 1;
@@ -1891,12 +2148,13 @@ const Retro = (() => {
     const col = type ? TYPE_COLORS[type] || '#6b7280' : '#6b7280';
     const st = stackOf(f.p);
     st.t = T; st.n = 1;                                   // later texts stack above the callout
-    floatAt(clamp(f.x, 130, VW - 130), Math.max(f.top - 30, VH * 0.27), `<b style="--tc:${col}">${esc(name)}</b>`, 'mvcall', 1500);
+    floatAt(f.x, f.top - 30, `<b style="--tc:${col}">${esc(name)}</b>`, 'mvcall', 1500);
   }
   function floatAt(x, y, html, cls, ms = 1100) {
     const el = document.createElement('div');
     el.className = 'rf ' + cls; el.innerHTML = html;
-    el.style.left = `calc(var(--u) * ${x.toFixed(1)})`; el.style.top = `calc(var(--u) * ${y.toFixed(1)})`;
+    // world-anchored: placed in world units on the camera-transformed layer (its --u only scales the lettering)
+    el.style.left = (x * UNIT).toFixed(1) + 'px'; el.style.top = (y * UNIT).toFixed(1) + 'px';
     fxEl.append(el);
     later(() => el.remove(), ms);
     return el;
@@ -1909,18 +2167,18 @@ const Retro = (() => {
     if (T - st.t > 0.7) st.n = 0;
     st.t = T;
     const n = st.n++;
-    floatAt(clamp(f.x + awayX(f) * 85, 130, VW - 130), Math.max(f.top - 20 - n * 28, VH * 0.25), s, cls, 1300);
+    floatAt(f.x + awayX(f) * 85, f.top - 20 - n * 28, s, cls, 1300);
   }
   function awayX(f) { const o = foeOf(f); return o && o.state === 'idle' && Math.abs(o.x - f.x) < 260 ? (Math.sign(f.x - o.x) || (f.p ? 1 : -1)) : 0; }
   function number(f, amt, i = 0, kind = '') {
-    if (multi && !inSpot(f) && kind !== 'crit' && kind !== 'super' && kind !== 'heal') return; floatAt(f.x + awayX(f) * 62 + R(-8, 8) + i * 12, Math.max(f.top + 16 - i * 14, VH * 0.25 + 42), String(amt), 'dmg ' + kind, 1000); }
+    if (multi && !inSpot(f) && kind !== 'crit' && kind !== 'super' && kind !== 'heal') return; floatAt(f.x + awayX(f) * 62 + R(-8, 8) + i * 12, f.top + 16 - i * 14, String(amt), 'dmg ' + kind, 1000); }
   function big(s, cls = '', ms = 2200) {
     const el = document.createElement('div');
     el.className = 'rbig ' + cls; el.textContent = s;
-    (hudEl.classList.contains('hidden') ? fxEl : hudEl).append(el);
+    (hudEl.classList.contains('hidden') ? topEl : hudEl).append(el);
     later(() => el.remove(), ms);
   }
-  function speech(p, s, ms = 1600) { const t = trOf(p); if (t && s) floatAt(clamp(t.x, 110, VW - 110), t.y - 112, esc(s), 'rgo', ms); }
+  function speech(p, s, ms = 1600) { const t = trOf(p); if (t && s) floatAt(t.x, t.y - 112, esc(s), 'rgo', ms); }
 
   // ---------------------------------------------------------------------
   //  Move -> effect style (same groups as the 3D effects)
@@ -2891,7 +3149,30 @@ const Retro = (() => {
   // ---- dash strikes (Quick Attack, Extreme Speed, Aqua Jet...): the whole sequence
   //  anticipation -> acceleration -> contact -> impact -> recoil -> follow-through -> recovery.
   //  Damage still happens once, through hit(); the target's recoil comes from the battle code (knock).
+  // physical attacks from far away: a real run-up across the arena (the camera follows) before the strike itself
+  async function runUp(f, d, stop) {
+    if (Math.hypot(d.x - f.x, d.y - f.y) <= stop + 60) return;
+    const P = motionOf(f), sp = maxSpeed(f) * (P.heavy ? 1.5 : 2.1), t0 = FT;
+    let last = FT;
+    f.dashing = true; f.crouchT = 0;
+    if (!calm()) camShot('track', { f, w: 0.3, z: 1, hold: 1.8 });
+    while (on && f.state === 'idle' && d.state === 'idle' && FT - t0 < 1.8) {
+      const dx = d.x - f.x, dy = d.y - f.y, L = Math.hypot(dx, dy) || 1;
+      if (L <= stop) break;
+      const dt = Math.min(0.05, FT - last), ramp = Math.min(1, (FT - t0) / 0.25); last = FT;   // accelerate into the run
+      const step = Math.min(L - stop, sp * ramp * dt);
+      f.x += dx / L * step; f.y += dy / L * step; clampField(f);
+      f.face = Math.sign(dx) || f.face;
+      if (!f.hover && Math.random() < 0.5) dust(f.x, f.y, P.heavy ? 0.9 : 0.6);
+      if (P.accel > 1.2) { f.after = Math.max(f.after, 0.08); f.afterCol = '#ffffff'; }
+      await wait(16);
+    }
+    camRelease('track');
+    f.dashing = false;
+  }
   async function dashStrike(f, d, m, o, hit, spec) {
+    await runUp(f, d, 380);
+    if (!on || f.state !== 'idle' || d.state !== 'idle') return;
     const dir = Math.sign(d.x - f.x) || f.face, tp = tempo(f), sz = spec.size || 1, c = spec.c, heavy = sz > 1.2;
     f.face = dir;
     // 1. anticipation: it digs in low and leans back, a glint flashes in its eye
@@ -2947,6 +3228,8 @@ const Retro = (() => {
     const t = m.type || 'Normal';
     const spec = CT[m.id] || { v: { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail' }[variant] || 'charge', c: TYPE_CT[t] || C_WHITE, el: t !== 'Normal' ? t : null };
     if (spec.fast && spec.v === 'charge' && !(spec.n > 1)) return dashStrike(f, d, m, o, hit, spec);
+    await runUp(f, d, 300);
+    if (!on || f.state !== 'idle' || d.state !== 'idle') return;
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
     if (spec.aura || big) { f.aura = c[1]; f.auraT = FT + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
     if (!spec.fast) await windup2(f, d, spec, big);
@@ -3287,13 +3570,14 @@ const Retro = (() => {
     const w = WEATHER[m.id];
     if (w) {
       SFX.buff();
-      if (w === 'sun') { flash('#fff3c0', 0.3); lightAt(VW / 2, VH / 2, VW * 0.6, '#ffd27a', 1.6, 0.6); }
+      const v = viewRect(), vw = v.x1 - v.x0, vh = v.y1 - v.y0;
+      if (w === 'sun') { flash('#fff3c0', 0.3); lightAt(v.x0 + vw / 2, v.y0 + vh / 2, vw * 0.6, '#ffd27a', 1.6, 0.6); }
       for (let i = 0; i < 160; i++) {
-        const x = R(-50, VW), y = R(-40, VH * 0.4), delay = R(0, 1.2);
+        const x = R(v.x0 - 50, v.x1), y = R(v.y0 - 40, v.y0 + vh * 0.4), delay = R(0, 1.2);
         if (w === 'rain') spawn({ kind: 'streak', c: ['#bfe0ff'], x, y, vx: 120, vy: 900, life: 0.8, len: 22, ang: Math.atan2(900, 120), delay });
-        else if (w === 'sand') spawn({ sq: 1, c: ['#e2c08a'], x: -20, y: R(0, VH), vx: R(500, 800), vy: R(-30, 30), life: 1.6, s0: 1, s1: 1, delay });
+        else if (w === 'sand') spawn({ sq: 1, c: ['#e2c08a'], x: v.x0 - 20, y: R(v.y0, v.y1), vx: R(500, 800), vy: R(-30, 30), life: 1.6, s0: 1, s1: 1, delay });
         else if (w === 'snow') spawn({ sq: 1, c: ['#ffffff'], x, y, vx: R(-30, 30), vy: R(80, 140), life: 3, s0: 1, s1: 1, delay, fade: true });
-        else if (i < 30) moteP(R(0, VW), R(0, VH), '#fff3a0', { vy: -20, life: 1.4, delay });
+        else if (i < 30) moteP(R(v.x0, v.x1), R(v.y0, v.y1), '#fff3a0', { vy: -20, life: 1.4, delay });
       }
       await wait(600); hit(); await wait(300);
       return;
@@ -4285,7 +4569,7 @@ const Retro = (() => {
     const pwMove = clamp((m.power || 60) / 80, 0.6, 1.6) * (eff > 1 ? 1.2 : eff < 1 ? 0.75 : 1);
     const pwDmg = clamp(0.5 + frac * 2.6, 0.5, 2.0);
     const pw = (pwMove + pwDmg) / 2 * (crit ? 1.2 : 1);
-    d.lastFrac = frac;
+    d.lastFrac = frac; d.hurtT = T;
     impactAt(type, at.x, at.y, d.y, pw);
     d.white = 1; d.whiteCol = '#ffffff'; d.bump(4 + pw * 3); d.shiver = 0.12;
     const foe = foeOf(d); d.rotSV += (Math.sign(d.x - (foe ? foe.x : d.x - 1)) || 1) * 5 * pw;
@@ -4478,6 +4762,7 @@ const Retro = (() => {
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
+    if (m.cat !== 'status') f.atkT = T;                // 2.5D sprites play their attack animation
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
     if (!multi || spot === f) callout(f, m.name, m.type);
@@ -4534,6 +4819,7 @@ const Retro = (() => {
     for (let i = 0; i < 70; i++) { const an = R(0, 6.28), r0 = R(160, 260); spawn({ kind: 'streak', c: [RB[i % 7]], x: 0, y: 0, life: 0.5, delay: i * 0.015, len: 26, ang: an + Math.PI, path: k => ({ x: f.cx + Math.cos(an) * r0 * (1 - easeIn(k)), y: f.cy + Math.sin(an) * r0 * 0.7 * (1 - easeIn(k)) }) }); }
     await tw(1.15, k => { f.white = 0.6 + k * 0.4; f.shiver = k > 0.5 ? 0.08 : 0; if (k > 0.6) shake = Math.max(shake, (k - 0.6) * 8); }); chk(tk);
     const anim = await getAnim(fm.sprite); chk(tk);
+    f.set25 = null;                                    // the Mega form has no baked sheet: its pixel sprite takes over
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
     shapes.push({ kind: 'megaorb', f, phase: 'burst', life: 0.45, age: 0 });
@@ -4579,6 +4865,8 @@ const Retro = (() => {
       if (acting > 0) { if (pendingSpot !== f) { pendingSpot = f; pendingT = T; } return false; }
       pendingSpot = null; spot = f; spotFoe = foe;
       dimTo(0.4, 1.6);
+      // lean toward the featured duel and push in a little; the group framing keeps everyone else in shot
+      camShot('anticipate', { x: (f.cx + foe.cx) / 2, y: (f.cy + foe.cy) / 2, w: 0.5, z: 1.18, hold: 3 });
     } else if (acting >= 2) return false;
     acting++; f.acting = true;
     return true;
@@ -4631,7 +4919,7 @@ const Retro = (() => {
     const tk = token;
     act(f, tk).catch(swallow).finally(() => {
       if (tk !== token) return;
-      if (f.acting) { f.acting = false; acting = Math.max(0, acting - 1); if (spot === f) { spot = spotFoe = null; spotEndT = T; } }
+      if (f.acting) { f.acting = false; acting = Math.max(0, acting - 1); if (spot === f) { spot = spotFoe = null; spotEndT = T; camRelease('anticipate'); } }
       f.busy = false;
       f.cd = actionGap(f.mon) + R(-0.25, 0.4) + (f.extraCd || 0);
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
@@ -4648,7 +4936,7 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const anim = await getAnim(mon.sprite); chk(tk);
+    const [anim, set25] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species)]); chk(tk);
     const tr = trOf(p);
     const dest = multi ? multiSpot(p) : { ...spots.start[p] };
     const foe = multi ? null : F[1 - p];
@@ -4674,8 +4962,9 @@ const Retro = (() => {
     for (let i = 0; i < 14; i++) moteP(dest.x, dest.y - 24, '#ffffff', { vx: R(-200, 200), vy: R(-200, 100), drag: 3, life: 0.6 });
     ringP(dest.x, dest.y, 6, 70, '#ffffff', 0.4);
     flash('#ffffff', 0.12);
-    const f = new Fighter(p, mon, anim);
-    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = multi ? (Math.sign(VW / 2 - dest.x) || 1) : p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
+    const f = new Fighter(p, mon, set25 ? set25.idle : anim);
+    f.set25 = set25;
+    f.x = dest.x; f.y = dest.y; f.face = f.faceVis = multi ? (Math.sign((field.x0 + field.x1) / 2 - dest.x) || 1) : p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
     focusOn(f.x, f.y - 30, 0.9);
     playCry(mon);
@@ -4690,14 +4979,14 @@ const Retro = (() => {
     if (f.state !== 'idle') return;
     loudUntil = T + 0.8;                               // a knockout always gets the full punch
     f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
-    f.state = 'faint';
+    f.state = 'faint'; f.faintT = T;
     const p = f.p, mon = f.mon, tk = token;
     playCry(mon, 0.8); SFX.faint();
     if (multi) {
       // knockout feed: who took out whom
       const tag = o => `<b style="--tc:${TYPE_COLORS[o.mon.types[0]]}">${esc(o.mon.name)}</b>`;
       feed(by && by !== f ? `${tag(by)} <i>✖</i> ${tag(f)}` : `${tag(f)} <i>fainted</i>`);
-      floatAt(clamp(f.x, 130, VW - 130), Math.max(f.top - 16, VH * 0.25), 'K.O.!', 'crit', 1200);
+      floatAt(f.x, f.top - 16, 'K.O.!', 'crit', 1200);
       if (!sideMons(sideOf(p)).some(m => m.hp > 0)) elim.push(sideOf(p));
     } else big(`${mon.name.toUpperCase()} FAINTED!`, '', 2100);
     cheer = 1; AudioFX.Crowd.cheer(1);
@@ -4810,7 +5099,8 @@ const Retro = (() => {
   };
   function confetti() {
     const cols = ['#ff5a5a', '#ffd23f', '#5ad6ff', '#7be35a', '#ff8ad8', '#ffffff'];
-    for (let i = 0; i < 160; i++) spawn({ sq: 1, c: [pick(cols)], x: R(0, VW), y: R(-200, -10), vx: R(-40, 40), vy: R(110, 210), life: R(3, 4.5), delay: R(0, 1.2), s0: 2, s1: 2 });
+    const v = viewRect();
+    for (let i = 0; i < 160; i++) spawn({ sq: 1, c: [pick(cols)], x: R(v.x0, v.x1), y: R(v.y0 - 200, v.y0 - 10), vx: R(-40, 40), vy: R(110, 210), life: R(3, 4.5), delay: R(0, 1.2), s0: 2, s1: 2 });
   }
   // ---------------------------------------------------------------------
   //  Final-blow replay: while a side is down to its last Pokémon, two canvas
@@ -5024,7 +5314,7 @@ const Retro = (() => {
       </div>
       <div class="rc-sub">${opts.subtitle ? esc(opts.subtitle) + ' · ' : ''}${TH.name}</div>
       <div class="rc-ask">WHO WINS? <span>COMMENT 👇</span></div>`;
-    fxEl.append(card);
+    topEl.append(card);
     SFX.banner();
     later(() => SFX.beep(true), 700);
     const lines = opts.lines;
@@ -5045,6 +5335,7 @@ const Retro = (() => {
     T += dt;
     if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
+    if (running) heatStep(dt);
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
     ambient(dt);
@@ -5056,12 +5347,12 @@ const Retro = (() => {
   updaters.push(update);
   addEventListener('resize', () => {
     if (!on) return;
-    const oldW = VW, oldH = VH;
+    const oldW = WW, oldH = WH;
     if (!RP.ko) rpReset();
     resize(); layout();
     buildTheme(Object.keys(THEMES).find(k => THEMES[k] === TH) || 'plaza');
     TR.forEach((t, p) => { if (t) { t.x = spots.trainer[p].x; t.y = spots.trainer[p].y; } });
-    F.forEach(f => { if (f) { f.x *= VW / oldW; f.y *= VH / oldH; f.goal = null; clampField(f); } });
+    F.forEach(f => { if (f) { f.x *= WW / oldW; f.y *= WH / oldH; f.goal = null; clampField(f); } });
   });
   addEventListener('keydown', e => {
     if (!on || multi || e.target.tagName === 'INPUT') return;
@@ -5081,7 +5372,7 @@ const Retro = (() => {
     multi = null; elim = [];
     acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
     root.classList.remove('multi');
-    fxEl.innerHTML = ''; hudEl.innerHTML = ''; fxEl.style.transform = '';
+    fxEl.innerHTML = ''; hudEl.innerHTML = ''; topEl.innerHTML = ''; fxEl.style.transform = ''; lastTz = 0;
     cameraReset(); dimA = dimTarget = 0;
     root.classList.add('hidden');
     World.skip3D = false; World.captureSource = null;
@@ -5092,17 +5383,18 @@ const Retro = (() => {
     FX_TIME = 1;
     on = true; ended = false; running = false; token++;
     const tk = token;
-    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; firstOut = -1; SW.n = [0, 0]; SW.t = [-99, -99]; cameraReset();
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; firstOut = -1; heat.fill(0); SW.n = [0, 0]; SW.t = [-99, -99]; cameraReset();
     root.classList.remove('hidden');
     World.skip3D = true; World.captureSource = cv;
-    resize(); layout(); camX = VW / 2; camY = VH / 2;
+    resize(); layout(); cameraReset();
     decal = null;
     const key = settings.theme === 'random' ? pick(Object.keys(THEMES)) : (THEME_MAP[settings.theme] || 'plaza');
     buildTheme(key);
     // multi battle: one slot per Pokémon; smaller sprites and tighter spacing when the field is busy
     if (state.multi) {
       const n = state.players.length;
-      multi = { ...state.multi, spr: n > 4 ? 0.78 : 0.9, space: (n > 4 ? 0.5 : 0.65) * (state.multi.mode === 'brawl' ? 1.2 : 1) };
+      // the field is ~5x larger now, so spacing can relax closer to the 1v1 distances
+      multi = { ...state.multi, spr: n > 4 ? 0.78 : 0.9, space: (n > 4 ? 0.7 : 0.85) * (state.multi.mode === 'brawl' ? 1.15 : 1) };
       F.length = 0; for (let p = 0; p < n; p++) F.push(null);
       if (multi.mode === 'brawl') {                    // lanes: each Pokémon is paired with one on the other team
         const s0 = multi.side.flatMap((s, p) => s ? [] : [p]), s1 = multi.side.flatMap((s, p) => s ? [p] : []);
@@ -5117,7 +5409,7 @@ const Retro = (() => {
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
-    const loading = Promise.all(srcs.map(getAnim));
+    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.map(m => get25(m.species)))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);
@@ -5131,9 +5423,9 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, field, SW, cam: { x: camX, y: camY, z: camZ } }),
+  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ } }),
     // test hook: play one move's effect (no damage) with the battle paused
     _fxMap: () => Object.keys(MOVES).filter(moveSupported).map(id => { const m = { id, ...MOVES[id] }; const [st, v] = classify(m).split(':'); return [id, SIG[id] ? 'sig' : st === 'contact' ? 'ct:' + (CT[id] ? CT[id].v : 'default-' + (v || '')) : st, m.type, m.cat]; }),
-    _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = VW * (p ? 0.62 : 0.38); f.y = VH * 0.62; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
+    _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = (field.x0 + field.x1) / 2 + (p ? 130 : -130); f.y = (field.y0 + field.y1) / 2; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
     _testMove: async (id, visual) => { running = false; const f = F[0], d = F[1]; if (!f || !d) return 'no fighters'; const m = { id, ...MOVES[id], ppLeft: 9 }; const [style, variant] = classify(m).split(':'); let hit = false; const selfT = SELF_TARGETS.has(m.target) || id === 'rest'; await (SIG[id] || S[style] || S.generic)(f, selfT ? f : d, m, { miss: false }, () => { if (hit) return; hit = true; if (visual && m.cat !== 'status') { const pw = impactFx(d, m, 1, false); knock(d, f, pw * 0.4); } }, style === 'orb' && !SIG[id] ? variant === 'big' : variant); f.dashing = false; f.crouchT = 0; f.jz = 0; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; return hit ? (SIG[id] ? 'sig:' : '') + style : 'NOHIT ' + style; } };
 })();
