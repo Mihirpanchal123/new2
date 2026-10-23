@@ -8,8 +8,10 @@ import fs from 'node:fs';
 
 const [, , src, dst, rx] = process.argv;
 if (!src || !dst) { console.log('usage: node tools/slim-glb.mjs <in.glb> <out.glb> [clip regex]'); process.exit(1); }
-// the battle clips (see CLIPS in retro3d.js); the 2xxxx duplicate set of the official models is dropped
-const KEEP = new RegExp(rx || '_0\\d{4}_(battlewait01_loop|defaultwait01_loop|run01_loop|walk01_loop|attack01|rangeattack01|damage01|stun01_start|stun01_loop|stun01_end|down01_start|roar01|sleep01_loop|glad01)$|^(?!pm\\d)');
+// the battle clips (see CLIPS in retro3d.js). Official models carry a 0xxxx and a 2xxxx set; some have their
+// battle clips (attack, damage, down...) only in the 2xxxx set, so a 2xxxx clip is kept unless 0xxxx has it too
+const KEEP = new RegExp(rx || '_[02]\\d{4}_(battlewait01_loop|defaultwait01_loop|run01_loop|walk01_loop|attack01|rangeattack01|damage01|stun01_start|stun01_loop|stun01_end|down01_start|roar01|sleep01_loop|glad01)$|^(?!pm\\d)');
+const SET = /_([02])\d{4}_(\w+)$/;
 
 const buf = fs.readFileSync(src);
 if (buf.readUInt32LE(0) !== 0x46546c67) throw new Error('not a GLB');
@@ -19,6 +21,8 @@ let bin = buf.subarray(20 + jlen + 8, 20 + jlen + 8 + buf.readUInt32LE(20 + jlen
 
 const before = (json.animations || []).length;
 json.animations = (json.animations || []).filter(a => KEEP.test(a.name || ''));
+const set0 = new Set(json.animations.map(a => SET.exec(a.name || '')).filter(m => m && m[1] === '0').map(m => m[2]));
+json.animations = json.animations.filter(a => { const m = SET.exec(a.name || ''); return !m || m[1] === '0' || !set0.has(m[2]); });
 
 // keyframe reduction: a key that linear interpolation between its neighbours already reproduces is dropped,
 // and a channel that never leaves the node's rest pose is dropped (the mixer restores the rest pose anyway)
@@ -27,7 +31,7 @@ const extra = [];
 let extraLen = 0;
 const readF = i => {
   const a = json.accessors[i], v = json.bufferViews[a.bufferView], n = NC[a.type];
-  if (a.componentType !== 5126 || !n || (v.byteStride && v.byteStride !== n * 4)) return null;
+  if (!v || a.sparse || a.componentType !== 5126 || !n || (v.byteStride && v.byteStride !== n * 4)) return null;   // all-zero / sparse accessors stay as they are
   const o = (v.byteOffset || 0) + (a.byteOffset || 0);
   return { n, d: new Float32Array(bin.buffer.slice(bin.byteOffset + o, bin.byteOffset + o + a.count * n * 4)) };
 };
@@ -78,6 +82,23 @@ for (const a of json.animations) {
 bin = Buffer.concat([bin, ...extra]);
 console.log(`keyframes: ${keysBefore} -> ${keysAfter}`);
 
+// level of detail: some models carry lod1..lod3 copies of every mesh; only lod0 (the most detailed) is drawn.
+// Only mesh nodes go - the lod groups are often skin joints themselves, and the skeleton stays whole
+const lodOf = n => { const m = /^lod(\d+)$/.exec(n.name || ''); return m ? +m[1] : -1; };
+const joints = new Set((json.skins || []).flatMap(s => s.joints));
+if ((json.nodes || []).some(n => lodOf(n) > 0)) {
+  const drop = new Set(), mark = i => { if (json.nodes[i].mesh != null && !joints.has(i)) drop.add(i); for (const c of json.nodes[i].children || []) mark(c); };
+  json.nodes.forEach((n, i) => { if (lodOf(n) > 0) mark(i); });
+  for (const n of json.nodes) if (n.children) n.children = n.children.filter(c => !drop.has(c));
+  for (const i of drop) { const n = json.nodes[i]; delete n.mesh; delete n.skin; }
+  // meshes nothing shows any more
+  const used = [...new Set(json.nodes.filter(n => n.mesh != null).map(n => n.mesh))].sort((a, b) => a - b);
+  const mm = new Map(used.map((m, k) => [m, k]));
+  json.meshes = used.map(m => json.meshes[m]);
+  for (const n of json.nodes) if (n.mesh != null) n.mesh = mm.get(n.mesh);
+  console.log(`lod: ${drop.size} nodes of lower detail dropped`);
+}
+
 // accessors still in use
 const usedAcc = new Set();
 for (const m of json.meshes || []) for (const p of m.primitives) {
@@ -87,6 +108,8 @@ for (const m of json.meshes || []) for (const p of m.primitives) {
 }
 for (const s of json.skins || []) if (s.inverseBindMatrices != null) usedAcc.add(s.inverseBindMatrices);
 for (const a of json.animations) for (const s of a.samplers) { usedAcc.add(s.input); usedAcc.add(s.output); }
+const instancing = n => n.extensions && n.extensions.EXT_mesh_gpu_instancing && n.extensions.EXT_mesh_gpu_instancing.attributes;
+for (const n of json.nodes || []) { const at = instancing(n); if (at) Object.values(at).forEach(i => usedAcc.add(i)); }
 const accMap = new Map(), accessors = [];
 (json.accessors || []).forEach((a, i) => { if (usedAcc.has(i)) { accMap.set(i, accessors.length); accessors.push(a); } });
 const ra = i => accMap.get(i);
@@ -97,6 +120,7 @@ for (const m of json.meshes || []) for (const p of m.primitives) {
 }
 for (const s of json.skins || []) if (s.inverseBindMatrices != null) s.inverseBindMatrices = ra(s.inverseBindMatrices);
 for (const a of json.animations) for (const s of a.samplers) { s.input = ra(s.input); s.output = ra(s.output); }
+for (const n of json.nodes || []) { const at = instancing(n); if (at) for (const k in at) at[k] = ra(at[k]); }
 json.accessors = accessors;
 
 // buffer views still in use (accessors, sparse data, images, Draco streams), repacked into a new binary chunk

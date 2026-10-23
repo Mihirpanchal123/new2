@@ -54,7 +54,13 @@ const ROOTS = [
   'charcadet', 'gimmighoul', 'nacli', 'capsakid', 'glimmet', 'tatsugiri', 'frigibax',
   'koraidon', 'miraidon', 'wo-chien', 'chien-pao', 'ting-lu', 'chi-yu', 'ogerpon', 'terapagos', 'pecharunt'
 ];
-const EXCLUDE = new Set(['kleavor']);
+// left out: no 3D model for Retro's live 3D (tools/build-live3d.mjs). Their evolutions stay, linked to the stage before.
+const EXCLUDE = new Set(['kleavor', 'perrserker', 'pyroar', 'dipplin', 'charcadet', 'armarouge', 'capsakid', 'scovillain', 'glimmet', 'glimmora', 'terapagos']);
+const EXCLUDE_MEGA = new Set(['blastoise-mega', 'dragonite-mega', 'absol-mega-z', 'clefable-mega', 'victreebel-mega', 'meganium-mega', 'froslass-mega',
+  'chimecho-mega', 'staraptor-mega', 'heatran-mega', 'emboar-mega', 'chandelure-mega', 'scolipede-mega', 'scrafty-mega', 'golurk-mega', 'pyroar-mega',
+  'meowstic-male-mega', 'meowstic-female-mega', 'barbaracle-mega', 'dragalge-mega', 'hawlucha-mega', 'crabominable-mega', 'golisopod-mega', 'drampa-mega',
+  'magearna-mega', 'magearna-original-mega', 'falinks-mega', 'scovillain-mega', 'glimmora-mega', 'tatsugiri-curly-mega', 'tatsugiri-droopy-mega',
+  'tatsugiri-stretchy-mega', 'baxcalibur-mega']);
 // moves taught by TM / move tutor (game.js tmMoves) that no level-up learnset includes
 const EXTRA_MOVES = ['solar-beam', 'fly', 'dig', 'hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'dive', 'bounce'];
 
@@ -207,8 +213,8 @@ async function main() {
     const chain = await getJSON(sp.evolution_chain.url);
     (function walk(node, parent, parentMin) {
       const name = node.species.name;
-      if (EXCLUDE.has(name)) return;
       const m = parent ? evoMethod(node.evolution_details[0], parentMin) : { min: 1, text: 'Base form' };
+      if (EXCLUDE.has(name)) { node.evolves_to.forEach(n => walk(n, parent, m.min)); return; }
       if (!evo[name]) { evo[name] = { from: parent, min: m.min, text: m.text, to: [] }; order.push(name); }
       if (parent) evo[parent].to.push(name);
       node.evolves_to.forEach(n => walk(n, name, m.min));
@@ -236,7 +242,7 @@ async function main() {
     sprites.push([entry, p]);
     for (const v of sp.varieties) {
       const vn = v.pokemon.name;
-      if (!vn.includes('-mega')) continue;
+      if (!vn.includes('-mega') || EXCLUDE_MEGA.has(vn)) continue;
       const mp = await getJSON(`${API}/pokemon/${vn}`);
       const suffix = vn.endsWith('-x') ? ' X' : vn.endsWith('-y') ? ' Y' : vn.endsWith('-z') ? ' Z' : '';
       // forms that each have a Mega (meowstic-female-mega, tatsugiri-droopy-mega...) keep the form in the name

@@ -1,3 +1,3253 @@
 {
- "mewtwo": { "file": "models3d/mewtwo.glb", "heightPx": 106, "source": "Pokémon 3D API assets models/regular-150.glb (git b596552), slimmed by tools/slim-glb.mjs" }
+ "bulbasaur": {
+  "file": "models3d/bulbasaur.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1.glb"
+ },
+ "ivysaur": {
+  "file": "models3d/ivysaur.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/2.glb"
+ },
+ "venusaur": {
+  "file": "models3d/venusaur.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/3.glb"
+ },
+ "venusaur-mega": {
+  "file": "models3d/venusaur-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/3.glb"
+ },
+ "charmander": {
+  "file": "models3d/charmander.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/4.glb"
+ },
+ "charmeleon": {
+  "file": "models3d/charmeleon.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/5.glb"
+ },
+ "charizard": {
+  "file": "models3d/charizard.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/6.glb"
+ },
+ "charizard-mega-x": {
+  "file": "models3d/charizard-mega-x.glb",
+  "heightPx": 97,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/x/6.glb"
+ },
+ "charizard-mega-y": {
+  "file": "models3d/charizard-mega-y.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/y/6.glb"
+ },
+ "squirtle": {
+  "file": "models3d/squirtle.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/7.glb"
+ },
+ "wartortle": {
+  "file": "models3d/wartortle.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/8.glb"
+ },
+ "blastoise": {
+  "file": "models3d/blastoise.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/9.glb"
+ },
+ "pichu": {
+  "file": "models3d/pichu.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/172.glb"
+ },
+ "pikachu": {
+  "file": "models3d/pikachu.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/25.glb"
+ },
+ "raichu": {
+  "file": "models3d/raichu.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/26.glb"
+ },
+ "raichu-mega-x": {
+  "file": "models3d/raichu-mega-x.glb",
+  "heightPx": 82,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/x/26.glb"
+ },
+ "raichu-mega-y": {
+  "file": "models3d/raichu-mega-y.glb",
+  "heightPx": 76,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/y/26.glb"
+ },
+ "pidgey": {
+  "file": "models3d/pidgey.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/16.glb"
+ },
+ "pidgeotto": {
+  "file": "models3d/pidgeotto.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/17.glb"
+ },
+ "pidgeot": {
+  "file": "models3d/pidgeot.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/18.glb"
+ },
+ "pidgeot-mega": {
+  "file": "models3d/pidgeot-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/18.glb"
+ },
+ "abra": {
+  "file": "models3d/abra.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/63.glb"
+ },
+ "kadabra": {
+  "file": "models3d/kadabra.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/64.glb"
+ },
+ "alakazam": {
+  "file": "models3d/alakazam.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/65.glb"
+ },
+ "alakazam-mega": {
+  "file": "models3d/alakazam-mega.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/65.glb"
+ },
+ "machop": {
+  "file": "models3d/machop.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/66.glb"
+ },
+ "machoke": {
+  "file": "models3d/machoke.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/67.glb"
+ },
+ "machamp": {
+  "file": "models3d/machamp.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/68.glb"
+ },
+ "gastly": {
+  "file": "models3d/gastly.glb",
+  "heightPx": 85,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/92.glb"
+ },
+ "haunter": {
+  "file": "models3d/haunter.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/93.glb"
+ },
+ "gengar": {
+  "file": "models3d/gengar.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/94.glb"
+ },
+ "gengar-mega": {
+  "file": "models3d/gengar-mega.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/94.glb"
+ },
+ "magikarp": {
+  "file": "models3d/magikarp.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/129.glb"
+ },
+ "gyarados": {
+  "file": "models3d/gyarados.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/130.glb"
+ },
+ "gyarados-mega": {
+  "file": "models3d/gyarados-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/130.glb"
+ },
+ "dratini": {
+  "file": "models3d/dratini.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/147.glb"
+ },
+ "dragonair": {
+  "file": "models3d/dragonair.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/148.glb"
+ },
+ "dragonite": {
+  "file": "models3d/dragonite.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/149.glb"
+ },
+ "eevee": {
+  "file": "models3d/eevee.glb",
+  "heightPx": 55,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/133.glb"
+ },
+ "vaporeon": {
+  "file": "models3d/vaporeon.glb",
+  "heightPx": 76,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/134.glb"
+ },
+ "jolteon": {
+  "file": "models3d/jolteon.glb",
+  "heightPx": 70,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/135.glb"
+ },
+ "flareon": {
+  "file": "models3d/flareon.glb",
+  "heightPx": 73,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/136.glb"
+ },
+ "espeon": {
+  "file": "models3d/espeon.glb",
+  "heightPx": 73,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/196.glb"
+ },
+ "umbreon": {
+  "file": "models3d/umbreon.glb",
+  "heightPx": 76,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/197.glb"
+ },
+ "leafeon": {
+  "file": "models3d/leafeon.glb",
+  "heightPx": 76,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/470.glb"
+ },
+ "glaceon": {
+  "file": "models3d/glaceon.glb",
+  "heightPx": 70,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/471.glb"
+ },
+ "sylveon": {
+  "file": "models3d/sylveon.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/700.glb"
+ },
+ "scyther": {
+  "file": "models3d/scyther.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/123.glb"
+ },
+ "scizor": {
+  "file": "models3d/scizor.glb",
+  "heightPx": 100,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/212.glb"
+ },
+ "scizor-mega": {
+  "file": "models3d/scizor-mega.glb",
+  "heightPx": 106,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/212.glb"
+ },
+ "kangaskhan": {
+  "file": "models3d/kangaskhan.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/115.glb"
+ },
+ "kangaskhan-mega": {
+  "file": "models3d/kangaskhan-mega.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/115.glb"
+ },
+ "mewtwo": {
+  "file": "models3d/mewtwo.glb",
+  "heightPx": 106,
+  "source": "Pokémon 3D API assets models/regular-150.glb (git b596552), slimmed by tools/slim-glb.mjs"
+ },
+ "mewtwo-mega-x": {
+  "file": "models3d/mewtwo-mega-x.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/x/150.glb"
+ },
+ "mewtwo-mega-y": {
+  "file": "models3d/mewtwo-mega-y.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/y/150.glb"
+ },
+ "mareep": {
+  "file": "models3d/mareep.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/179.glb"
+ },
+ "flaaffy": {
+  "file": "models3d/flaaffy.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/180.glb"
+ },
+ "ampharos": {
+  "file": "models3d/ampharos.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/181.glb"
+ },
+ "ampharos-mega": {
+  "file": "models3d/ampharos-mega.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/181.glb"
+ },
+ "houndour": {
+  "file": "models3d/houndour.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/228.glb"
+ },
+ "houndoom": {
+  "file": "models3d/houndoom.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/229.glb"
+ },
+ "houndoom-mega": {
+  "file": "models3d/houndoom-mega.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/229.glb"
+ },
+ "larvitar": {
+  "file": "models3d/larvitar.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/246.glb"
+ },
+ "pupitar": {
+  "file": "models3d/pupitar.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/247.glb"
+ },
+ "tyranitar": {
+  "file": "models3d/tyranitar.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/248.glb"
+ },
+ "tyranitar-mega": {
+  "file": "models3d/tyranitar-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/248.glb"
+ },
+ "treecko": {
+  "file": "models3d/treecko.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/252.glb"
+ },
+ "grovyle": {
+  "file": "models3d/grovyle.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/253.glb"
+ },
+ "sceptile": {
+  "file": "models3d/sceptile.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/254.glb"
+ },
+ "sceptile-mega": {
+  "file": "models3d/sceptile-mega.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/254.glb"
+ },
+ "torchic": {
+  "file": "models3d/torchic.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/255.glb"
+ },
+ "combusken": {
+  "file": "models3d/combusken.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/256.glb"
+ },
+ "blaziken": {
+  "file": "models3d/blaziken.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/257.glb"
+ },
+ "blaziken-mega": {
+  "file": "models3d/blaziken-mega.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/257.glb"
+ },
+ "mudkip": {
+  "file": "models3d/mudkip.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/258.glb"
+ },
+ "marshtomp": {
+  "file": "models3d/marshtomp.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/259.glb"
+ },
+ "swampert": {
+  "file": "models3d/swampert.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/260.glb"
+ },
+ "swampert-mega": {
+  "file": "models3d/swampert-mega.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/260.glb"
+ },
+ "ralts": {
+  "file": "models3d/ralts.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/280.glb"
+ },
+ "kirlia": {
+  "file": "models3d/kirlia.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/281.glb"
+ },
+ "gardevoir": {
+  "file": "models3d/gardevoir.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/282.glb"
+ },
+ "gardevoir-mega": {
+  "file": "models3d/gardevoir-mega.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/282.glb"
+ },
+ "gallade": {
+  "file": "models3d/gallade.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/475.glb"
+ },
+ "gallade-mega": {
+  "file": "models3d/gallade-mega.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/475.glb"
+ },
+ "aron": {
+  "file": "models3d/aron.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/304.glb"
+ },
+ "lairon": {
+  "file": "models3d/lairon.glb",
+  "heightPx": 73,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/305.glb"
+ },
+ "aggron": {
+  "file": "models3d/aggron.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/306.glb"
+ },
+ "aggron-mega": {
+  "file": "models3d/aggron-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/306.glb"
+ },
+ "absol": {
+  "file": "models3d/absol.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/359.glb"
+ },
+ "absol-mega": {
+  "file": "models3d/absol-mega.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/359.glb"
+ },
+ "bagon": {
+  "file": "models3d/bagon.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/371.glb"
+ },
+ "shelgon": {
+  "file": "models3d/shelgon.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/372.glb"
+ },
+ "salamence": {
+  "file": "models3d/salamence.glb",
+  "heightPx": 91,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/373.glb"
+ },
+ "salamence-mega": {
+  "file": "models3d/salamence-mega.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/373.glb"
+ },
+ "beldum": {
+  "file": "models3d/beldum.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/374.glb"
+ },
+ "metang": {
+  "file": "models3d/metang.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/375.glb"
+ },
+ "metagross": {
+  "file": "models3d/metagross.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/376.glb"
+ },
+ "metagross-mega": {
+  "file": "models3d/metagross-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/376.glb"
+ },
+ "rayquaza": {
+  "file": "models3d/rayquaza.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/384.glb"
+ },
+ "rayquaza-mega": {
+  "file": "models3d/rayquaza-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/384.glb"
+ },
+ "munchlax": {
+  "file": "models3d/munchlax.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/446.glb"
+ },
+ "snorlax": {
+  "file": "models3d/snorlax.glb",
+  "heightPx": 109,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/143.glb"
+ },
+ "riolu": {
+  "file": "models3d/riolu.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/447.glb"
+ },
+ "lucario": {
+  "file": "models3d/lucario.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/448.glb"
+ },
+ "lucario-mega": {
+  "file": "models3d/lucario-mega.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/448.glb"
+ },
+ "lucario-mega-z": {
+  "file": "models3d/lucario-mega-z.glb",
+  "heightPx": 85,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/za/448.glb"
+ },
+ "gible": {
+  "file": "models3d/gible.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/443.glb"
+ },
+ "gabite": {
+  "file": "models3d/gabite.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/444.glb"
+ },
+ "garchomp": {
+  "file": "models3d/garchomp.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/445.glb"
+ },
+ "garchomp-mega": {
+  "file": "models3d/garchomp-mega.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/445.glb"
+ },
+ "garchomp-mega-z": {
+  "file": "models3d/garchomp-mega-z.glb",
+  "heightPx": 103,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/za/445.glb"
+ },
+ "caterpie": {
+  "file": "models3d/caterpie.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/10.glb"
+ },
+ "metapod": {
+  "file": "models3d/metapod.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/11.glb"
+ },
+ "butterfree": {
+  "file": "models3d/butterfree.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/12.glb"
+ },
+ "weedle": {
+  "file": "models3d/weedle.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/13.glb"
+ },
+ "kakuna": {
+  "file": "models3d/kakuna.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/14.glb"
+ },
+ "beedrill": {
+  "file": "models3d/beedrill.glb",
+  "heightPx": 76,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/15.glb"
+ },
+ "beedrill-mega": {
+  "file": "models3d/beedrill-mega.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/15.glb"
+ },
+ "nidoran-f": {
+  "file": "models3d/nidoran-f.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/29.glb"
+ },
+ "nidorina": {
+  "file": "models3d/nidorina.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/30.glb"
+ },
+ "nidoqueen": {
+  "file": "models3d/nidoqueen.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/31.glb"
+ },
+ "nidoran-m": {
+  "file": "models3d/nidoran-m.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/32.glb"
+ },
+ "nidorino": {
+  "file": "models3d/nidorino.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/33.glb"
+ },
+ "nidoking": {
+  "file": "models3d/nidoking.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/34.glb"
+ },
+ "vulpix": {
+  "file": "models3d/vulpix.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/37.glb"
+ },
+ "ninetales": {
+  "file": "models3d/ninetales.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/38.glb"
+ },
+ "igglybuff": {
+  "file": "models3d/igglybuff.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/174.glb"
+ },
+ "jigglypuff": {
+  "file": "models3d/jigglypuff.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/39.glb"
+ },
+ "wigglytuff": {
+  "file": "models3d/wigglytuff.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/40.glb"
+ },
+ "zubat": {
+  "file": "models3d/zubat.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/41.glb"
+ },
+ "golbat": {
+  "file": "models3d/golbat.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/42.glb"
+ },
+ "crobat": {
+  "file": "models3d/crobat.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/169.glb"
+ },
+ "oddish": {
+  "file": "models3d/oddish.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/43.glb"
+ },
+ "gloom": {
+  "file": "models3d/gloom.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/44.glb"
+ },
+ "vileplume": {
+  "file": "models3d/vileplume.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/45.glb"
+ },
+ "bellossom": {
+  "file": "models3d/bellossom.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/182.glb"
+ },
+ "growlithe": {
+  "file": "models3d/growlithe.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/58.glb"
+ },
+ "arcanine": {
+  "file": "models3d/arcanine.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/59.glb"
+ },
+ "poliwag": {
+  "file": "models3d/poliwag.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/60.glb"
+ },
+ "poliwhirl": {
+  "file": "models3d/poliwhirl.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/61.glb"
+ },
+ "poliwrath": {
+  "file": "models3d/poliwrath.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/62.glb"
+ },
+ "politoed": {
+  "file": "models3d/politoed.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/186.glb"
+ },
+ "geodude": {
+  "file": "models3d/geodude.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/74.glb"
+ },
+ "graveler": {
+  "file": "models3d/graveler.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/75.glb"
+ },
+ "golem": {
+  "file": "models3d/golem.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/76.glb"
+ },
+ "ponyta": {
+  "file": "models3d/ponyta.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/77.glb"
+ },
+ "rapidash": {
+  "file": "models3d/rapidash.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/78.glb"
+ },
+ "slowpoke": {
+  "file": "models3d/slowpoke.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/79.glb"
+ },
+ "slowbro": {
+  "file": "models3d/slowbro.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/80.glb"
+ },
+ "slowbro-mega": {
+  "file": "models3d/slowbro-mega.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/80.glb"
+ },
+ "slowking": {
+  "file": "models3d/slowking.glb",
+  "heightPx": 106,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/199.glb"
+ },
+ "magnemite": {
+  "file": "models3d/magnemite.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/81.glb"
+ },
+ "magneton": {
+  "file": "models3d/magneton.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/82.glb"
+ },
+ "magnezone": {
+  "file": "models3d/magnezone.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/462.glb"
+ },
+ "onix": {
+  "file": "models3d/onix.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/95.glb"
+ },
+ "steelix": {
+  "file": "models3d/steelix.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/208.glb"
+ },
+ "steelix-mega": {
+  "file": "models3d/steelix-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/208.glb"
+ },
+ "cubone": {
+  "file": "models3d/cubone.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/104.glb"
+ },
+ "marowak": {
+  "file": "models3d/marowak.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/105.glb"
+ },
+ "rhyhorn": {
+  "file": "models3d/rhyhorn.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/111.glb"
+ },
+ "rhydon": {
+  "file": "models3d/rhydon.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/112.glb"
+ },
+ "rhyperior": {
+  "file": "models3d/rhyperior.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/464.glb"
+ },
+ "horsea": {
+  "file": "models3d/horsea.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/116.glb"
+ },
+ "seadra": {
+  "file": "models3d/seadra.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/117.glb"
+ },
+ "kingdra": {
+  "file": "models3d/kingdra.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/230.glb"
+ },
+ "staryu": {
+  "file": "models3d/staryu.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/120.glb"
+ },
+ "starmie": {
+  "file": "models3d/starmie.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/121.glb"
+ },
+ "starmie-mega": {
+  "file": "models3d/starmie-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/121.glb"
+ },
+ "lapras": {
+  "file": "models3d/lapras.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/131.glb"
+ },
+ "aerodactyl": {
+  "file": "models3d/aerodactyl.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/142.glb"
+ },
+ "aerodactyl-mega": {
+  "file": "models3d/aerodactyl-mega.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/142.glb"
+ },
+ "articuno": {
+  "file": "models3d/articuno.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/144.glb"
+ },
+ "zapdos": {
+  "file": "models3d/zapdos.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/145.glb"
+ },
+ "moltres": {
+  "file": "models3d/moltres.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/146.glb"
+ },
+ "mew": {
+  "file": "models3d/mew.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/151.glb"
+ },
+ "porygon": {
+  "file": "models3d/porygon.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/137.glb"
+ },
+ "porygon2": {
+  "file": "models3d/porygon2.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/233.glb"
+ },
+ "porygon-z": {
+  "file": "models3d/porygon-z.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/474.glb"
+ },
+ "tyrogue": {
+  "file": "models3d/tyrogue.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/236.glb"
+ },
+ "hitmonlee": {
+  "file": "models3d/hitmonlee.glb",
+  "heightPx": 91,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/106.glb"
+ },
+ "hitmonchan": {
+  "file": "models3d/hitmonchan.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/107.glb"
+ },
+ "hitmontop": {
+  "file": "models3d/hitmontop.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/237.glb"
+ },
+ "elekid": {
+  "file": "models3d/elekid.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/239.glb"
+ },
+ "electabuzz": {
+  "file": "models3d/electabuzz.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/125.glb"
+ },
+ "electivire": {
+  "file": "models3d/electivire.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/466.glb"
+ },
+ "magby": {
+  "file": "models3d/magby.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/240.glb"
+ },
+ "magmar": {
+  "file": "models3d/magmar.glb",
+  "heightPx": 85,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/126.glb"
+ },
+ "magmortar": {
+  "file": "models3d/magmortar.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/467.glb"
+ },
+ "cleffa": {
+  "file": "models3d/cleffa.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/173.glb"
+ },
+ "clefairy": {
+  "file": "models3d/clefairy.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/35.glb"
+ },
+ "clefable": {
+  "file": "models3d/clefable.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/36.glb"
+ },
+ "bellsprout": {
+  "file": "models3d/bellsprout.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/69.glb"
+ },
+ "weepinbell": {
+  "file": "models3d/weepinbell.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/70.glb"
+ },
+ "victreebel": {
+  "file": "models3d/victreebel.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/71.glb"
+ },
+ "pinsir": {
+  "file": "models3d/pinsir.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/127.glb"
+ },
+ "pinsir-mega": {
+  "file": "models3d/pinsir-mega.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/127.glb"
+ },
+ "meowth": {
+  "file": "models3d/meowth.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/52.glb"
+ },
+ "persian": {
+  "file": "models3d/persian.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/53.glb"
+ },
+ "psyduck": {
+  "file": "models3d/psyduck.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/54.glb"
+ },
+ "golduck": {
+  "file": "models3d/golduck.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/55.glb"
+ },
+ "mankey": {
+  "file": "models3d/mankey.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/56.glb"
+ },
+ "primeape": {
+  "file": "models3d/primeape.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/57.glb"
+ },
+ "annihilape": {
+  "file": "models3d/annihilape.glb",
+  "heightPx": 82,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/979.glb"
+ },
+ "sandshrew": {
+  "file": "models3d/sandshrew.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/27.glb"
+ },
+ "sandslash": {
+  "file": "models3d/sandslash.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/28.glb"
+ },
+ "diglett": {
+  "file": "models3d/diglett.glb",
+  "heightPx": 54,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/50.glb"
+ },
+ "dugtrio": {
+  "file": "models3d/dugtrio.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/51.glb"
+ },
+ "tentacool": {
+  "file": "models3d/tentacool.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/72.glb"
+ },
+ "tentacruel": {
+  "file": "models3d/tentacruel.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/73.glb"
+ },
+ "ditto": {
+  "file": "models3d/ditto.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/132.glb"
+ },
+ "chikorita": {
+  "file": "models3d/chikorita.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/152.glb"
+ },
+ "bayleef": {
+  "file": "models3d/bayleef.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/153.glb"
+ },
+ "meganium": {
+  "file": "models3d/meganium.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/154.glb"
+ },
+ "cyndaquil": {
+  "file": "models3d/cyndaquil.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/155.glb"
+ },
+ "quilava": {
+  "file": "models3d/quilava.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/156.glb"
+ },
+ "typhlosion": {
+  "file": "models3d/typhlosion.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/157.glb"
+ },
+ "totodile": {
+  "file": "models3d/totodile.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/158.glb"
+ },
+ "croconaw": {
+  "file": "models3d/croconaw.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/159.glb"
+ },
+ "feraligatr": {
+  "file": "models3d/feraligatr.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/160.glb"
+ },
+ "feraligatr-mega": {
+  "file": "models3d/feraligatr-mega.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/160.glb"
+ },
+ "togepi": {
+  "file": "models3d/togepi.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/175.glb"
+ },
+ "togetic": {
+  "file": "models3d/togetic.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/176.glb"
+ },
+ "togekiss": {
+  "file": "models3d/togekiss.glb",
+  "heightPx": 91,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/468.glb"
+ },
+ "heracross": {
+  "file": "models3d/heracross.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/214.glb"
+ },
+ "heracross-mega": {
+  "file": "models3d/heracross-mega.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/214.glb"
+ },
+ "sneasel": {
+  "file": "models3d/sneasel.glb",
+  "heightPx": 73,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/215.glb"
+ },
+ "weavile": {
+  "file": "models3d/weavile.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/461.glb"
+ },
+ "sneasler": {
+  "file": "models3d/sneasler.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/903.glb"
+ },
+ "skarmory": {
+  "file": "models3d/skarmory.glb",
+  "heightPx": 97,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/227.glb"
+ },
+ "skarmory-mega": {
+  "file": "models3d/skarmory-mega.glb",
+  "heightPx": 97,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/227.glb"
+ },
+ "raikou": {
+  "file": "models3d/raikou.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/243.glb"
+ },
+ "entei": {
+  "file": "models3d/entei.glb",
+  "heightPx": 109,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/244.glb"
+ },
+ "suicune": {
+  "file": "models3d/suicune.glb",
+  "heightPx": 106,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/245.glb"
+ },
+ "lugia": {
+  "file": "models3d/lugia.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/249.glb"
+ },
+ "ho-oh": {
+  "file": "models3d/ho-oh.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/250.glb"
+ },
+ "phanpy": {
+  "file": "models3d/phanpy.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/231.glb"
+ },
+ "donphan": {
+  "file": "models3d/donphan.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/232.glb"
+ },
+ "wooper": {
+  "file": "models3d/wooper.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/194.glb"
+ },
+ "quagsire": {
+  "file": "models3d/quagsire.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/195.glb"
+ },
+ "clodsire": {
+  "file": "models3d/clodsire.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/980.glb"
+ },
+ "celebi": {
+  "file": "models3d/celebi.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/251.glb"
+ },
+ "murkrow": {
+  "file": "models3d/murkrow.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/198.glb"
+ },
+ "honchkrow": {
+  "file": "models3d/honchkrow.glb",
+  "heightPx": 73,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/430.glb"
+ },
+ "misdreavus": {
+  "file": "models3d/misdreavus.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/200.glb"
+ },
+ "mismagius": {
+  "file": "models3d/mismagius.glb",
+  "heightPx": 73,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/429.glb"
+ },
+ "gligar": {
+  "file": "models3d/gligar.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/207.glb"
+ },
+ "gliscor": {
+  "file": "models3d/gliscor.glb",
+  "heightPx": 106,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/472.glb"
+ },
+ "wingull": {
+  "file": "models3d/wingull.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/278.glb"
+ },
+ "pelipper": {
+  "file": "models3d/pelipper.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/279.glb"
+ },
+ "shroomish": {
+  "file": "models3d/shroomish.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/285.glb"
+ },
+ "breloom": {
+  "file": "models3d/breloom.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/286.glb"
+ },
+ "slakoth": {
+  "file": "models3d/slakoth.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/287.glb"
+ },
+ "vigoroth": {
+  "file": "models3d/vigoroth.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/288.glb"
+ },
+ "slaking": {
+  "file": "models3d/slaking.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/289.glb"
+ },
+ "trapinch": {
+  "file": "models3d/trapinch.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/328.glb"
+ },
+ "vibrava": {
+  "file": "models3d/vibrava.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/329.glb"
+ },
+ "flygon": {
+  "file": "models3d/flygon.glb",
+  "heightPx": 106,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/330.glb"
+ },
+ "swablu": {
+  "file": "models3d/swablu.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/333.glb"
+ },
+ "altaria": {
+  "file": "models3d/altaria.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/334.glb"
+ },
+ "altaria-mega": {
+  "file": "models3d/altaria-mega.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/334.glb"
+ },
+ "feebas": {
+  "file": "models3d/feebas.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/349.glb"
+ },
+ "milotic": {
+  "file": "models3d/milotic.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/350.glb"
+ },
+ "duskull": {
+  "file": "models3d/duskull.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/355.glb"
+ },
+ "dusclops": {
+  "file": "models3d/dusclops.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/356.glb"
+ },
+ "dusknoir": {
+  "file": "models3d/dusknoir.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/477.glb"
+ },
+ "snorunt": {
+  "file": "models3d/snorunt.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/361.glb"
+ },
+ "glalie": {
+  "file": "models3d/glalie.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/362.glb"
+ },
+ "glalie-mega": {
+  "file": "models3d/glalie-mega.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/362.glb"
+ },
+ "froslass": {
+  "file": "models3d/froslass.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/478.glb"
+ },
+ "spheal": {
+  "file": "models3d/spheal.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/363.glb"
+ },
+ "sealeo": {
+  "file": "models3d/sealeo.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/364.glb"
+ },
+ "walrein": {
+  "file": "models3d/walrein.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/365.glb"
+ },
+ "kyogre": {
+  "file": "models3d/kyogre.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/382.glb"
+ },
+ "groudon": {
+  "file": "models3d/groudon.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/383.glb"
+ },
+ "latias": {
+  "file": "models3d/latias.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/380.glb"
+ },
+ "latias-mega": {
+  "file": "models3d/latias-mega.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/380.glb"
+ },
+ "latios": {
+  "file": "models3d/latios.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/381.glb"
+ },
+ "latios-mega": {
+  "file": "models3d/latios-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/381.glb"
+ },
+ "mawile": {
+  "file": "models3d/mawile.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/303.glb"
+ },
+ "mawile-mega": {
+  "file": "models3d/mawile-mega.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/303.glb"
+ },
+ "meditite": {
+  "file": "models3d/meditite.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/307.glb"
+ },
+ "medicham": {
+  "file": "models3d/medicham.glb",
+  "heightPx": 85,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/308.glb"
+ },
+ "medicham-mega": {
+  "file": "models3d/medicham-mega.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/308.glb"
+ },
+ "electrike": {
+  "file": "models3d/electrike.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/309.glb"
+ },
+ "manectric": {
+  "file": "models3d/manectric.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/310.glb"
+ },
+ "manectric-mega": {
+  "file": "models3d/manectric-mega.glb",
+  "heightPx": 100,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/310.glb"
+ },
+ "shuppet": {
+  "file": "models3d/shuppet.glb",
+  "heightPx": 64,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/353.glb"
+ },
+ "banette": {
+  "file": "models3d/banette.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/354.glb"
+ },
+ "banette-mega": {
+  "file": "models3d/banette-mega.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/354.glb"
+ },
+ "sableye": {
+  "file": "models3d/sableye.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/302.glb"
+ },
+ "sableye-mega": {
+  "file": "models3d/sableye-mega.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/302.glb"
+ },
+ "carvanha": {
+  "file": "models3d/carvanha.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/318.glb"
+ },
+ "sharpedo": {
+  "file": "models3d/sharpedo.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/319.glb"
+ },
+ "sharpedo-mega": {
+  "file": "models3d/sharpedo-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/319.glb"
+ },
+ "numel": {
+  "file": "models3d/numel.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/322.glb"
+ },
+ "camerupt": {
+  "file": "models3d/camerupt.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/323.glb"
+ },
+ "camerupt-mega": {
+  "file": "models3d/camerupt-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/323.glb"
+ },
+ "chingling": {
+  "file": "models3d/chingling.glb",
+  "heightPx": 54,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/433.glb"
+ },
+ "chimecho": {
+  "file": "models3d/chimecho.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/358.glb"
+ },
+ "regirock": {
+  "file": "models3d/regirock.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/377.glb"
+ },
+ "regice": {
+  "file": "models3d/regice.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/378.glb"
+ },
+ "registeel": {
+  "file": "models3d/registeel.glb",
+  "heightPx": 103,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/379.glb"
+ },
+ "jirachi": {
+  "file": "models3d/jirachi.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/385.glb"
+ },
+ "deoxys": {
+  "file": "models3d/deoxys.glb",
+  "heightPx": 76,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/386.glb"
+ },
+ "turtwig": {
+  "file": "models3d/turtwig.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/387.glb"
+ },
+ "grotle": {
+  "file": "models3d/grotle.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/388.glb"
+ },
+ "torterra": {
+  "file": "models3d/torterra.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/389.glb"
+ },
+ "chimchar": {
+  "file": "models3d/chimchar.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/390.glb"
+ },
+ "monferno": {
+  "file": "models3d/monferno.glb",
+  "heightPx": 73,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/391.glb"
+ },
+ "infernape": {
+  "file": "models3d/infernape.glb",
+  "heightPx": 82,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/392.glb"
+ },
+ "piplup": {
+  "file": "models3d/piplup.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/393.glb"
+ },
+ "prinplup": {
+  "file": "models3d/prinplup.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/394.glb"
+ },
+ "empoleon": {
+  "file": "models3d/empoleon.glb",
+  "heightPx": 97,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/395.glb"
+ },
+ "shinx": {
+  "file": "models3d/shinx.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/403.glb"
+ },
+ "luxio": {
+  "file": "models3d/luxio.glb",
+  "heightPx": 73,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/404.glb"
+ },
+ "luxray": {
+  "file": "models3d/luxray.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/405.glb"
+ },
+ "starly": {
+  "file": "models3d/starly.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/396.glb"
+ },
+ "staravia": {
+  "file": "models3d/staravia.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/397.glb"
+ },
+ "staraptor": {
+  "file": "models3d/staraptor.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/398.glb"
+ },
+ "buneary": {
+  "file": "models3d/buneary.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/427.glb"
+ },
+ "lopunny": {
+  "file": "models3d/lopunny.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/428.glb"
+ },
+ "lopunny-mega": {
+  "file": "models3d/lopunny-mega.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/428.glb"
+ },
+ "dialga": {
+  "file": "models3d/dialga.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/483.glb"
+ },
+ "palkia": {
+  "file": "models3d/palkia.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/484.glb"
+ },
+ "giratina": {
+  "file": "models3d/giratina.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/487.glb"
+ },
+ "darkrai": {
+  "file": "models3d/darkrai.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/491.glb"
+ },
+ "darkrai-mega": {
+  "file": "models3d/darkrai-mega.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/491.glb"
+ },
+ "snover": {
+  "file": "models3d/snover.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/459.glb"
+ },
+ "abomasnow": {
+  "file": "models3d/abomasnow.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/460.glb"
+ },
+ "abomasnow-mega": {
+  "file": "models3d/abomasnow-mega.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/460.glb"
+ },
+ "happiny": {
+  "file": "models3d/happiny.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/440.glb"
+ },
+ "chansey": {
+  "file": "models3d/chansey.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/113.glb"
+ },
+ "blissey": {
+  "file": "models3d/blissey.glb",
+  "heightPx": 91,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/242.glb"
+ },
+ "spiritomb": {
+  "file": "models3d/spiritomb.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/442.glb"
+ },
+ "rotom": {
+  "file": "models3d/rotom.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/479.glb"
+ },
+ "croagunk": {
+  "file": "models3d/croagunk.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/453.glb"
+ },
+ "toxicroak": {
+  "file": "models3d/toxicroak.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/454.glb"
+ },
+ "uxie": {
+  "file": "models3d/uxie.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/480.glb"
+ },
+ "mesprit": {
+  "file": "models3d/mesprit.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/481.glb"
+ },
+ "azelf": {
+  "file": "models3d/azelf.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/482.glb"
+ },
+ "heatran": {
+  "file": "models3d/heatran.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/485.glb"
+ },
+ "regigigas": {
+  "file": "models3d/regigigas.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/486.glb"
+ },
+ "cresselia": {
+  "file": "models3d/cresselia.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/488.glb"
+ },
+ "shaymin": {
+  "file": "models3d/shaymin.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/492.glb"
+ },
+ "arceus": {
+  "file": "models3d/arceus.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/493.glb"
+ },
+ "snivy": {
+  "file": "models3d/snivy.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/495.glb"
+ },
+ "servine": {
+  "file": "models3d/servine.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/496.glb"
+ },
+ "serperior": {
+  "file": "models3d/serperior.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/497.glb"
+ },
+ "tepig": {
+  "file": "models3d/tepig.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/498.glb"
+ },
+ "pignite": {
+  "file": "models3d/pignite.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/499.glb"
+ },
+ "emboar": {
+  "file": "models3d/emboar.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/500.glb"
+ },
+ "oshawott": {
+  "file": "models3d/oshawott.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/501.glb"
+ },
+ "dewott": {
+  "file": "models3d/dewott.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/502.glb"
+ },
+ "samurott": {
+  "file": "models3d/samurott.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/503.glb"
+ },
+ "zorua": {
+  "file": "models3d/zorua.glb",
+  "heightPx": 67,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/570.glb"
+ },
+ "zoroark": {
+  "file": "models3d/zoroark.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/571.glb"
+ },
+ "axew": {
+  "file": "models3d/axew.glb",
+  "heightPx": 64,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/610.glb"
+ },
+ "fraxure": {
+  "file": "models3d/fraxure.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/611.glb"
+ },
+ "haxorus": {
+  "file": "models3d/haxorus.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/612.glb"
+ },
+ "deino": {
+  "file": "models3d/deino.glb",
+  "heightPx": 70,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/633.glb"
+ },
+ "zweilous": {
+  "file": "models3d/zweilous.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/634.glb"
+ },
+ "hydreigon": {
+  "file": "models3d/hydreigon.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/635.glb"
+ },
+ "litwick": {
+  "file": "models3d/litwick.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/607.glb"
+ },
+ "lampent": {
+  "file": "models3d/lampent.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/608.glb"
+ },
+ "chandelure": {
+  "file": "models3d/chandelure.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/609.glb"
+ },
+ "audino": {
+  "file": "models3d/audino.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/531.glb"
+ },
+ "audino-mega": {
+  "file": "models3d/audino-mega.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/531.glb"
+ },
+ "drilbur": {
+  "file": "models3d/drilbur.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/529.glb"
+ },
+ "excadrill": {
+  "file": "models3d/excadrill.glb",
+  "heightPx": 67,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/530.glb"
+ },
+ "excadrill-mega": {
+  "file": "models3d/excadrill-mega.glb",
+  "heightPx": 73,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/530.glb"
+ },
+ "venipede": {
+  "file": "models3d/venipede.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/543.glb"
+ },
+ "whirlipede": {
+  "file": "models3d/whirlipede.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/544.glb"
+ },
+ "scolipede": {
+  "file": "models3d/scolipede.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/545.glb"
+ },
+ "scraggy": {
+  "file": "models3d/scraggy.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/559.glb"
+ },
+ "scrafty": {
+  "file": "models3d/scrafty.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/560.glb"
+ },
+ "tynamo": {
+  "file": "models3d/tynamo.glb",
+  "heightPx": 54,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/602.glb"
+ },
+ "eelektrik": {
+  "file": "models3d/eelektrik.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/603.glb"
+ },
+ "eelektross": {
+  "file": "models3d/eelektross.glb",
+  "heightPx": 109,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/604.glb"
+ },
+ "eelektross-mega": {
+  "file": "models3d/eelektross-mega.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/604.glb"
+ },
+ "golett": {
+  "file": "models3d/golett.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/622.glb"
+ },
+ "golurk": {
+  "file": "models3d/golurk.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/623.glb"
+ },
+ "larvesta": {
+  "file": "models3d/larvesta.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/636.glb"
+ },
+ "volcarona": {
+  "file": "models3d/volcarona.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/637.glb"
+ },
+ "sandile": {
+  "file": "models3d/sandile.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/551.glb"
+ },
+ "krokorok": {
+  "file": "models3d/krokorok.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/552.glb"
+ },
+ "krookodile": {
+  "file": "models3d/krookodile.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/553.glb"
+ },
+ "pawniard": {
+  "file": "models3d/pawniard.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/624.glb"
+ },
+ "bisharp": {
+  "file": "models3d/bisharp.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/625.glb"
+ },
+ "kingambit": {
+  "file": "models3d/kingambit.glb",
+  "heightPx": 106,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/983.glb"
+ },
+ "rufflet": {
+  "file": "models3d/rufflet.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/627.glb"
+ },
+ "braviary": {
+  "file": "models3d/braviary.glb",
+  "heightPx": 91,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/628.glb"
+ },
+ "vullaby": {
+  "file": "models3d/vullaby.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/629.glb"
+ },
+ "mandibuzz": {
+  "file": "models3d/mandibuzz.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/630.glb"
+ },
+ "victini": {
+  "file": "models3d/victini.glb",
+  "heightPx": 58,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/494.glb"
+ },
+ "cobalion": {
+  "file": "models3d/cobalion.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/638.glb"
+ },
+ "terrakion": {
+  "file": "models3d/terrakion.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/639.glb"
+ },
+ "virizion": {
+  "file": "models3d/virizion.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/640.glb"
+ },
+ "tornadus": {
+  "file": "models3d/tornadus.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/641.glb"
+ },
+ "thundurus": {
+  "file": "models3d/thundurus.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/642.glb"
+ },
+ "landorus": {
+  "file": "models3d/landorus.glb",
+  "heightPx": 76,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/645.glb"
+ },
+ "reshiram": {
+  "file": "models3d/reshiram.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/643.glb"
+ },
+ "zekrom": {
+  "file": "models3d/zekrom.glb",
+  "heightPx": 112,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/644.glb"
+ },
+ "kyurem": {
+  "file": "models3d/kyurem.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/646.glb"
+ },
+ "keldeo": {
+  "file": "models3d/keldeo.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/647.glb"
+ },
+ "meloetta": {
+  "file": "models3d/meloetta.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/648.glb"
+ },
+ "genesect": {
+  "file": "models3d/genesect.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/649.glb"
+ },
+ "froakie": {
+  "file": "models3d/froakie.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/656.glb"
+ },
+ "frogadier": {
+  "file": "models3d/frogadier.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/657.glb"
+ },
+ "greninja": {
+  "file": "models3d/greninja.glb",
+  "heightPx": 91,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/658.glb"
+ },
+ "greninja-mega": {
+  "file": "models3d/greninja-mega.glb",
+  "heightPx": 91,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/658.glb"
+ },
+ "fennekin": {
+  "file": "models3d/fennekin.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/653.glb"
+ },
+ "braixen": {
+  "file": "models3d/braixen.glb",
+  "heightPx": 76,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/654.glb"
+ },
+ "delphox": {
+  "file": "models3d/delphox.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/655.glb"
+ },
+ "delphox-mega": {
+  "file": "models3d/delphox-mega.glb",
+  "heightPx": 91,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/655.glb"
+ },
+ "chespin": {
+  "file": "models3d/chespin.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/650.glb"
+ },
+ "quilladin": {
+  "file": "models3d/quilladin.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/651.glb"
+ },
+ "chesnaught": {
+  "file": "models3d/chesnaught.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/652.glb"
+ },
+ "chesnaught-mega": {
+  "file": "models3d/chesnaught-mega.glb",
+  "heightPx": 94,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/652.glb"
+ },
+ "honedge": {
+  "file": "models3d/honedge.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/679.glb"
+ },
+ "doublade": {
+  "file": "models3d/doublade.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/680.glb"
+ },
+ "aegislash": {
+  "file": "models3d/aegislash.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/681.glb"
+ },
+ "goomy": {
+  "file": "models3d/goomy.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/704.glb"
+ },
+ "sliggoo": {
+  "file": "models3d/sliggoo.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/705.glb"
+ },
+ "goodra": {
+  "file": "models3d/goodra.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/706.glb"
+ },
+ "litleo": {
+  "file": "models3d/litleo.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/667.glb"
+ },
+ "flabebe": {
+  "file": "models3d/flabebe.glb",
+  "heightPx": 54,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/669.glb"
+ },
+ "floette": {
+  "file": "models3d/floette.glb",
+  "heightPx": 54,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/670.glb"
+ },
+ "floette-mega": {
+  "file": "models3d/floette-mega.glb",
+  "heightPx": 54,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/670.glb"
+ },
+ "florges": {
+  "file": "models3d/florges.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/671.glb"
+ },
+ "espurr": {
+  "file": "models3d/espurr.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/677.glb"
+ },
+ "meowstic": {
+  "file": "models3d/meowstic.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/678.glb"
+ },
+ "inkay": {
+  "file": "models3d/inkay.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/686.glb"
+ },
+ "malamar": {
+  "file": "models3d/malamar.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/687.glb"
+ },
+ "malamar-mega": {
+  "file": "models3d/malamar-mega.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/za/687.glb"
+ },
+ "binacle": {
+  "file": "models3d/binacle.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/688.glb"
+ },
+ "barbaracle": {
+  "file": "models3d/barbaracle.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/689.glb"
+ },
+ "skrelp": {
+  "file": "models3d/skrelp.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/690.glb"
+ },
+ "dragalge": {
+  "file": "models3d/dragalge.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/691.glb"
+ },
+ "hawlucha": {
+  "file": "models3d/hawlucha.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/701.glb"
+ },
+ "noibat": {
+  "file": "models3d/noibat.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/714.glb"
+ },
+ "noivern": {
+  "file": "models3d/noivern.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/715.glb"
+ },
+ "xerneas": {
+  "file": "models3d/xerneas.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/716.glb"
+ },
+ "yveltal": {
+  "file": "models3d/yveltal.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/717.glb"
+ },
+ "zygarde": {
+  "file": "models3d/zygarde.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/718.glb"
+ },
+ "diancie": {
+  "file": "models3d/diancie.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/719.glb"
+ },
+ "diancie-mega": {
+  "file": "models3d/diancie-mega.glb",
+  "heightPx": 79,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/719.glb"
+ },
+ "hoopa": {
+  "file": "models3d/hoopa.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/720.glb"
+ },
+ "volcanion": {
+  "file": "models3d/volcanion.glb",
+  "heightPx": 97,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/721.glb"
+ },
+ "rowlet": {
+  "file": "models3d/rowlet.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/722.glb"
+ },
+ "dartrix": {
+  "file": "models3d/dartrix.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/723.glb"
+ },
+ "decidueye": {
+  "file": "models3d/decidueye.glb",
+  "heightPx": 94,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/724.glb"
+ },
+ "litten": {
+  "file": "models3d/litten.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/725.glb"
+ },
+ "torracat": {
+  "file": "models3d/torracat.glb",
+  "heightPx": 67,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/726.glb"
+ },
+ "incineroar": {
+  "file": "models3d/incineroar.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/727.glb"
+ },
+ "popplio": {
+  "file": "models3d/popplio.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/728.glb"
+ },
+ "brionne": {
+  "file": "models3d/brionne.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/729.glb"
+ },
+ "primarina": {
+  "file": "models3d/primarina.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/730.glb"
+ },
+ "rockruff": {
+  "file": "models3d/rockruff.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/744.glb"
+ },
+ "lycanroc": {
+  "file": "models3d/lycanroc.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/745.glb"
+ },
+ "mimikyu": {
+  "file": "models3d/mimikyu.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/778.glb"
+ },
+ "crabrawler": {
+  "file": "models3d/crabrawler.glb",
+  "heightPx": 64,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/739.glb"
+ },
+ "crabominable": {
+  "file": "models3d/crabominable.glb",
+  "heightPx": 97,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/740.glb"
+ },
+ "wimpod": {
+  "file": "models3d/wimpod.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/767.glb"
+ },
+ "golisopod": {
+  "file": "models3d/golisopod.glb",
+  "heightPx": 106,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/768.glb"
+ },
+ "drampa": {
+  "file": "models3d/drampa.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/780.glb"
+ },
+ "tapu-koko": {
+  "file": "models3d/tapu-koko.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/785.glb"
+ },
+ "tapu-lele": {
+  "file": "models3d/tapu-lele.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/786.glb"
+ },
+ "tapu-bulu": {
+  "file": "models3d/tapu-bulu.glb",
+  "heightPx": 103,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/787.glb"
+ },
+ "tapu-fini": {
+  "file": "models3d/tapu-fini.glb",
+  "heightPx": 85,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/788.glb"
+ },
+ "cosmog": {
+  "file": "models3d/cosmog.glb",
+  "heightPx": 54,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/789.glb"
+ },
+ "cosmoem": {
+  "file": "models3d/cosmoem.glb",
+  "heightPx": 54,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/790.glb"
+ },
+ "solgaleo": {
+  "file": "models3d/solgaleo.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/791.glb"
+ },
+ "lunala": {
+  "file": "models3d/lunala.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/792.glb"
+ },
+ "necrozma": {
+  "file": "models3d/necrozma.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/800.glb"
+ },
+ "magearna": {
+  "file": "models3d/magearna.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/801.glb"
+ },
+ "marshadow": {
+  "file": "models3d/marshadow.glb",
+  "heightPx": 67,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/802.glb"
+ },
+ "zeraora": {
+  "file": "models3d/zeraora.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/807.glb"
+ },
+ "zeraora-mega": {
+  "file": "models3d/zeraora-mega.glb",
+  "heightPx": 91,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/mega/807.glb"
+ },
+ "meltan": {
+  "file": "models3d/meltan.glb",
+  "heightPx": 54,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/808.glb"
+ },
+ "melmetal": {
+  "file": "models3d/melmetal.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/809.glb"
+ },
+ "grookey": {
+  "file": "models3d/grookey.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/810.glb"
+ },
+ "thwackey": {
+  "file": "models3d/thwackey.glb",
+  "heightPx": 67,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/811.glb"
+ },
+ "rillaboom": {
+  "file": "models3d/rillaboom.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/812.glb"
+ },
+ "scorbunny": {
+  "file": "models3d/scorbunny.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/813.glb"
+ },
+ "raboot": {
+  "file": "models3d/raboot.glb",
+  "heightPx": 64,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/814.glb"
+ },
+ "cinderace": {
+  "file": "models3d/cinderace.glb",
+  "heightPx": 88,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/815.glb"
+ },
+ "sobble": {
+  "file": "models3d/sobble.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/816.glb"
+ },
+ "drizzile": {
+  "file": "models3d/drizzile.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/817.glb"
+ },
+ "inteleon": {
+  "file": "models3d/inteleon.glb",
+  "heightPx": 103,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/818.glb"
+ },
+ "dreepy": {
+  "file": "models3d/dreepy.glb",
+  "heightPx": 61,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/885.glb"
+ },
+ "drakloak": {
+  "file": "models3d/drakloak.glb",
+  "heightPx": 88,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/886.glb"
+ },
+ "dragapult": {
+  "file": "models3d/dragapult.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/887.glb"
+ },
+ "toxel": {
+  "file": "models3d/toxel.glb",
+  "heightPx": 58,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/848.glb"
+ },
+ "toxtricity": {
+  "file": "models3d/toxtricity.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/849.glb"
+ },
+ "rookidee": {
+  "file": "models3d/rookidee.glb",
+  "heightPx": 54,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/821.glb"
+ },
+ "corvisquire": {
+  "file": "models3d/corvisquire.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/822.glb"
+ },
+ "corviknight": {
+  "file": "models3d/corviknight.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/823.glb"
+ },
+ "grimmsnarl": {
+  "file": "models3d/grimmsnarl.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Unborne-Fetus/Pokedex-3D-Models-Animations/main/0861/regular.glb"
+ },
+ "falinks": {
+  "file": "models3d/falinks.glb",
+  "heightPx": 112,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/870.glb"
+ },
+ "applin": {
+  "file": "models3d/applin.glb",
+  "heightPx": 54,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/840.glb"
+ },
+ "flapple": {
+  "file": "models3d/flapple.glb",
+  "heightPx": 55,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/841.glb"
+ },
+ "appletun": {
+  "file": "models3d/appletun.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/842.glb"
+ },
+ "hydrapple": {
+  "file": "models3d/hydrapple.glb",
+  "heightPx": 100,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1019.glb"
+ },
+ "duraludon": {
+  "file": "models3d/duraludon.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/884.glb"
+ },
+ "archaludon": {
+  "file": "models3d/archaludon.glb",
+  "heightPx": 106,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1018.glb"
+ },
+ "zacian": {
+  "file": "models3d/zacian.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/888.glb"
+ },
+ "zamazenta": {
+  "file": "models3d/zamazenta.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/889.glb"
+ },
+ "eternatus": {
+  "file": "models3d/eternatus.glb",
+  "heightPx": 112,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/890.glb"
+ },
+ "kubfu": {
+  "file": "models3d/kubfu.glb",
+  "heightPx": 64,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/891.glb"
+ },
+ "urshifu": {
+  "file": "models3d/urshifu.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/892.glb"
+ },
+ "calyrex": {
+  "file": "models3d/calyrex.glb",
+  "heightPx": 79,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/898.glb"
+ },
+ "zarude": {
+  "file": "models3d/zarude.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/893.glb"
+ },
+ "sprigatito": {
+  "file": "models3d/sprigatito.glb",
+  "heightPx": 58,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/906.glb"
+ },
+ "floragato": {
+  "file": "models3d/floragato.glb",
+  "heightPx": 73,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/907.glb"
+ },
+ "meowscarada": {
+  "file": "models3d/meowscarada.glb",
+  "heightPx": 91,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/908.glb"
+ },
+ "fuecoco": {
+  "file": "models3d/fuecoco.glb",
+  "heightPx": 58,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/909.glb"
+ },
+ "crocalor": {
+  "file": "models3d/crocalor.glb",
+  "heightPx": 76,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/910.glb"
+ },
+ "skeledirge": {
+  "file": "models3d/skeledirge.glb",
+  "heightPx": 94,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/911.glb"
+ },
+ "quaxly": {
+  "file": "models3d/quaxly.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/912.glb"
+ },
+ "quaxwell": {
+  "file": "models3d/quaxwell.glb",
+  "heightPx": 82,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/913.glb"
+ },
+ "quaquaval": {
+  "file": "models3d/quaquaval.glb",
+  "heightPx": 100,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/914.glb"
+ },
+ "tinkatink": {
+  "file": "models3d/tinkatink.glb",
+  "heightPx": 58,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/957.glb"
+ },
+ "tinkatuff": {
+  "file": "models3d/tinkatuff.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/958.glb"
+ },
+ "tinkaton": {
+  "file": "models3d/tinkaton.glb",
+  "heightPx": 67,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/959.glb"
+ },
+ "ceruledge": {
+  "file": "models3d/ceruledge.glb",
+  "heightPx": 94,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/937.glb"
+ },
+ "gimmighoul": {
+  "file": "models3d/gimmighoul.glb",
+  "heightPx": 55,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/999.glb"
+ },
+ "gholdengo": {
+  "file": "models3d/gholdengo.glb",
+  "heightPx": 82,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1000.glb"
+ },
+ "nacli": {
+  "file": "models3d/nacli.glb",
+  "heightPx": 58,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/932.glb"
+ },
+ "naclstack": {
+  "file": "models3d/naclstack.glb",
+  "heightPx": 64,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/933.glb"
+ },
+ "garganacl": {
+  "file": "models3d/garganacl.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/934.glb"
+ },
+ "tatsugiri": {
+  "file": "models3d/tatsugiri.glb",
+  "heightPx": 76,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/978.glb"
+ },
+ "frigibax": {
+  "file": "models3d/frigibax.glb",
+  "heightPx": 61,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/996.glb"
+ },
+ "arctibax": {
+  "file": "models3d/arctibax.glb",
+  "heightPx": 70,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/997.glb"
+ },
+ "baxcalibur": {
+  "file": "models3d/baxcalibur.glb",
+  "heightPx": 109,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/998.glb"
+ },
+ "koraidon": {
+  "file": "models3d/koraidon.glb",
+  "heightPx": 112,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1007.glb"
+ },
+ "miraidon": {
+  "file": "models3d/miraidon.glb",
+  "heightPx": 112,
+  "anim": "idle",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1008.glb"
+ },
+ "wo-chien": {
+  "file": "models3d/wo-chien.glb",
+  "heightPx": 91,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1001.glb"
+ },
+ "chien-pao": {
+  "file": "models3d/chien-pao.glb",
+  "heightPx": 103,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1002.glb"
+ },
+ "ting-lu": {
+  "file": "models3d/ting-lu.glb",
+  "heightPx": 112,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1003.glb"
+ },
+ "chi-yu": {
+  "file": "models3d/chi-yu.glb",
+  "heightPx": 58,
+  "anim": "full",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1004.glb"
+ },
+ "ogerpon": {
+  "file": "models3d/ogerpon.glb",
+  "heightPx": 82,
+  "anim": "rig",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1017.glb"
+ },
+ "pecharunt": {
+  "file": "models3d/pecharunt.glb",
+  "heightPx": 55,
+  "anim": "static",
+  "source": "Pokemon-3D-api/assets/main/models/opt/regular/1025.glb"
+ }
 }

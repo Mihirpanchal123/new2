@@ -237,7 +237,7 @@ const Retro = (() => {
   const ANIM = new Map();
   function opaqueBox(img, w, h) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);   // CPU-backed: read back below
     const d = g.getImageData(0, 0, w, h).data;
     let x0 = w, y0 = h, x1 = -1, y1 = -1;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
@@ -320,9 +320,9 @@ const Retro = (() => {
   //  loads when such a Pokémon is in the battle. Any failure (no WebGL, model
   //  missing) falls back to the 2.5D sheet or the pixel sprite.
   // ---------------------------------------------------------------------
-  let L3 = null, MAN3 = null;
+  let L3 = null, L3m = null, MAN3 = null;
   const lives = new Set();                             // fighters showing a live model (released when they leave the field)
-  const live3D = () => L3 || (L3 = import('./retro3d.js').catch(e => { console.warn('live 3D unavailable', e); return null; }));
+  const live3D = () => L3 || (L3 = import('./retro3d.js').then(m => (L3m = m)).catch(e => { console.warn('live 3D unavailable', e); return null; }));
   function hasLive(species) {
     if (prefs.live3d === false || !species) return Promise.resolve(false);
     if (!MAN3) MAN3 = fetch('models3d/manifest.json').then(r => r.ok ? r.json() : {}).catch(() => ({}));
@@ -332,8 +332,8 @@ const Retro = (() => {
   const getLive = species => hasLive(species).then(ok => ok ? live3D().then(L => L && L.create(species)) : null).catch(e => { console.warn('live 3D model unavailable for', species, e); return null; });
   function dropLive(f) { if (f.live) { f.live.dispose(); f.live = null; } lives.delete(f); }
   // Voxel 3D (prototype): Pokémon without a model get their animated sprite inflated into a voxel volume.
-  // Species listed here only, for now (Mega forms of a listed species included)
-  const VOXEL3D = new Set(['charizard']);
+  // Species listed here only (Mega forms of a listed species included); every Pokémon now has a real model
+  const VOXEL3D = new Set([]);
   const getVoxel = (mon, anim) => prefs.live3d !== false && VOXEL3D.has(mon.species) && anim.frames.length
     ? live3D().then(L => L && L.voxel(anim)).catch(e => { console.warn('voxel 3D unavailable for', mon.species, e); return null; })
     : Promise.resolve(null);
@@ -464,8 +464,9 @@ const Retro = (() => {
   const SKINS = ['#f6cfa8', '#e9b48a', '#c98d5f', '#8d5a3a', '#f3d9c0'];
   const HAIRS = ['#2b1d14', '#6b3d1f', '#d9a441', '#1e1e2a', '#9a6430', '#c0392b', '#7f8c8d', '#e8e0d0'];
   const SHIRTS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#ecf0f1', '#34495e', '#ff79b0', '#7f5af0'];
+  // (CPU-backed: outline() reads its pixels back, which is slow from a GPU canvas - the stands hold hundreds)
   function personCanvas() {
-    const c = newCanvas(9, 15), g = c.getContext('2d');
+    const c = newCanvas(9, 15), g = c.getContext('2d', { willReadFrequently: true });
     const s = pick(SKINS), h = pick(HAIRS), sh = pick(SHIRTS), pa = pick(['#2c3e50', '#34495e', '#5d4037', '#1e272e', '#576574']);
     const hat = Math.random() < 0.25 ? pick(['#c0392b', '#2980b9', '#f39c12', '#ffffff']) : null;
     P_(g, s, 2, 1, 5, 5); P_(g, h, 2, 0, 5, 2); P_(g, h, 1, 1, 1, 4); P_(g, h, 7, 1, 1, 3);
@@ -732,7 +733,7 @@ const Retro = (() => {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!op(x, y) && (op(x - 1, y) || op(x + 1, y) || op(x, y - 1) || op(x, y + 1))) g.fillRect(x, y, 1, 1);
   }
   function trainerArt(o, pose) {
-    const c = newCanvas(18, 30), g = c.getContext('2d');
+    const c = newCanvas(18, 30), g = c.getContext('2d', { willReadFrequently: true });   // outline() reads it back
     const C = n => n == null ? null : hex(n);
     const skin = '#f6cfa8', hair = C(o.hair), top = C(o.top), inner = C(o.inner ?? o.top), legs = C(o.legs), shoes = C(o.shoes), hatC = C(o.hatColor);
     const oy = pose === 'cheer' ? 0 : 1;
@@ -873,37 +874,62 @@ const Retro = (() => {
     for (let i = 0; i < 32; i++) heat[i] *= 1 - dt * 0.03;
     for (const f of F) if (f && f.state === 'idle') heat[heatCell(f.x, f.y)] += dt;
   }
-  // each new goal comes from a tactic: sweep around the foe, cross to its other side,
-  // reposition far across the field, retreat when hurt, or press in for a physical hit
+  // Movement follows the rhythm of the fight, like a fighter's footwork. Each goal has a purpose:
+  //   after an action   back off out of reach after a contact hit; after a ranged move sidestep or hold ground
+  //   while waiting     a deliberate move round the foe toward fresh ground (flank / arc / cross), then stand and watch
+  //   about to act      set up at the range of the planned move: close in for a contact move, keep distance otherwise
+  //   badly hurt        retreat
+  // A goal of null is "stand here and watch the foe" (f.pauseT says how long).
+  // where the next move wants to be thrown from
+  function moveRange(f, foe) {
+    const pm = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
+    return pm && isContact(pm) ? space(f, foe) * 1.2 : wantDist(f, foe);
+  }
   function pickGoal(f) {
     const foe = foeOf(f);
     const inField = g => ({ x: clamp(g.x, field.x0 + 8, field.x1 - 8), y: clamp(g.y, field.y0 + 6, field.y1 - 6) });
     if (!foe || foe.state !== 'idle') return inField({ x: f.x + R(-220, 220), y: f.y + R(-110, 110) });
-    const want = wantDist(f, foe), low = f.mon.hp / f.mon.maxhp < 0.3, fast = spd(f.mon) > 90;
-    const plan = f.plan != null && f.plan >= 0 ? f.mon.moves[f.plan] : null;
+    const want = wantDist(f, foe), low = f.mon.hp / f.mon.maxhp < 0.3;
     const r = Math.random();
-    let mode = low && r < 0.4 ? 'retreat' : r < 0.1 ? 'cross' : r < (fast ? 0.38 : 0.26) ? 'flank' : r < 0.64 ? 'arc' : 'roam';
-    if (f.hitRun) { mode = Math.random() < 0.5 ? 'roam' : 'flank'; f.hitRun = false; }
+    let mode;
+    if (low && r < 0.45) mode = 'retreat';
+    else if (f.hitRun) mode = f.lastContact ? 'backoff' : r < 0.55 ? 'sidestep' : 'hold';
+    else if (f.cd < 1.3) mode = 'setup';
+    else mode = r < 0.1 ? 'cross' : r < 0.45 ? 'flank' : r < 0.75 ? 'arc' : 'hold';
+    f.hitRun = false;
     f.mode = mode;
-    if (mode !== 'flank' && Math.random() < 0.25) f.orbit *= -1;
+    f.goalPace = mode === 'setup' || mode === 'sidestep' ? 0.55 : mode === 'backoff' ? 0.8 : 1;   // stepping, not running
+    if (mode === 'hold') { f.pauseT = R(0.7, 1.5); return null; }
+    if ((mode === 'arc' || mode === 'cross') && Math.random() < 0.25) f.orbit *= -1;
+    const ax = f.x - foe.x, ay = (f.y - foe.y) / 0.6, L = Math.hypot(ax, ay) || 1, here = Math.atan2(ay, ax);
     let best = null, bs = -1e9;
     for (let i = 0; i < 14; i++) {
       let g;
-      if (mode === 'flank') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(1.3, 1.7); g = { x: foe.x + Math.cos(ang) * want * 1.1, y: foe.y + Math.sin(ang) * want * 0.66 }; }   // circle round the foe a quarter-turn at a time (never cut through it)
-      else if (mode === 'arc') { const ang = Math.atan2((f.y - foe.y) / 0.6, f.x - foe.x) + f.orbit * R(0.8, 1.7); g = { x: foe.x + Math.cos(ang) * want * R(0.9, 1.3), y: foe.y + Math.sin(ang) * want * 0.6 * R(0.9, 1.3) }; }
+      // set up on the line to the foe at the range of the planned move, a little to one side
+      if (mode === 'setup') { const rr = moveRange(f, foe), a = here + R(-0.35, 0.35); g = { x: foe.x + Math.cos(a) * rr, y: foe.y + Math.sin(a) * rr * 0.6 }; }
+      // back off: out of reach again, diagonally away
+      else if (mode === 'backoff') { const a = here + f.orbit * R(0.2, 0.7), rr = want * R(0.9, 1.15); g = { x: foe.x + Math.cos(a) * rr, y: foe.y + Math.sin(a) * rr * 0.6 }; }
+      // sidestep: a short step across the foe's line of fire
+      else if (mode === 'sidestep') { const a = here + f.orbit * R(0.35, 0.6); g = { x: foe.x + Math.cos(a) * L, y: foe.y + Math.sin(a) * L * 0.6 }; }
+      // circle round the foe a quarter-turn at a time (never cut through it)
+      else if (mode === 'flank') { const ang = here + f.orbit * R(1.3, 1.7); g = { x: foe.x + Math.cos(ang) * want * 1.1, y: foe.y + Math.sin(ang) * want * 0.66 }; }
+      else if (mode === 'arc') { const ang = here + f.orbit * R(0.8, 1.7); g = { x: foe.x + Math.cos(ang) * want * R(0.9, 1.3), y: foe.y + Math.sin(ang) * want * 0.6 * R(0.9, 1.3) }; }
       // cross: run past the foe to its far side (the steering keeps them from walking through it)
-      else if (mode === 'cross') { const ax = foe.x - f.x, ay = foe.y - f.y, L = Math.hypot(ax, ay) || 1; g = { x: foe.x + ax / L * want * R(0.8, 1.1) + R(-60, 60), y: foe.y + ay / L * want * 0.6 + R(-60, 60) }; }
-      else if (mode === 'press') g = { x: foe.x - (Math.sign(foe.x - f.x) || 1) * (f.r + foe.r + 40) + R(-20, 20), y: foe.y + R(-24, 24) };
-      else { const a = R(0, 6.283), rr = want * R(0.8, ARENA.roam); g = { x: foe.x + Math.cos(a) * rr, y: foe.y + Math.sin(a) * rr * 0.6 }; }   // reposition, but stay in the fight
+      else if (mode === 'cross') { const bx = foe.x - f.x, by = foe.y - f.y, B = Math.hypot(bx, by) || 1; g = { x: foe.x + bx / B * want * R(0.8, 1.1) + R(-60, 60), y: foe.y + by / B * want * 0.6 + R(-60, 60) }; }
+      else { const a = R(0, 6.283), rr = want * R(0.8, ARENA.roam); g = { x: foe.x + Math.cos(a) * rr, y: foe.y + Math.sin(a) * rr * 0.6 }; }   // retreat: somewhere far, but in the fight
       g = inField(g);
       const df = Math.hypot(g.x - foe.x, (g.y - foe.y) / 0.6), travel = Math.hypot(g.x - f.x, g.y - f.y);
-      const edge = Math.min(g.x - field.x0, field.x1 - g.x, (g.y - field.y0) * 1.6, (field.y1 - g.y) * 1.6);
+      const edge = Math.min(g.x - field.x0, field.x1 - g.x, (g.y - field.y0) * 1.6, (field.y1 - g.y) * 1.6), wall = edge < 30 ? 70 : 0;
       let sc;
       if (mode === 'retreat') sc = Math.min(df, want * ARENA.roam) * 0.8 - (edge < 24 ? 60 : 0) + R(0, 40);
-      else if (mode === 'press') sc = -travel * 0.2 + R(0, 20);
-      else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - (edge < 30 ? 70 : 0) + R(0, 50);
+      else if (mode === 'setup') sc = -Math.abs(df - moveRange(f, foe)) - travel * 0.3 - wall + R(0, 20);
+      else if (mode === 'backoff') sc = -Math.abs(df - want) - wall + R(0, 30);
+      else if (mode === 'sidestep') sc = -Math.abs(df - L) * 0.5 - wall + R(0, 30);
+      else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - wall + R(0, 50);
       if (df < space(f, foe)) sc -= 600;                                // never pick a spot right next to the foe
-      if (!multi && mode !== 'press') sc -= heat[heatCell(g.x, g.y)] * 18;   // a duel prefers parts of the arena it hasn't used yet
+      // no sudden about-turns: a goal behind the way it is already moving costs (unless it is getting away)
+      if (f.speed > 60 && mode !== 'retreat' && mode !== 'backoff') { const dot = ((g.x - f.x) * f.vx + (g.y - f.y) * f.vy) / (travel * f.speed + 1e-6); if (dot < -0.3) sc += 160 * dot; }
+      if (!multi && (mode === 'flank' || mode === 'arc' || mode === 'cross' || mode === 'retreat')) sc -= heat[heatCell(g.x, g.y)] * 18;   // a duel prefers parts of the arena it hasn't used yet
       if (multi) for (const o of F) if (o && o !== f && o !== foe && o.state === 'idle') { const dd = Math.hypot(g.x - o.x, (g.y - o.y) / 0.6); if (dd < 260) sc -= (260 - dd) * 1.4; }   // keep duels apart
       if (sc > bs) { bs = sc; best = g; }
     }
@@ -919,7 +945,9 @@ const Retro = (() => {
     f.sq = clamp(f.sq + f.sqv * dt, -0.45, 0.45);
     f.crouch += (f.crouchT - f.crouch) * Math.min(1, dt * 14);
     f.faceVis += (f.face - f.faceVis) * Math.min(1, dt * 15);
-    if (f.live) f.live.drive(dt, { face: f.faceVis, vx: f.vx, vy: f.vy, moving: f.state === 'idle' && (f.dashing || f.speed > 60), sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
+    // the model faces where it runs only on a real run; stepping about, it keeps its eyes on the foe
+    f.runFace = (f.goalPace ?? 1) >= 1 && f.speed > (f.runFace ? 110 : 170);
+    if (f.live) f.live.drive(dt, { face: f.faceVis, vx: f.vx, vy: f.vy, run: f.dashing || f.runFace, moving: f.state === 'idle' && (f.dashing || f.speed > 60), sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
     f.shiver = Math.max(0, f.shiver - dt);
     f.rotSV += (-f.rotS * 200 - f.rotSV * 11) * dt; f.rotS = clamp(f.rotS + f.rotSV * dt, -0.45, 0.45);
     if (!f.busy && !f.dashing) f.rotA *= Math.exp(-dt * 8);
@@ -941,15 +969,21 @@ const Retro = (() => {
     const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0)) && !megaHold();
     if (canWalk) {
       f.goalT -= dt;
-      if (!f.goal && !(f.pauseT > 0)) f.goal = pickGoal(f);
+      // about to act: set up at the range of the planned move, once per attack cycle (it cuts a wander or a pause short)
+      if (f.cd < 1.3 && !f.setupDone && f.mode !== 'retreat') { f.setupDone = true; f.pauseT = 0; f.replan = true; }
       if (f.pauseT > 0) f.pauseT -= dt;
-      else if (!f.goal || f.goalT <= 0 || Math.hypot(f.goal.x - f.x, f.goal.y - f.y) < 12) {
-        if (f.goal && Math.random() < 0.3) { f.pauseT = R(0.25, 0.7); f.goal = null; }
-        else { f.goal = pickGoal(f); f.goalT = Math.hypot(f.goal.x - f.x, f.goal.y - f.y) / maxSpeed(f) + R(0.4, 1.0); }
+      else if (f.replan || !f.goal || f.goalT <= 0 || Math.hypot(f.goal.x - f.x, f.goal.y - f.y) < 12) {
+        if (f.goal && !f.replan) { f.goal = null; f.pauseT = R(0.4, 1.1); }   // got there: stand and watch the foe a moment
+        else {
+          f.replan = false;
+          f.goal = pickGoal(f);
+          if (f.goal) f.goalT = Math.hypot(f.goal.x - f.x, f.goal.y - f.y) / (maxSpeed(f) * f.goalPace) + R(0.4, 1.0);
+        }
       }
       const gx = f.goal ? f.goal.x : f.x, gy = f.goal ? f.goal.y : f.y;
-      const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1;
-      const sp = (f.goal ? maxSpeed(f) * (d > 600 ? 1.65 : d > 260 ? 1.3 : 1) : 0) * Math.min(1, d / 90);   // sprint on long runs, ease into the stop
+      const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1, pace = f.goalPace ?? 1;
+      // stepping (setting up, sidestepping) at a walk; a long reposition sprints; it eases into the stop
+      const sp = (f.goal ? maxSpeed(f) * pace * (pace < 1 ? 1 : d > 600 ? 1.65 : d > 260 ? 1.3 : 1) : 0) * Math.min(1, d / 90);
       if (d > 600 && f.goal && motionOf(f).accel > 1.2) { f.after = Math.max(f.after, 0.08); f.afterCol = '#ffffff'; }   // fast ones blur across the arena
       if (d > 260 && f.speed > 180 && !f.hover && Math.random() < dt * 12) dust(f.x, f.y, 0.7);
       tvx = dx / d * sp; tvy = dy / d * sp;
@@ -969,10 +1003,12 @@ const Retro = (() => {
             tvy = vy2 * 0.6;
           }
         } }
-      if (!f.hover && m.stats.spe * stageMult(m.stages.spe) > 95 && (f.hopT = (f.hopT ?? R(1.5, 3)) - dt) <= 0) {
-        f.hopT = R(2, 3.5);
-        const fo = foeOf(f);
-        if (fo && fo.state === 'idle') {
+      // a dodge: a fast Pokémon side-hops out of the line as the foe winds up an attack (never at random)
+      f.hopT = (f.hopT ?? 0) - dt;
+      const fo = foeOf(f), fpm = fo && fo.plan != null && fo.plan >= 0 ? fo.mon.moves[fo.plan] : null;
+      if (!f.hover && f.hopT <= 0 && m.stats.spe * stageMult(m.stages.spe) > 95 && fo && fo.state === 'idle' && !fo.busy && fo.cd > 0 && fo.cd < 0.35 && !(fpm && fpm.cat === 'status')) {
+        f.hopT = R(2.5, 4);
+        if (Math.random() < 0.6) {
           const ax = f.x - fo.x, ay = f.y - fo.y, L = Math.hypot(ax, ay) || 1, sd = Math.random() < 0.5 ? -1 : 1;
           f.kx += -ay / L * 420 * sd; f.ky += ax / L * 300 * sd; f.after = 0.25; f.afterCol = '#ffffff';
           tw(0.22, k => { f.jz = Math.sin(k * Math.PI) * 18; }).then(() => { f.jz = 0; f.bump(3); dust(f.x, f.y, 0.6); });
@@ -1962,8 +1998,11 @@ const Retro = (() => {
       pixRing(r.x, r.y, rr, r.flat, r.col, r.w);
     }
     ctx.globalAlpha = 1;
-    // live 3D models render their frame (and cast shadow) for this frame first
-    for (const f of F) if (f && f.live && f.state !== 'gone') f.live.render();
+    // live 3D models render their frame (and cast shadow) for this frame first, all in one batch; one far off screen waits
+    if (lives.size && L3m) {
+      const v = viewRect(), m = 160;
+      L3m.renderAll(F.filter(f => f && f.live && f.state !== 'gone' && f.x > v.x0 - m && f.x < v.x1 + m && f.y > v.y0 - m && f.y < v.y1 + m * 2).map(f => f.live));
+    }
     // shadows (Pokémon, and anything flying through the air)
     for (const f of F) if (f && f.state !== 'gone') {
       const lift = clamp(f.z / 120, 0, 0.5);
@@ -2240,6 +2279,13 @@ const Retro = (() => {
   const LOOKUP = {};
   for (const [style, ids] of Object.entries(GROUP)) for (const id of ids) LOOKUP[id] = style;
   const RECHARGE = new Set(['hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'roar-of-time', 'rock-wrecker', 'prismatic-laser', 'eternabeam']);
+  // the body action a live 3D Pokémon performs for a move: the contact style of a physical move (CT), else its effect style
+  const CONTACT = { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail', charge: 'charge' };
+  function bodyStyle(mv) {
+    const c = CT[mv.id], k = classify(mv);
+    if (c && typeof c === 'object' && c.v) return c.v;
+    return k.startsWith('contact:') ? CONTACT[k.slice(8)] : k;
+  }
   function classify(mv) {
     const id = mv.id;
     if (LOOKUP[id]) return LOOKUP[id];
@@ -4798,7 +4844,7 @@ const Retro = (() => {
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
     if (m.cat !== 'status') f.atkT = T;                // 2.5D sprites play their attack animation
-    if (f.live && m.ailment !== 'protect') f.live.play(m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar');
+    if (f.live) f.live.play(m.ailment === 'protect' ? 'guard' : m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar', bodyStyle(m));
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
     if (!multi || spot === f) callout(f, m.name, m.type);
@@ -4855,11 +4901,11 @@ const Retro = (() => {
     for (let i = 0; i < 70; i++) { const an = R(0, 6.28), r0 = R(160, 260); spawn({ kind: 'streak', c: [RB[i % 7]], x: 0, y: 0, life: 0.5, delay: i * 0.015, len: 26, ang: an + Math.PI, path: k => ({ x: f.cx + Math.cos(an) * r0 * (1 - easeIn(k)), y: f.cy + Math.sin(an) * r0 * 0.7 * (1 - easeIn(k)) }) }); }
     await tw(1.15, k => { f.white = 0.6 + k * 0.4; f.shiver = k > 0.5 ? 0.08 : 0; if (k > 0.6) shake = Math.max(shake, (k - 0.6) * 8); }); chk(tk);
     const anim = await getAnim(fm.sprite); chk(tk);
-    const vox = await getVoxel(u, anim);
+    const vox = (await getLive(fm.name)) || await getVoxel(u, anim);
     if (vox && (tk !== token || !on)) vox.dispose();
     chk(tk);
     f.set25 = null;                                    // the Mega form has no baked sheet: its pixel sprite takes over
-    dropLive(f);                                       // ...nor a live model (a voxel one if its species has them; f.anim is replaced below)
+    dropLive(f);                                       // the live model of the Mega form takes over (if it has one; f.anim is replaced below)
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
     shapes.push({ kind: 'megaorb', f, phase: 'burst', life: 0.45, age: 0 });
@@ -4966,8 +5012,9 @@ const Retro = (() => {
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
       if (sd) f.cd *= SD_CD;
       f.extraCd = 0;
-      f.goal = null;
-      f.hitRun = true;
+      f.goal = null; f.pauseT = 0;
+      f.hitRun = true; f.setupDone = false;                // next: back off / sidestep, then set up again before the next move
+      f.lastContact = isContact(f.lastMove);
     });
   }
 
@@ -4977,7 +5024,8 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const [anim, set25, model] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species), getLive(mon.isMega ? null : mon.species)]);
+    const key3 = mon.isMega ? mon.modelKey : mon.species;   // a baked sheet is only decoded when there is no live model
+    const [anim, set25, model] = await Promise.all([getAnim(mon.sprite), hasLive(key3).then(l => l ? null : get25(mon.isMega ? null : mon.species)), getLive(key3)]);
     // a real model first, then the baked sheet, then the voxel sprite
     const live = model || (set25 ? null : await getVoxel(mon, anim));
     if (live && (tk !== token || !on)) live.dispose();
@@ -5459,7 +5507,10 @@ const Retro = (() => {
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
-    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.flatMap(m => [get25(m.species), preloadLive(m.species), prepVoxel(m)]))]);
+    // models of this battle (Mega forms included); older ones beyond a few are freed
+    const keys = new Set(state.players.flatMap(pl => pl.team.flatMap(m => [m.species, ...(m.megaForm ? [m.megaForm.name] : [])])));
+    if (L3m) L3m.trim(keys);
+    const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(preloadLive), ...state.players.flatMap(pl => pl.team.flatMap(m => [hasLive(m.species).then(l => l ? null : get25(m.species)), prepVoxel(m)]))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);

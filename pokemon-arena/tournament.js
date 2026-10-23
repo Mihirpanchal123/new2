@@ -6,6 +6,20 @@ const Store = (() => {
   const KEY = 'pokemon-arena-v1';
   const data = { battles: 0, trainers: {}, pokemon: {}, champions: [], tournament: null };
   try { Object.assign(data, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+  // a saved tournament may hold your team from an older roster: drop Pokémon, Megas and moves no longer in the game
+  const P = window.POKEDEX;
+  const fix = e => {
+    if (!e || !e.me || !Array.isArray(e.team)) return;
+    e.team = e.team.filter(s => P.species[s.species]);
+    for (const s of e.team) {
+      if (s.mega && !P.species[s.species].megas.some(m => m.name === s.mega)) s.mega = null;
+      s.moves = s.moves.filter(m => P.moves[m]);
+    }
+  };
+  try {
+    if (data.tournament) fix(data.tournament.champion);
+    for (const r of (data.tournament && data.tournament.rounds) || []) for (const m of r) { fix(m.a); fix(m.b); fix(m.winner); }
+  } catch (e) { data.tournament = null; }
   return { data, save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} } };
 })();
 
