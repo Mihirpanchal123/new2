@@ -281,45 +281,10 @@ const Retro = (() => {
     return pr;
   }
   // ---------------------------------------------------------------------
-  //  2.5D sprites: animated sheets pre-rendered from the 3D models by
-  //  tools/bake-25d.mjs (idle / move / attack / hurt / down). Plain 2D images
-  //  at runtime - no 3D engine. Pokémon without a sheet, Mega forms, or a
-  //  sheet that fails to load keep their normal pixel sprite.
-  // ---------------------------------------------------------------------
-  let MAN25 = null;
-  function get25(species) {
-    if (prefs.p25 === false || !species) return Promise.resolve(null);
-    if (!MAN25) MAN25 = fetch('sprites25d/manifest.json').then(r => r.ok ? r.json() : {}).catch(() => ({}));
-    const key = '25:' + species;
-    if (ANIM.has(key)) return ANIM.get(key);
-    const pr = MAN25.then(async man => {
-      const e = man[species];
-      if (!e || !e.clips || !e.clips.idle) return null;
-      const img = new Image(); img.src = e.file; await img.decode();
-      const set = {};
-      for (const [kind, c] of Object.entries(e.clips)) {
-        const frames = [];
-        for (let i = 0; i < c.n; i++) frames.push({ img: await createImageBitmap(img, i * e.fw, c.row * e.fh, e.fw, e.fh), dur: 1 / c.fps });
-        set[kind] = { frames, total: frames.reduce((a, f) => a + f.dur, 0), w: e.fw, h: e.fh, loop: c.loop, src: e.file + '#' + kind };
-      }
-      // one anchor box (the standing pose) shared by every clip, so size and feet never jump between animations
-      let box = null;
-      for (let i = 0; i < set.idle.frames.length; i += Math.max(1, set.idle.frames.length >> 2)) {
-        const b = opaqueBox(set.idle.frames[i].img, e.fw, e.fh);
-        box = box ? { x0: Math.min(box.x0, b.x0), y0: Math.min(box.y0, b.y0), x1: Math.max(box.x1, b.x1), y1: Math.max(box.y1, b.y1) } : b;
-      }
-      for (const a of Object.values(set)) Object.assign(a, { box, bw: box.x1 - box.x0 + 1, bh: box.y1 - box.y0 + 1, foot: e.foot || null });
-      return set;
-    }).catch(e => { console.warn('2.5D sprite unavailable for', species, e); return null; });
-    ANIM.set(key, pr);
-    return pr;
-  }
-  // ---------------------------------------------------------------------
   //  Live 3D Pokémon (retro3d.js): the real animated model, lit and rendered
-  //  as pixel art every frame and drawn like any sprite. Preferred over the
-  //  baked sheet when the species has a model in models3d/; three.js only
-  //  loads when such a Pokémon is in the battle. Any failure (no WebGL, model
-  //  missing) falls back to the 2.5D sheet or the pixel sprite.
+  //  as pixel art every frame and drawn like any sprite, when the species has
+  //  a model in models3d/; three.js only loads when such a Pokémon is in the
+  //  battle. Any failure (no WebGL, model missing) falls back to the pixel sprite.
   // ---------------------------------------------------------------------
   let L3 = null, L3m = null, MAN3 = null;
   const lives = new Set();                             // fighters showing a live model (released when they leave the field)
@@ -341,17 +306,6 @@ const Retro = (() => {
   // during the intro: build the voxel models of every voxel Pokémon in the teams (and its Mega form), unless it has a real model
   const prepVoxel = m => prefs.live3d === false || !VOXEL3D.has(m.species) ? null : hasLive(m.species).then(real => real ? null : live3D().then(L => L &&
     Promise.all([m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])].map(src => getAnim(src).then(a => a.frames.length && L.prepareVoxel(a)))))).catch(() => null);
-  // which baked animation a fighter is showing, and how far into it
-  function clipOf(f, t) {
-    const s = f.set25;
-    if (!s) return null;
-    const one = (c, t0) => [c, clamp(T - t0, 0, c.total - 1e-3)];
-    if (f.state === 'faint' && s.down) return one(s.down, f.faintT);
-    if (s.hurt && T - (f.hurtT ?? -99) < s.hurt.total) return one(s.hurt, f.hurtT);
-    if (s.attack && T - (f.atkT ?? -99) < s.attack.total) return one(s.attack, f.atkT);
-    if (s.move && f.state === 'idle' && (f.dashing || f.speed > 60)) return [s.move, t];
-    return [s.idle, t];
-  }
   function frameAt(a, t) {
     if (a.frames.length === 1) return a.frames[0].img;
     let k = t % a.total;
@@ -385,7 +339,7 @@ const Retro = (() => {
   function drawSprite(a, t, x, y, s, flip, o = {}) {
     const img = frameAt(a, t), b = a.box;
     const w = a.w * s, h = a.h * s;
-    // anchor: the feet (baked 2.5D sheets know exactly where they are), else the bottom centre of the opaque area
+    // anchor: the feet (live 3D models know exactly where they are), else the bottom centre of the opaque area
     const ox = (a.foot ? a.foot[0] : (b.x0 + b.x1 + 1) / 2) * s, oy = (a.foot ? a.foot[1] : b.y1 + 1) * s;
     ctx.save();
     ctx.globalAlpha = o.alpha ?? 1;
@@ -2023,8 +1977,7 @@ const Retro = (() => {
     // a live 3D model turns in 3D (its yaw follows faceVis), so it is never mirrored
     for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: (f.live ? 1 : -g.sx) * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
-    const clip = clipOf(f, t + f.p * 0.37);
-    drawSprite(clip ? clip[0] : f.anim, clip ? clip[1] : t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
+    drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
       { sx: (f.live ? 1 : -f.faceVis) * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
   // draw the visible part of a world-sized art layer (1 art pixel = PX world units)
@@ -5550,7 +5503,6 @@ const Retro = (() => {
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
-    if (m.cat !== 'status') f.atkT = T;                // 2.5D sprites play their attack animation
     if (f.live) f.live.play(m.ailment === 'protect' ? 'guard' : m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar', bodyStyle(m));
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
@@ -5612,7 +5564,6 @@ const Retro = (() => {
     const vox = (await getLive(fm.name)) || await getVoxel(u, anim);
     if (vox && (tk !== token || !on)) vox.dispose();
     chk(tk);
-    f.set25 = null;                                    // the Mega form has no baked sheet: its pixel sprite takes over
     dropLive(f);                                       // the live model of the Mega form takes over (if it has one; f.anim is replaced below)
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
@@ -5732,10 +5683,10 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const key3 = mon.isMega ? mon.modelKey : mon.species;   // a baked sheet is only decoded when there is no live model
-    const [anim, set25, model] = await Promise.all([getAnim(mon.sprite), hasLive(key3).then(l => l ? null : get25(mon.isMega ? null : mon.species)), getLive(key3)]);
-    // a real model first, then the baked sheet, then the voxel sprite
-    const live = model || (set25 ? null : await getVoxel(mon, anim));
+    const key3 = mon.isMega ? mon.modelKey : mon.species;
+    const [anim, model] = await Promise.all([getAnim(mon.sprite), getLive(key3)]);
+    // a real model first, then the voxel sprite
+    const live = model || await getVoxel(mon, anim);
     if (live && (tk !== token || !on)) live.dispose();
     chk(tk);
     const tr = trOf(p);
@@ -5763,8 +5714,7 @@ const Retro = (() => {
     for (let i = 0; i < 14; i++) moteP(dest.x, dest.y - 24, '#ffffff', { vx: R(-200, 200), vy: R(-200, 100), drag: 3, life: 0.6 });
     ringP(dest.x, dest.y, 6, 70, '#ffffff', 0.4);
     flash('#ffffff', 0.12);
-    const f = new Fighter(p, mon, live ? live.anim : set25 ? set25.idle : anim);
-    f.set25 = live ? null : set25;
+    const f = new Fighter(p, mon, live ? live.anim : anim);
     if (live) { f.live = live; lives.add(f); }
     f.x = dest.x; f.y = dest.y; f.face = f.faceVis = multi ? (Math.sign((field.x0 + field.x1) / 2 - dest.x) || 1) : p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
@@ -6226,7 +6176,7 @@ const Retro = (() => {
     const keys = new Set(state.players.flatMap(pl => pl.team.flatMap(m => [m.species, ...(m.megaForm ? [m.megaForm.name] : [])])));
     if (L3m) L3m.trim(keys);
     warmDiscs();
-    const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(preloadLive), ...state.players.flatMap(pl => pl.team.flatMap(m => [hasLive(m.species).then(l => l ? null : get25(m.species)), prepVoxel(m)]))]);
+    const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(preloadLive), ...state.players.flatMap(pl => pl.team.map(prepVoxel))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);

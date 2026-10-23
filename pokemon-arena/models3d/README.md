@@ -4,8 +4,8 @@ Every form listed in `manifest.json` is drawn in Retro 2D battles from its real 
 `retro3d.js`. Nothing is pre-rendered. three.js (in `lib/`) loads only when such a Pokémon is in the battle. The model
 renders offscreen with a fixed orthographic 3/4 camera, toon lighting and a cast shadow, then a GPU pass reduces it to
 the art-pixel grid (12-level palette, 1 px outline). Retro then draws that frame like any sprite, so the camera,
-effects, flashes, HUD and battle logic are unchanged. Live models are preferred over the baked `sprites25d/` sheets;
-a Mega Evolution switches to the Mega form's model. Settings → "Live 3D Pokémon" turns them off.
+effects, flashes, HUD and battle logic are unchanged.
+A Mega Evolution switches to the Mega form's model. Settings → "Live 3D Pokémon" turns them off.
 
 ## Building the models
     node tools/build-live3d.mjs                 every form in data.js that has no model yet

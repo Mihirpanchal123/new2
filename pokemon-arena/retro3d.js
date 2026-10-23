@@ -11,7 +11,7 @@
 //  Both go through the same Stage:
 //    fixed orthographic 3/4 camera, 2x supersampled render target
 //    GPU pass: box-reduce to the pixel grid, hard alpha, 12-level palette,
-//              dark outline (same look as tools/bake-25d.js)
+//              dark outline
 //    the model's own cast shadow on a ground plane, reduced to a hard pixel
 //    mask that Retro draws like its blob shadows
 //  Facing is a real 3D yaw (the model turns instead of being mirrored).
@@ -23,7 +23,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 const SS = 2;                        // supersampling: render 2x larger, then reduce to the pixel grid
-const ELEV = 0.38;                   // camera elevation (radians), the same slant as the baked 2.5D sheets
+const ELEV = 0.38;                   // camera elevation (radians), the arena's slant
 const YAW = 0.95;                    // models: 3/4 view toward the foe: 0 faces the camera, +-YAW faces right / left
 const YAW_ACT = 1.2;                 // ...and closer to side-on while attacking, so limbs thrown at the foe read in silhouette
 const OUTLINE = [26, 22, 34];        // outline colour of the hand-drawn sprites
@@ -734,7 +734,7 @@ function drv(r, x, y, z) {
 
 class Live extends Stage {
   constructor(tpl) {
-    // lights: the same rig as the baked sheets (warm sky / violet ground, key from the upper left, cool rim)
+    // lights: warm sky / violet ground, key from the upper left, cool rim)
     const hemi = new THREE.HemisphereLight(0xfff4e0, 0x5a4a60, 1.5);
     const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(-3, 5, 4);
     const rim = new THREE.DirectionalLight(0xa8c8ff, 1.3); rim.position.set(4, 2, -4);

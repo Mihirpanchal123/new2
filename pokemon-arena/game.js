@@ -741,8 +741,6 @@ $('setReplays').checked = prefs.replays !== false;
 $('setFlashes').checked = prefs.flashes !== false;
 $('setCutins').checked = prefs.cutins !== false;
 $('setSudden').value = String(prefs.suddenDeath ?? 60);
-$('set25').checked = prefs.p25 !== false;
-$('set25').onchange = e => { prefs.p25 = e.target.checked; savePrefs(); };
 $('setLive3d').checked = prefs.live3d !== false;
 $('setLive3d').onchange = e => { prefs.live3d = e.target.checked; savePrefs(); };
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
