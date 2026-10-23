@@ -70,6 +70,8 @@ function tmMoves(species) {
   if (STARTERS.grass.includes(species)) out.push('frenzy-plant');
   if (STARTERS.fire.includes(species)) out.push('blast-burn');
   if (STARTERS.water.includes(species)) out.push('hydro-cannon');
+  // the showcase moves (staged animations, signature moves): a Pokémon that learns one by level can use it at any level
+  for (const id of SHOWCASE) if (sp.learnset.some(([, m]) => m === id)) out.push(id);
   return out.filter(id => MOVES[id]);
 }
 const UNIQUE_OK = new Set(['rest', 'protect', 'detect', 'shell-smash', 'wave-crash', 'aqua-cutter']);
@@ -87,8 +89,24 @@ const STATUS_INFO = {
   frz: { label: 'FRZ', color: '#38bdf8', msg: 'was frozen solid!' }
 };
 const STRUGGLE = { id: 'struggle', name: 'Struggle', type: null, cat: 'physical', power: 50, acc: null, priority: 0, target: 'selected-pokemon', metaCat: 'damage', ailment: 'none', stats: [], drain: -25, flinch: 0, crit: 0, statChance: 0 };
-// PokéAPI stores Wave Crash recoil as "unique"; fill it in
-if (MOVES['wave-crash']) MOVES['wave-crash'].drain = -33;
+// PokéAPI has no effect data for Wave Crash: it is a damaging move with 33% recoil; fill it in
+if (MOVES['wave-crash']) Object.assign(MOVES['wave-crash'], { metaCat: 'damage', drain: -33 });
+// newer moves PokéAPI has no effect data for, filled in (simplified where the real effect needs a mechanic this game
+// does not have: Comeuppance hits for a fixed 80, Axe Kick's crash on a miss and Gigaton Hammer's cooldown are left out)
+const MOVE_PATCH = {
+  'aqua-cutter': { metaCat: 'damage' }, 'raging-fury': { metaCat: 'damage' }, 'gigaton-hammer': { metaCat: 'damage' }, 'axe-kick': { metaCat: 'damage' },
+  comeuppance: { metaCat: 'damage', power: 80 },
+  'flower-trick': { metaCat: 'damage', crit: 3 },                                            // always a critical hit, never misses
+  'dire-claw': { metaCat: 'damage-ailment', ailment: 'poison', ailmentChance: 50 },
+  'torch-song': { metaCat: 'damage-raise', statChance: 100 },                              // raises its Sp. Atk
+  'aqua-step': { metaCat: 'damage-raise', statChance: 100 },                               // raises its Speed
+  'headlong-rush': { metaCat: 'damage-raise', statChance: 100, stats: [['defense', -1], ['special-defense', -1]] }
+};
+for (const [id, p] of Object.entries(MOVE_PATCH)) if (MOVES[id]) Object.assign(MOVES[id], p);
+// moves with a staged animation in Retro 2D (and signature moves): default movesets prefer them, and the taught ones
+// (Wave Crash, Hydro Cannon...) count too, so a new team shows them off without setting anything up
+const SHOWCASE = new Set(['flamethrower', 'flare-blitz', 'psychic', 'ancient-power', 'aura-sphere', 'close-combat', 'hydro-cannon', 'wave-crash',
+  'torch-song', 'aqua-step', 'flower-trick', 'gigaton-hammer', 'headlong-rush', 'raging-fury', 'dire-claw', 'axe-kick', 'aqua-cutter', 'comeuppance']);
 
 function moveSupported(id) {
   const m = MOVES[id];
@@ -128,9 +146,9 @@ function defaultMoves(species, level) {
     p *= (m.acc || 100) / 100;
     if (sp.types.includes(m.type)) p *= 1.5;
     if (m.drain < 0) p *= 0.9;
-    return p * moveTiming(id);
+    return p * moveTiming(id) * (SHOWCASE.has(id) ? 1.35 : 1);
   };
-  const pool = learnable(species, level, false).map(id => ({ id, s: score(id) }));
+  const pool = [...new Set([...learnable(species, level, false), ...learnable(species, level).filter(id => SHOWCASE.has(id))])].map(id => ({ id, s: score(id) }));
   const chosen = [];
   while (chosen.length < 4 && pool.length) {
     const statusCount = chosen.filter(c => MOVES[c].cat === 'status').length;
@@ -146,8 +164,7 @@ function defaultMoves(species, level) {
   return chosen;
 }
 
-// Rendering lives in core.js + arenas.js, 3D Pokémon in actors.js,
-// move effects in vfx.js and trainers in trainers.js.
+// Battles play in Retro 2D (retro.js); this file holds the rules, the team builder and the menus.
 
 // =====================================================================
 //  SOUND & RECORDING
@@ -281,105 +298,14 @@ function makeMon(spec, owner) {
   };
 }
 
-function updateHud() {
-  if (state && state.started && battleActive) {
-    const pinch = [0, 1].some(p => { const m = active(p); return m && (m.hp / m.maxhp < 0.25 || state.players[p].team.filter(x => x.hp > 0).length === 1); });
-    AudioFX.Music.setLevel(pinch ? 2 : 1);
-  }
-  for (const p of [0, 1]) {
-    const m = active(p);
-    if (!m) continue;
-    World.setTint(p, m.status);
-    World.setState(p, m.status, m.hp / m.maxhp);
-    Broadcast.setName(p, m.name);
-    const pct = Math.max(0, m.hp / m.maxhp * 100);
-    const color = pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444';
-    const st = m.status ? STATUS_INFO[m.status] : null;
-    const balls = state.players[p].team.map(x => `<div class="ball ${x.hp <= 0 ? 'dead' : ''}"></div>`).join('');
-    $('panel' + p).innerHTML = `
-      <div class="row"><span class="owner p${p}">${PLAYER[p]}${controllers[p] === 'cpu' ? ' (CPU)' : ''}</span><div class="balls">${balls}</div></div>
-      <div class="row"><span class="pname">${m.name}</span>
-        <span>${m.isMega ? '<span class="badge mega-badge">MEGA</span>' : ''}${st ? `<span class="badge" style="background:${st.color}">${st.label}</span>` : ''}
-        <b style="margin-left:6px">Lv${m.level}</b></span></div>
-      <div>${m.types.map(typeBadge).join('')}</div>
-      <div class="hpwrap"><span class="hplabel">HP</span><div class="hpbar"><div class="hpfill" style="width:${pct}%;background:${color}"></div></div></div>
-      <div class="hptext">${Math.max(0, m.hp)} / ${m.maxhp}</div>`;
-  }
-}
 
-let skipWait = null;
-$('msg').onclick = () => skipWait && skipWait();
-async function say(html, ms = 1150) {
-  guard();
-  $('msg').innerHTML = html;
-  await new Promise(res => {
-    let done = false;
-    const finish = () => { if (!done) { done = true; res(); } };
-    later(finish, ms);
-    skipWait = finish;
-  });
-  skipWait = null;
-  guard();
-}
 
 // ---- battle lifecycle: every battle has a token; restart/exit invalidates it
 let battleToken = 0, battleActive = false;
 class BattleAbort extends Error {}
-const pendingChoices = new Set();              // rejecters for choice menus waiting on a human
 function guard() { if (!state || state.token !== battleToken) throw new BattleAbort(); }
-function humanChoice(build) {
-  return new Promise((res, rej) => {
-    const finish = v => { pendingChoices.delete(rej); res(v); };
-    pendingChoices.add(rej);
-    build(finish);
-  });
-}
-function clearButtons() { $('actions').innerHTML = ''; $('switches').innerHTML = ''; }
 const canMega = p => { const u = active(p); return u.megaForm && !u.isMega && !state.players[p].usedMega; };
 
-// =====================================================================
-//  CHOOSING ACTIONS (human UI + CPU AI)
-// =====================================================================
-function chooseActionHuman(p) {
-  return humanChoice(res => {
-    const u = active(p);
-    let mega = false;
-    const done = a => { clearButtons(); res(a); };
-    $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b>: What will ${u.name} do?`;
-    clearButtons();
-    if (u.moves.every(m => m.ppLeft <= 0)) {
-      const b = document.createElement('button');
-      b.className = 'mv'; b.style.background = '#6b7280';
-      b.innerHTML = 'Struggle <small>no moves left</small>';
-      b.onclick = () => done({ type: 'move', idx: -1, mega });
-      $('actions').append(b);
-    }
-    u.moves.forEach((m, i) => {
-      const b = document.createElement('button');
-      b.className = 'mv'; b.style.background = TYPE_COLORS[m.type];
-      const pow = m.power ? 'POW ' + m.power : FIXED_DAMAGE[m.id] ? 'FIXED' : 'STATUS';
-      b.innerHTML = `${m.name} <small>${m.type} · ${pow} · PP ${m.ppLeft}/${m.pp}</small>`;
-      b.disabled = m.ppLeft <= 0;
-      b.onclick = () => done({ type: 'move', idx: i, mega });
-      $('actions').append(b);
-    });
-    if (canMega(p)) {
-      const b = document.createElement('button');
-      b.className = 'sw megabtn';
-      b.textContent = `Mega Evolve (${u.megaForm.stone})`;
-      b.onclick = () => { mega = !mega; b.classList.toggle('on', mega); };
-      $('switches').append(b);
-    }
-    state.players[p].team.forEach((m, i) => {
-      if (i === state.players[p].active || m.hp <= 0) return;
-      const b = document.createElement('button');
-      b.className = 'sw';
-      b.innerHTML = `<img src="${m.sprite}"> ${m.name} ${m.hp}/${m.maxhp}`;
-      b.onclick = () => done({ type: 'switch', idx: i });
-      $('switches').append(b);
-    });
-  });
-}
 
 function calcDamage(u, t, m, crit = false, roll = 0.925) {
   if (FIXED_DAMAGE[m.id] !== undefined) {
@@ -444,63 +370,8 @@ function bestMatchupIdx(p) {
   return best;
 }
 
-async function chooseActionCPU(p) {
-  $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b> is thinking...`;
-  await wait(450);
-  const u = active(p), t = active(1 - p);
-  const scored = u.moves.map((m, i) => ({ i, s: scoreMove(u, t, m) * (0.85 + Math.random() * 0.3) }));
-  const best = scored.sort((a, b) => b.s - a.s)[0];
-  if ((!best || best.s < 0.12) && Math.random() < 0.5) {
-    const sw = bestMatchupIdx(p);
-    if (sw >= 0) return { type: 'switch', idx: sw };
-  }
-  const idx = best && best.s > -1 ? best.i : -1;
-  return { type: 'move', idx: u.moves.every(m => m.ppLeft <= 0) ? -1 : idx, mega: !!canMega(p) };
-}
 
-const chooseAction = p => {
-  const v = active(p).vol;
-  if (v.charging) return Promise.resolve({ type: 'move', idx: v.charging.idx, mega: false });
-  if (v.recharge) return Promise.resolve({ type: 'recharge' });
-  return controllers[p] === 'cpu' ? chooseActionCPU(p) : chooseActionHuman(p);
-};
-// 3D: Fly / Dig take the Pokémon off the field until its next turn
-async function hideMon(p, kind) {
-  const A = World.actors[p];
-  if (!A.visible) return;
-  SFX.whoosh();
-  World.focusOne(p);
-  if (kind === 'fly') await tween(0.6, k => { A.lift = easeIn(k) * 8; A.opacity = 1 - k * k; });
-  else if (kind === 'vanish') await tween(0.5, k => { A.opacity = 1 - k; });
-  else { World.shake(0.25); SFX.rumble(0.6); await tween(0.55, k => { A.lift = -k * 1.4; A.opacity = 1 - k; }); }
-  A.visible = false; A.lift = 0; A.opacity = 1; A.hidden = kind;
-  World.overview();
-}
-async function unhideMon(p) {
-  const A = World.actors[p];
-  if (!A.hidden) return;
-  const kind = A.hidden;
-  A.hidden = null; A.visible = true;
-  if (kind === 'fly') await tween(0.28, k => { A.lift = (1 - easeOut(k)) * 8; });
-  else { World.shake(0.3); SFX.rumble(0.4); await tween(0.25, k => { A.lift = -(1 - k) * 1.4; }); }
-  A.lift = 0;
-}
 
-function chooseReplacement(p) {
-  if (controllers[p] === 'cpu') return wait(400).then(() => bestMatchupIdx(p));
-  return humanChoice(res => {
-    $('msg').innerHTML = `<b class="p${p}">${PLAYER[p]}</b>: Choose your next Pokémon!`;
-    clearButtons();
-    state.players[p].team.forEach((m, i) => {
-      if (m.hp <= 0) return;
-      const b = document.createElement('button');
-      b.className = 'sw';
-      b.innerHTML = `<img src="${m.sprite}"> ${m.name} Lv${m.level} ${m.hp}/${m.maxhp}`;
-      b.onclick = () => { clearButtons(); res(i); };
-      $('switches').append(b);
-    });
-  });
-}
 
 // =====================================================================
 //  BATTLE ENGINE
@@ -508,8 +379,6 @@ function chooseReplacement(p) {
 const stageMult = s => s >= 0 ? (2 + s) / 2 : 2 / (2 - s);
 const accMult = s => s >= 0 ? (3 + s) / 3 : 3 / (3 - s);
 const speedOf = m => m.stats.spe * stageMult(m.stages.spe) * (m.status === 'par' ? 0.5 : 1);
-const hasAlive = p => state.players[p].team.some(m => m.hp > 0);
-const battleOver = () => !hasAlive(0) || !hasAlive(1);
 const rand = () => Math.random();
 
 function canStatus(mon, s) {
@@ -520,387 +389,17 @@ function canStatus(mon, s) {
   if (s === 'frz' && mon.types.includes('Ice')) return false;
   return true;
 }
-async function inflict(t, ailment, moveName) {
-  const code = AILMENT[ailment];
-  if (MAJOR.includes(code)) {
-    if (!canStatus(t, code)) return false;
-    t.status = code;
-    if (code === 'slp') t.sleepTurns = 1 + Math.floor(rand() * 3);
-    updateHud();
-    await VFX.status(code, t.owner);
-    await say(`${lbl(t)} ${STATUS_INFO[code].msg}`);
-    return true;
-  }
-  if (code === 'conf') {
-    if (t.vol.conf) return false;
-    t.vol.conf = 2 + Math.floor(rand() * 4);
-    await VFX.status('confused', t.owner);
-    await say(`${lbl(t)} became confused!`);
-    return true;
-  }
-  if (code === 'seed') {
-    if (t.vol.seed || t.types.includes('Grass')) return false;
-    t.vol.seed = true;
-    await say(`${lbl(t)} was seeded!`);
-    return true;
-  }
-  if (code === 'trap') {
-    if (t.vol.trap) return false;
-    t.vol.trap = 4 + Math.floor(rand() * 2);
-    t.vol.trapName = moveName;
-    await say(`${lbl(t)} was trapped by ${moveName}!`);
-    return true;
-  }
-  return false;
-}
-async function changeStats(mon, changes) {
-  for (const [stat, n] of changes) {
-    const k = STAT_KEY[stat];
-    if (!k) continue;
-    const cur = mon.stages[k];
-    if ((n > 0 && cur >= 6) || (n < 0 && cur <= -6)) {
-      await say(`${lbl(mon)}'s ${STAT_NAMES[k]} won't go any ${n > 0 ? 'higher' : 'lower'}!`);
-      continue;
-    }
-    mon.stages[k] = Math.max(-6, Math.min(6, cur + n));
-    const word = n >= 3 ? 'rose drastically' : n === 2 ? 'rose sharply' : n > 0 ? 'rose' : n <= -3 ? 'severely fell' : n === -2 ? 'harshly fell' : 'fell';
-    await say(`${lbl(mon)}'s ${STAT_NAMES[k]} ${word}!`, 900);
-  }
-}
-async function hurt(p, amount) {
-  const m = active(p);
-  m.hp = Math.max(0, m.hp - amount);
-  updateHud();
-}
-async function faint(p) {
-  const m = active(p);
-  if (World.actors[p].hidden) { World.actors[p].hidden = null; World.actors[p].visible = true; }
-  playCry(m, 0.8);
-  SFX.faint();
-  Broadcast.pop(p, 'ko');
-  World.cheer(1);
-  World.focusOne(p);
-  World.trainers.dismay(p);
-  if (World.actors[1 - p].visible) World.trainers.cheer(1 - p);
-  await World.faint(p);
-  World.overview();
-  updateHud();
-  await say(`${lbl(m)} fainted!`);
-}
 
-async function doSwitch(p, idx, forced) {
-  const pl = state.players[p];
-  if (!forced && World.actors[p].visible) {
-    await say(`<b class="p${p}">${PLAYER[p]}</b>: Come back, ${active(p).name}!`, 800);
-    await World.recall(p);
-  }
-  pl.active = idx;
-  const m = active(p);
-  m.stages = blankStages();
-  m.vol = {};
-  m.turnsOut = 0;
-  World.setSpeedStat(p, m.stats.spe);
-  updateHud();
-  if (forced && state.started && pl.team.filter(x => x.hp > 0).length === 1) { Broadcast.bigText('LAST POKéMON!', 'last', 1400); World.cheer(0.9); }
-  const out = World.sendOut(p, m);
-  later(() => playCry(m), 550);
-  await out;
-  await say(`<b class="p${p}">${PLAYER[p]}</b>: Go! ${m.name}!`, 900);
-}
 
-async function megaEvolve(p) {
-  const u = active(p), f = u.megaForm;
-  state.players[p].usedMega = true;
-  await say(`${lbl(u)}'s ${f.stone} is reacting to <b class="p${p}">${PLAYER[p]}</b>'s Key Stone!`, 1300);
-  await World.trainers.mega(p);
-  Broadcast.banner('MEGA EVOLUTION!', f.types[0]);
-  World.focusOne(p, { elev: 0.2, dist: 0.85 });
-  later(() => Broadcast.captureThumb(6, `MEGA ${u.name.toUpperCase()}!`), 1500);
-  await VFX.other('megaevo', p);
-  World.focusOne(p, { elev: 0.22, dist: 0.85 });
-  u.modelKey = f.name;
-  u.sprite = f.sprite;
-  await World.megaSwap(p, u);
-  const prev = u.name;
-  u.isMega = true;
-  u.name = f.display;
-  u.types = f.types.slice();
-  u.stats = calcStats(f.base, u.level);
-  u.sprite = f.sprite;
-  if (f.cry) u.cry = f.cry;
-  playCry(u);
-  updateHud();
-  await say(`<b class="p${p}">${prev}</b> has Mega Evolved into <b class="p${p}">${f.display}</b>!`, 1500);
-  World.overview();
-}
 
-async function useMove(p, idx) {
-  const u = active(p), t = active(1 - p);
-  const m = idx < 0 ? STRUGGLE : u.moves[idx];
-  if (m.ailment !== 'protect') u.vol.protectCount = 0;
-  const charged = !!(u.vol.charging && u.vol.charging.id === m.id);
-  if (u.vol.charging) { delete u.vol.charging; await unhideMon(p); }
 
-  // --- can the user act? ---
-  if (u.status === 'slp') {
-    if (u.sleepTurns > 0) { u.sleepTurns--; await VFX.status('slp', p); await say(`${lbl(u)} is fast asleep.`); return; }
-    u.status = null; updateHud(); await say(`${lbl(u)} woke up!`);
-  }
-  if (u.status === 'frz') {
-    if (rand() < 0.2) { u.status = null; updateHud(); await say(`${lbl(u)} thawed out!`); }
-    else { await VFX.status('frz', p); await say(`${lbl(u)} is frozen solid!`); return; }
-  }
-  if (u.vol.flinch) { await VFX.status('flinch', p); await say(`${lbl(u)} flinched and couldn't move!`); return; }
-  if (u.vol.conf) {
-    u.vol.conf--;
-    if (u.vol.conf === 0) await say(`${lbl(u)} snapped out of its confusion!`);
-    else {
-      await VFX.status('confused', p);
-      await say(`${lbl(u)} is confused!`, 800);
-      if (rand() < 1 / 3) {
-        const self = { id: 'confusion-hit', type: null, cat: 'physical', power: 40 };
-        await VFX.status('confusedselfhit', p);
-        await World.blink(p);
-        await hurt(p, Math.max(1, calcDamage(u, u, self)));
-        await say('It hurt itself in its confusion!');
-        if (u.hp <= 0) await faint(p);
-        return;
-      }
-    }
-  }
-  if (u.status === 'par' && rand() < 0.25) { await VFX.status('par', p); await say(`${lbl(u)} is paralyzed! It can't move!`); return; }
 
-  if (idx >= 0 && !charged) m.ppLeft--;
-  World.trainers.command(p);
-  Broadcast.banner(m.name, m.type || 'Normal');
-  await say(`${lbl(u)} used <b>${m.name}</b>!`, 900);
-  if (TWO_TURN[m.id] && !charged) {
-    u.vol.charging = { id: m.id, idx };
-    if (TWO_TURN[m.id].hide) await hideMon(p, TWO_TURN[m.id].hide);
-    else { World.focusOne(p, { elev: 0.3, dist: 0.9 }); World.flex(p); SFX.buff(); await VFX.status('charge', p).catch(() => {}); await wait(500); World.overview(); }
-    await say(`${lbl(u)} ${TWO_TURN[m.id].msg}`);
-    return;
-  }
-
-  const selfTarget = SELF_TARGETS.has(m.target) || m.id === 'rest';
-  if (!selfTarget && t.hp <= 0) { await say('But there was no target...'); return; }
-  if (m.id === 'fake-out' && u.turnsOut > 0) { await say('But it failed!'); return; }
-  let hiddenMult = 1;
-  if (!selfTarget && t.vol.charging && TWO_TURN[t.vol.charging.id] && TWO_TURN[t.vol.charging.id].hide) {
-    const k = HITS_HIDDEN[TWO_TURN[t.vol.charging.id].hide][m.id];
-    if (!k) { Broadcast.pop(1 - p, 'miss'); await say(`${lbl(u)}'s attack missed! ${lbl(t)} is ${TWO_TURN[t.vol.charging.id].hide === 'fly' ? 'up in the sky' : 'underground'}!`); return; }
-    hiddenMult = k;
-  }
-  if (!selfTarget && t.vol.protect) {
-    await VFX.move(m.id, p, 1 - p, { blocked: true });
-    Broadcast.pop(1 - p, 'block');
-    await say(`${lbl(t)} protected itself!`);
-    return;
-  }
-  if (!selfTarget && m.acc != null) {
-    const st = Math.max(-6, Math.min(6, u.stages.acc - t.stages.eva));
-    if (rand() * 100 >= m.acc * accMult(st)) {
-      await Promise.all([VFX.move(m.id, p, 1 - p, { miss: true }), wait(120).then(() => World.dodge(1 - p, p))]);
-      Broadcast.pop(1 - p, 'miss');
-      AudioFX.Crowd.gasp();
-      await say(`${lbl(u)}'s attack missed!`);
-      return;
-    }
-  }
-
-  // --- status moves ---
-  if (m.cat === 'status') {
-    if (m.id === 'rest') {
-      if (u.hp === u.maxhp) { await say('But it failed!'); return; }
-      await VFX.move(m.id, p, p);
-      u.hp = u.maxhp; u.status = 'slp'; u.sleepTurns = 2;
-      updateHud();
-      await say(`${lbl(u)} slept and became healthy!`);
-      return;
-    }
-    if (m.ailment === 'protect') {
-      if (rand() < 1 / Math.pow(3, u.vol.protectCount || 0)) {
-        u.vol.protect = true;
-        u.vol.protectCount = (u.vol.protectCount || 0) + 1;
-        await VFX.move(m.id, p, p);
-        await say(`${lbl(u)} protected itself!`);
-      } else { u.vol.protectCount = 0; await say('But it failed!'); }
-      return;
-    }
-    if (m.healing > 0 && selfTarget) {
-      if (u.hp === u.maxhp) { await say(`${lbl(u)}'s HP is full!`); return; }
-      await VFX.move(m.id, p, p);
-      u.hp = Math.min(u.maxhp, u.hp + Math.floor(u.maxhp * m.healing / 100));
-      updateHud();
-      await say(`${lbl(u)} restored HP!`);
-      return;
-    }
-    if (selfTarget) { await VFX.move(m.id, p, p); await changeStats(u, m.stats); return; }
-    if (POWDER.has(m.id) && t.types.includes('Grass')) { await say(`It doesn't affect ${lbl(t)}...`); return; }
-    if (m.id === 'thunder-wave' && effectiveness('Electric', t.types) === 0) { await say(`It doesn't affect ${lbl(t)}...`); return; }
-    await VFX.move(m.id, p, 1 - p);
-    if (m.ailment !== 'none') {
-      if (!(await inflict(t, m.ailment, m.name))) await say('But it failed!');
-    }
-    if (m.stats.length) await changeStats(t, m.stats);
-    return;
-  }
-
-  // --- damaging moves ---
-  const eff = m.type ? effectiveness(m.type, t.types) : 1;
-  if (['earthquake', 'magnitude', 'bulldoze'].includes(m.id)) World.shake(0.4);
-  await VFX.move(m.id, p, 1 - p, { eff });
-  if (eff === 0) { Broadcast.pop(1 - p, 'immune'); AudioFX.Crowd.gasp(); await say(`It doesn't affect ${lbl(t)}...`); return; }
-
-  let hits = 1;
-  if (m.maxHits) {
-    if (m.minHits === m.maxHits) hits = m.minHits;
-    else { const r = rand(); hits = r < 0.35 ? 2 : r < 0.7 ? 3 : r < 0.85 ? 4 : 5; }
-  }
-  let total = 0, landed = 0, critHappened = false;
-  for (let h = 0; h < hits && t.hp > 0; h++) {
-    if (h > 0) await VFX.move(m.id, p, 1 - p, { eff });
-    const critStage = (m.crit || 0) + (m.id === 'aqua-cutter' ? 1 : 0);
-    const crit = FIXED_DAMAGE[m.id] === undefined && rand() < [1 / 24, 1 / 8, 1 / 2, 1][Math.min(3, critStage)];
-    let dmg = calcDamage(u, t, m, crit, (85 + Math.floor(rand() * 16)) / 100);
-    if (hiddenMult > 1) dmg = Math.floor(dmg * hiddenMult);
-    dmg = Math.min(t.hp, Math.max(1, dmg));
-    if (m.id === 'false-swipe' && dmg >= t.hp) dmg = t.hp - 1;
-    t.hp -= dmg; total += dmg; landed++;
-    if (crit) critHappened = true;
-    u.dmgDealt = (u.dmgDealt || 0) + dmg;
-    updateHud();
-    Broadcast.damage(1 - p, dmg, { crit, eff });
-    if (crit || t.hp <= 0) World.slowmo(0.35, 900);
-    await World.hit(1 - p, p, eff * (crit ? 1.5 : 1) * (m.power || 60) / 80, { eff, crit, ko: t.hp <= 0 });
-    if (crit && hits > 1) await say('A critical hit!', 700);
-  }
-  if (critHappened) Broadcast.pop(1 - p, 'crit'); else if (eff > 1) Broadcast.pop(1 - p, 'super'); else if (eff < 1) Broadcast.pop(1 - p, 'weak');
-  // remember big moments for the highlights reel and thumbnail
-  const ko = t.hp <= 0;
-  const score = (ko ? 3 : 0) + (critHappened ? 2 : 0) + (eff > 1 ? 1.5 : 0) + total / t.maxhp * 2;
-  if (score >= 2) {
-    Broadcast.addMoment({ score, side: p, moveId: m.id, type: m.type || 'Normal', label: `${u.name}'s ${m.name}`, damage: total, power: eff * (m.power || 60) / 80,
-      outcome: { eff, crit: critHappened, ko }, a: { modelKey: u.modelKey, sprite: u.sprite }, d: { modelKey: t.modelKey, sprite: t.sprite } });
-    Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : critHappened ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!');
-  }
-  if (ko) u.kos = (u.kos || 0) + 1;
-  if (critHappened && hits === 1) await say('A critical hit!', 900);
-  if (eff > 1 || critHappened) World.trainers.cheer(p);
-  if (eff > 1) await say("It's super effective!", 900);
-  if (eff < 1) await say("It's not very effective...", 900);
-  if (hits > 1) await say(`Hit ${landed} time(s)!`, 900);
-
-  if (m.drain > 0 && u.hp < u.maxhp) {
-    u.hp = Math.min(u.maxhp, u.hp + Math.max(1, Math.floor(total * m.drain / 100)));
-    updateHud();
-    await say(`${lbl(t)} had its energy drained!`);
-  }
-
-  if (t.hp <= 0 && prefs.replays !== false && !state.players[1 - p].team.some(x => x.hp > 0)) {
-    Broadcast.bigText('REPLAY', 'replay', 1100);
-    SFX.banner();
-    await wait(800);
-    const slow = World.slowmo(0.4, 2800);
-    await VFX.move(m.id, p, 1 - p, { eff });
-    World.focusOne(1 - p, { elev: 0.18, dist: 0.9 });
-    await World.hit(1 - p, p, 2, { eff, crit: critHappened, ko: true });
-    await slow;
-  }
-  if (t.hp <= 0) await faint(1 - p);
-  else {
-    if (m.ailment !== 'none' && m.ailmentChance > 0 && rand() * 100 < m.ailmentChance) await inflict(t, m.ailment, m.name);
-    if (m.flinch && rand() * 100 < m.flinch) t.vol.flinch = true; // only matters if the target hasn't moved yet
-  }
-  if (m.stats.length && u.hp > 0) {
-    const chance = m.statChance || 100;
-    if (rand() * 100 < chance) {
-      if (m.metaCat === 'damage-raise') await changeStats(u, m.stats);
-      else if (m.metaCat === 'damage-lower' && t.hp > 0) await changeStats(t, m.stats);
-    }
-  }
-  if (RECHARGE_MOVES.has(m.id) && landed > 0 && u.hp > 0) u.vol.recharge = true;
-  if (m.drain < 0 && u.hp > 0) {
-    const recoil = m.id === 'struggle' ? Math.floor(u.maxhp / 4) : Math.floor(total * -m.drain / 100);
-    await hurt(p, Math.max(1, recoil));
-    await World.blink(p);
-    await say(`${lbl(u)} is damaged by recoil!`);
-    if (u.hp <= 0) await faint(p);
-  }
-}
-
-async function endOfTurn() {
-  for (const p of [0, 1]) {
-    const m = active(p);
-    if (m.hp > 0 && (m.status === 'brn' || m.status === 'psn')) {
-      await VFX.status(m.status, p);
-      await World.blink(p);
-      await hurt(p, Math.max(1, Math.floor(m.maxhp / (m.status === 'brn' ? 16 : 8))));
-      await say(`${lbl(m)} is hurt by its ${m.status === 'brn' ? 'burn' : 'poison'}!`);
-      if (m.hp <= 0) await faint(p);
-    }
-    if (m.hp > 0 && m.vol.seed) {
-      const foe = active(1 - p);
-      const amt = Math.max(1, Math.floor(m.maxhp / 8));
-      if (foe.hp > 0) await VFX.other('leech', 1 - p, p);
-      await World.blink(p);
-      await hurt(p, amt);
-      if (foe.hp > 0) foe.hp = Math.min(foe.maxhp, foe.hp + amt);
-      updateHud();
-      await say(`${lbl(m)}'s health is sapped by Leech Seed!`);
-      if (m.hp <= 0) await faint(p);
-    }
-    if (m.hp > 0 && m.vol.trap) {
-      await VFX.other('bound', p);
-      await World.blink(p);
-      await hurt(p, Math.max(1, Math.floor(m.maxhp / 8)));
-      await say(`${lbl(m)} is hurt by ${m.vol.trapName}!`);
-      if (--m.vol.trap <= 0) { delete m.vol.trap; if (m.hp > 0) await say(`${lbl(m)} was freed from ${m.vol.trapName}!`); }
-      if (m.hp <= 0) await faint(p);
-    }
-    m.vol.flinch = false;
-    m.vol.protect = false;
-    m.turnsOut++;
-  }
-}
-
-async function resolveTurn(actions) {
-  for (const p of [0, 1])
-    if (actions[p].type === 'switch') await doSwitch(p, actions[p].idx, false);
-
-  const megas = [0, 1].filter(p => actions[p].type === 'move' && actions[p].mega && canMega(p))
-    .sort((a, b) => speedOf(active(b)) - speedOf(active(a)));
-  for (const p of megas) await megaEvolve(p);
-
-  const prio = p => actions[p].idx >= 0 ? (active(p).moves[actions[p].idx].priority || 0) : 0;
-  const order = [0, 1].filter(p => actions[p].type === 'move' || actions[p].type === 'recharge').sort((a, b) =>
-    (prio(b) - prio(a)) || (speedOf(active(b)) - speedOf(active(a))) || (rand() - 0.5));
-
-  for (const p of order) {
-    if (active(p).hp <= 0) continue;
-    if (actions[p].type === 'recharge') { delete active(p).vol.recharge; World.blink(p); await say(`${lbl(active(p))} must recharge!`); continue; }
-    await useMove(p, actions[p].idx);
-    World.overview();
-    if (battleOver()) return;
-  }
-  await endOfTurn();
-  if (battleOver()) return;
-  for (const p of [0, 1])
-    if (active(p).hp <= 0 && hasAlive(p)) await doSwitch(p, await chooseReplacement(p), true);
-}
 
 // =====================================================================
 //  BATTLE FLOW
 // =====================================================================
 let lastSpecs = null, lastMeta = {}, autoTimer = null;
 
-function showIntro(players) {
-  const side = p => `<div class="vsteam"><div class="vsname p${p}" style="color:${p ? '#f87171' : '#60a5fa'}">${PLAYER[p]}${controllers[p] === 'cpu' ? ' (CPU)' : ''}</div>
-    <div class="sprs">${players[p].team.map(m => `<img src="${m.sprite}" title="${m.name}" style="${p === 0 ? 'transform:scaleX(-1)' : ''}">`).join('')}</div>
-    <div style="color:#cbd5e1">${players[p].team.map(m => `${m.name} Lv${m.level}`).join(' · ')}</div></div>`;
-  $('intro').innerHTML = `<h1 class="logo">POKéMON ARENA</h1><div style="font-size:20px;color:#facc15;font-weight:800">${World.themeName(state.theme)}</div><div class="vs">${side(0)}<div class="vsword">VS</div>${side(1)}</div>`;
-  $('intro').classList.remove('hidden');
-}
 
 async function startBattle(specs, meta = {}) {
   clearTimeout(autoTimer);
@@ -916,17 +415,14 @@ async function startBattle(specs, meta = {}) {
   state = { players, multi, token: ++battleToken, meta, started: false };
   battleActive = true;
   setPaused(false);
-  try { await runBattle(); }
+  try { await runRetroBattle(); }
   catch (e) { if (!(e instanceof BattleAbort)) throw e; }
 }
 
 async function runRetroBattle() {
   $('builder').classList.add('hidden');
   $('endScreen').classList.add('hidden');
-  $('hud').classList.add('hidden');
   $('bracket').classList.add('hidden');
-  $('intro').classList.add('hidden');
-  clearButtons();
   Broadcast.resetBattle();
   updateRecButtons();
   state.started = true;
@@ -943,76 +439,6 @@ async function runRetroBattle() {
   showEnd(w);
 }
 
-async function runBattle() {
-  if (prefs.mode === 'retro' || state.multi) return runRetroBattle();
-  Retro.stop();
-  if (!World.has3D) { toast('Loading 3D…', 6000); await window.load3D(); guard(); }
-  World.reset();
-  World.actors.forEach(a => { a.hidden = null; });
-  World.trainers.reset();
-  state.theme = World.setTheme(settings.theme);
-  [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
-  World.preload(state.players.flatMap(pl => pl.team.flatMap(m => [m.modelKey, ...(m.megaForm ? [m.megaForm.name] : [])])));
-  $('builder').classList.add('hidden');
-  $('endScreen').classList.add('hidden');
-  $('hud').classList.add('hidden');
-  $('panel0').innerHTML = $('panel1').innerHTML = $('msg').innerHTML = '';
-  clearButtons();
-  updateRecButtons();
-  Broadcast.resetBattle();
-  $('bracket').classList.add('hidden');
-  const arena = World.themeName(state.theme);
-  await Broadcast.intro({
-    battleNo: Stats.battleNo(), names: [PLAYER[0], PLAYER[1]], arena,
-    subtitle: state.meta.subtitle ? `${state.meta.subtitle} · ${arena}` : arena,
-    records: [Stats.recordText(PLAYER[0]), Stats.recordText(PLAYER[1])],
-    teams: state.players.map(pl => pl.team.map(m => ({ name: m.name, sprite: m.sprite }))),
-    lines: state.meta.lines
-  });
-  guard();
-  state.started = true;
-  $('hud').classList.remove('hidden');
-
-  await say('The battle begins!', 900);
-  await doSwitch(0, 0, true);
-  await doSwitch(1, 0, true);
-  // turn limit keeps unattended auto-play from stalling on an endless stalemate
-  const hpLeft = p => state.players[p].team.reduce((a, m) => a + Math.max(0, m.hp) / m.maxhp, 0);
-  let turn = 0;
-  while (!battleOver() && turn++ < 250) {
-    const actions = [await chooseAction(0), await chooseAction(1)];
-    await resolveTurn(actions);
-  }
-  if (!battleOver()) await say('The turn limit was reached! The side with more HP left wins.', 1600);
-  const w = battleOver() ? (hasAlive(0) ? 0 : 1) : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
-  AudioFX.Music.victory();
-  World.cheer(1);
-  Broadcast.bigText(`${PLAYER[w]} WINS!`, 'start', 1800);
-  await say(`<b class="p${w}">${PLAYER[w]}</b> wins the battle!`, 1800);
-  World.trainers.celebrate(w);
-  World.trainers.dismay(1 - w, 4);
-  VFX.victory(World.trainers.list[w].root.position);
-  const endL = state.meta.endLines;
-  if (endL) { Broadcast.speech(w, endL[w] && endL[w].win, 2600); Broadcast.speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2600); }
-  const champ = World.actors[w].visible ? World.actors[w].root.position : World.trainers.list[w].root.position;
-  World.orbit(champ.clone().lerp(World.trainers.list[w].root.position, 0.5).setY(1.4), 11, 0.3, 0.35);
-  await wait(3600);
-  guard();
-  Stats.saveBattle({
-    names: [PLAYER[0], PLAYER[1]], winner: w,
-    mons: state.players.flatMap((pl, side) => pl.team.map(m => ({ species: m.species, name: m.name, side, kos: m.kos || 0, dmg: m.dmgDealt || 0 })))
-  });
-  if (prefs.highlights !== false && Broadcast.hasMoments()) {
-    splitRecording('highlights');
-    await Broadcast.reel();
-    guard();
-    splitRecording('battle');
-  }
-  battleActive = false;
-  updateRecButtons();
-  if (Tour.onBattleEnd(w)) return;
-  showEnd(w);
-}
 
 // cancel the running battle: stop its flow, timers, effects and menus
 function abortBattle() {
@@ -1022,17 +448,9 @@ function abortBattle() {
   AudioFX.Music.stop();
   AudioFX.Crowd.stop();
   Broadcast.resetBattle();
-  World.trainers.place();
   battleActive = false;
   Retro.stop();
-  for (const rej of pendingChoices) rej(new BattleAbort());
-  pendingChoices.clear();
-  skipWait = null;
   World.clearTimers();
-  if (World.has3D) VFX.clear();
-  World.reset();
-  World.trainers.reset();
-  clearButtons();
   setPaused(false);
 }
 function exitToBuilder() {
@@ -1042,8 +460,6 @@ function exitToBuilder() {
   hideBracket();
   clearTimeout(autoTimer);
   $('endScreen').classList.add('hidden');
-  $('intro').classList.add('hidden');
-  $('hud').classList.add('hidden');
   $('builder').classList.remove('hidden');
   updateRecButtons();
   renderTeams();
@@ -1124,7 +540,6 @@ function applyFormat(fmt) {
   document.body.classList.toggle('fmtMulti', fmt !== '1v1');
   teams.forEach((t, p) => teams[p] = t.slice(0, settings.teamSize));
   if (fmt === 'royale') editing = 0;
-  if (fmt !== '1v1' && prefs.mode === '3d') { applyMode('retro'); savePrefs(); toast('Battle Royale and Team Brawl play in Retro 2D.', 3000); }
   setEditing(editing);
 }
 
@@ -1221,8 +636,8 @@ function renderTeams() {
       <span style="font-weight:600;color:#94a3b8;font-size:12px">${teams[p].length}/${settings.teamSize}</span></div><div class="slots"></div>`;
     row.querySelector('[data-ctrl]').value = controllers[p];
     row.querySelector('[data-ctrl]').onchange = e => { controllers[p] = e.target.value; };
-    row.querySelector('[data-name]').onchange = e => { PLAYER[p] = e.target.value.trim() || `Player ${p + 1}`; World.trainers.setup(p, settings.outfits[p], PLAYER[p]); };
-    row.querySelector('[data-outfit]').onchange = e => { settings.outfits[p] = e.target.value; World.trainers.setup(p, settings.outfits[p], PLAYER[p]); };
+    row.querySelector('[data-name]').onchange = e => { PLAYER[p] = e.target.value.trim() || `Player ${p + 1}`; };
+    row.querySelector('[data-outfit]').onchange = e => { settings.outfits[p] = e.target.value; };
     row.querySelector('[data-rand]').onclick = () => { teams[p] = randomTeam(); renderTeams(); };
     row.querySelector('[data-clear]').onclick = () => { teams[p] = []; renderTeams(); };
     row.onclick = e => { if (e.target === row || e.target.classList.contains('teamhead')) setEditing(p); };
@@ -1317,63 +732,35 @@ $('setAuto').onchange = e => {
   if (settings.auto) { controllers[0] = controllers[1] = 'cpu'; renderTeams(); }
 };
 $('setMute').onchange = e => { muted = e.target.checked; };
-{ const visual = World.cheer; World.cheer = v => { visual(v); AudioFX.Crowd.cheer(v); }; }
 // broadcast preferences (saved in this browser)
 const savePrefs = () => { try { localStorage.setItem('pokemon-arena-prefs', JSON.stringify(prefs)); } catch (e) {} };
-const applyShorts = on => { document.body.classList.toggle('shorts', on); World.setShorts(on); World.trainers.place(); requestAnimationFrame(World.resize); };
+const applyShorts = on => document.body.classList.toggle('shorts', on);
 $('setMusic').value = prefs.music ?? 0.6; AudioFX.setVolume('music', +$('setMusic').value);
 $('setSfx').value = prefs.sfx ?? 0.85; AudioFX.setVolume('sfx', +$('setSfx').value);
-$('setHpBars').checked = prefs.hpBars !== false; Broadcast.opts.hpBars = $('setHpBars').checked;
-$('setHighlights').checked = prefs.highlights !== false;
 $('setReplays').checked = prefs.replays !== false;
+$('setFlashes').checked = prefs.flashes !== false;
+$('setCutins').checked = prefs.cutins !== false;
 $('setSudden').value = String(prefs.suddenDeath ?? 60);
 $('set25').checked = prefs.p25 !== false;
 $('set25').onchange = e => { prefs.p25 = e.target.checked; savePrefs(); };
 $('setLive3d').checked = prefs.live3d !== false;
 $('setLive3d').onchange = e => { prefs.live3d = e.target.checked; savePrefs(); };
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
-// battle style: full 3D or the retro top-down pixel mode
-const applyMode = mode => {
-  prefs.mode = mode === '3d' ? '3d' : 'retro';                 // Retro is the default (light, no 3D engine)
-  $('mode3d').classList.toggle('on0', prefs.mode === '3d');
-  $('modeRetro').classList.toggle('on0', prefs.mode === 'retro');
-  document.body.classList.toggle('retroMode', prefs.mode === 'retro');
-};
-applyMode(prefs.mode);
-$('mode3d').onclick = () => {
-  if (settings.format !== '1v1') { applyFormat('1v1'); prefs.format = '1v1'; toast('Battle Royale and Team Brawl are Retro 2D only — switched to 1v1.', 3500); }
-  applyMode('3d'); savePrefs(); load3DNow();
-};
+document.body.classList.add('retroMode');                   // Retro 2D is the battle view
 document.querySelectorAll('.fmtSeg button').forEach(b => b.onclick = () => { applyFormat(b.dataset.fmt); prefs.format = settings.format; savePrefs(); });
-function load3DNow() {
-  if (World.has3D) return;
-  toast('Loading 3D…', 6000);
-  window.load3D().then(() => toast('3D ready', 1500)).catch(e => { console.error(e); toast('3D failed to load: ' + e.message, 5000); });
-}
-// runs once when the 3D engine finishes loading (boot.mjs)
-window.init3D = () => {
-  World.has3D = true;                                // every 3D script has loaded
-  { const visual = World.cheer; World.cheer = v => { visual(v); AudioFX.Crowd.cheer(v); }; }
-  World.setShorts(!!prefs.shorts);
-  World.setTheme(settings.theme !== 'random' ? settings.theme : 'stadium');
-  [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
-  World.trainers.place();
-  World.resize();
-};
-$('modeRetro').onclick = () => { applyMode('retro'); savePrefs(); toast('Retro 2D: real-time pixel battles. Both Pokémon move and attack at the same time.', 3500); };
 $('setChannel').value = prefs.channel || ''; Broadcast.opts.channel = prefs.channel || '';
 $('setMusic').oninput = e => { prefs.music = +e.target.value; AudioFX.setVolume('music', prefs.music); savePrefs(); };
 $('setSfx').oninput = e => { prefs.sfx = +e.target.value; AudioFX.setVolume('sfx', prefs.sfx); savePrefs(); };
-$('setHpBars').onchange = e => { prefs.hpBars = e.target.checked; Broadcast.opts.hpBars = prefs.hpBars; savePrefs(); };
-$('setHighlights').onchange = e => { prefs.highlights = e.target.checked; savePrefs(); };
 $('setReplays').onchange = e => { prefs.replays = e.target.checked; savePrefs(); };
+$('setFlashes').onchange = e => { prefs.flashes = e.target.checked; savePrefs(); };
+$('setCutins').onchange = e => { prefs.cutins = e.target.checked; savePrefs(); };
 $('setSudden').onchange = e => { prefs.suddenDeath = +e.target.value; savePrefs(); };
 $('setShorts').onchange = e => { prefs.shorts = e.target.checked; applyShorts(prefs.shorts); savePrefs(); };
 $('setChannel').oninput = e => { prefs.channel = e.target.value.trim(); Broadcast.opts.channel = prefs.channel; savePrefs(); };
 $('setLength').onchange = e => { settings.hpMult = +e.target.value; };
 $('setPool').onchange = e => { settings.pool = e.target.value; };
 World.themeKeys.forEach(k => $('setTheme').insertAdjacentHTML('beforeend', `<option value="${k}">${World.themeName(k)}</option>`));
-$('setTheme').onchange = e => { settings.theme = e.target.value; if (settings.theme !== 'random') World.setTheme(settings.theme); };
+$('setTheme').onchange = e => { settings.theme = e.target.value; };
 $('randomBoth').onclick = () => { randomizeTeams(); renderTeams(); };
 $('startBtn').onclick = () => {
   const fmt = settings.format;
@@ -1386,5 +773,3 @@ $('startBtn').onclick = () => {
 renderDex();
 applyFormat(settings.format);
 startLoop();
-// the 3D engine only loads if 3D mode is in use (it's heavy: three.js, WebGL, models)
-if (prefs.mode === '3d') load3DNow();

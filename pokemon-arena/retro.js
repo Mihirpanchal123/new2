@@ -744,6 +744,10 @@ const Retro = (() => {
     else if (kind === 'wet') scorch(g, ax, ay, 6 * s, 0.25, '30,40,70');
     else if (kind === 'goo') scorch(g, ax, ay, 5 * s, 0.4, '110,40,140');
     else if (kind === 'leaf') for (let i = 0; i < 8; i++) P_(g, pick(['#3fa83a', '#6ccf4a', '#24782c']), ax + R(-8, 8), ay + R(-5, 5), 1, 1);
+    // a gouge ploughed by a sliding Pokémon (type = the direction of the slide)
+    else if (kind === 'furrow') { const an = type || 0, c = Math.cos(an), sn2 = Math.sin(an); for (let i = -4; i <= 4; i++) { const px = ax + c * i, py = ay + sn2 * i * 0.6; P_(g, 'rgba(30,18,12,.55)', px, py, 1, 1 + s); P_(g, 'rgba(255,240,220,.2)', px - sn2, py - 1, 1, 1); } }
+    // loose stones knocked out of the ground
+    else if (kind === 'rubble') { const base = groundRGB(); for (let i = 0; i < 3; i++) { const px = ax + R(-3, 3), py = ay + R(-2, 2); P_(g, rgbStr(mix(base, -0.35)), px, py + 1, 2, 1); P_(g, rgbStr(mix(base, 0.15)), px, py, 2, 1); } }
   }
 
   // ---------------------------------------------------------------------
@@ -964,6 +968,7 @@ const Retro = (() => {
   }
   function stepFighter(f, dt) {
     const m = f.mon;
+    trackMotion(f, dt);
     f.white = Math.max(0, f.white - dt * 5 / FX_SLOW);
     f.sqv += (-f.sq * 240 - f.sqv * 12) * dt;
     f.sq = clamp(f.sq + f.sqv * dt, -0.45, 0.45);
@@ -987,10 +992,11 @@ const Retro = (() => {
     if (f.state !== 'idle') { f.z = bob * (1 - f.sink) + f.jz; return; }
     // knockback slide
     f.x += f.kx * dt; f.y += f.ky * dt;
+    slideStep(f);
     const fr = Math.exp(-dt * 6); f.kx *= fr; f.ky *= fr;
     if (Math.hypot(f.kx, f.ky) > 110 && !f.hover && Math.random() < dt * 40) dust(f.x - Math.sign(f.kx) * 8, f.y, 0.8);
     let tvx = 0, tvy = 0;
-    const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0)) && !megaHold();
+    const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0)) && !(T < (f.holdT || 0)) && !megaHold();
     if (canWalk) {
       f.goalT -= dt;
       // about to act: set up at the range of the planned move, once per attack cycle (it cuts a wander or a pause short)
@@ -1032,7 +1038,8 @@ const Retro = (() => {
       const fo = foeOf(f), fpm = fo && fo.plan != null && fo.plan >= 0 ? fo.mon.moves[fo.plan] : null;
       if (!f.hover && f.hopT <= 0 && m.stats.spe * stageMult(m.stages.spe) > 95 && fo && fo.state === 'idle' && !fo.busy && fo.cd > 0 && fo.cd < 0.35 && !(fpm && fpm.cat === 'status')) {
         f.hopT = R(2.5, 4);
-        if (Math.random() < 0.6) {
+        if (Math.random() < 0.6 && spd(m) >= 110) flashStep(f, fo);   // the fastest vanish out of the line instead
+        else if (Math.random() < 0.6) {
           const ax = f.x - fo.x, ay = f.y - fo.y, L = Math.hypot(ax, ay) || 1, sd = Math.random() < 0.5 ? -1 : 1;
           f.kx += -ay / L * 420 * sd; f.ky += ax / L * 300 * sd; f.after = 0.25; f.afterCol = '#ffffff';
           tw(0.22, k => { f.jz = Math.sin(k * Math.PI) * 18; }).then(() => { f.jz = 0; f.bump(3); dust(f.x, f.y, 0.6); });
@@ -1073,6 +1080,7 @@ const Retro = (() => {
       const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1, min = f.r + o.r + 10;
       if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
     }
+    edgeCrash(f);
     clampField(f);
     // everyone else turns to watch a Mega Evolution, and status effects wait for it to finish
     if (megaHold() && megaF && f !== megaF && Math.abs(megaF.x - f.x) > 12) f.face = Math.sign(megaF.x - f.x);
@@ -1272,6 +1280,7 @@ const Retro = (() => {
   };
   function impactAt(type, x, y, gy, pw = 1, o = {}) {
     const pw0 = pw;
+    if (pw0 >= 1.6 && !o.quiet && field) shockwave(x, gy, Math.min(2, pw0 * 0.8));
     pw *= 1.25;                                        // everything a bit bigger and wider
     const K = IMP[type] || IMP.Normal, P = tp(type), n = pw;
     const h = Math.max(4, gy - y);                     // height of the hit above the ground
@@ -2003,8 +2012,10 @@ const Retro = (() => {
     const t = m.status === 'frz' || m.status === 'slp' ? 0.4 : T * (m.status === 'par' ? 0.5 : 1);
     const breathe = f.state === 'idle' && f.speed < 20 ? Math.sin(T * (m.hp / m.maxhp < 0.3 ? 5 : 2.6) + f.p) * 0.022 : 0;
     const sleep = m.status === 'slp' ? 0.14 : 0;
-    const sy = (1 - f.sq * 0.3 - f.crouch * 0.12 + breathe - sleep) * (1 - f.sink * 0.4);
-    const sxm = (1 + f.sq * 0.22 + f.crouch * 0.07 - breathe * 0.5 + sleep * 0.5);
+    // smear: very fast motion stretches it along the way it moves
+    const msp = f.state === 'idle' ? Math.hypot(f.mvx || 0, f.mvy || 0) : 0, sm = clamp((msp - 500) / 2500, 0, 0.32), horiz = Math.abs(f.mvx || 0) >= Math.abs(f.mvy || 0);
+    const sy = (1 - f.sq * 0.3 - f.crouch * 0.12 + breathe - sleep) * (1 - f.sink * 0.4) * (horiz ? 1 - sm * 0.4 : 1 + sm);
+    const sxm = (1 + f.sq * 0.22 + f.crouch * 0.07 - breathe * 0.5 + sleep * 0.5) * (horiz ? 1 + sm : 1 - sm * 0.4);
     const jit = f.white > 0.5 || f.shiver > 0 ? R(-2.5, 2.5) : 0;
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
@@ -2027,7 +2038,7 @@ const Retro = (() => {
     const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
     const cx = hw * 2 >= WW ? WW / 2 : clamp(camX, hw, WW - hw), cy = hh * 2 >= WH ? WH / 2 : clamp(camY, hh, WH - hh);
     // smooth (not per-frame random) shake; the final offset snaps to whole device pixels so pixel art doesn't shimmer
-    const sx = shake > 0 ? shake * (Math.sin(T * 61.3) * 0.7 + Math.sin(T * 23.1 + 2) * 0.3) : 0, sy = shake > 0 ? shake * (Math.sin(T * 47.9 + 1.3) * 0.7 + Math.sin(T * 19.7) * 0.3) : 0;
+    const sx = (shake > 0 ? shake * (Math.sin(T * 61.3) * 0.7 + Math.sin(T * 23.1 + 2) * 0.3) : 0) + kickX, sy = (shake > 0 ? shake * (Math.sin(T * 47.9 + 1.3) * 0.7 + Math.sin(T * 19.7) * 0.3) : 0) + kickY;
     const tx = Math.round(SC * (VW / 2 - cx * z + sx)), ty = Math.round(SC * (VH / 2 - cy * z + sy)), ox = tx / SC, oy = ty / SC;
     ctx.setTransform(SC * z, 0, 0, SC * z, tx, ty);
     // world-anchored texts ride the same camera; their lettering is counter-scaled so it stays readable when zoomed out
@@ -2121,6 +2132,7 @@ const Retro = (() => {
         drawTag(f, y);
       }
     }
+    drawLines(v);
     if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, WW + 80, WH + 80); ctx.globalAlpha = 1; }
   }
   // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl)
@@ -3359,6 +3371,7 @@ const Retro = (() => {
     const t = m.type || 'Normal';
     const spec = CT[m.id] || { v: { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail' }[variant] || 'charge', c: TYPE_CT[t] || C_WHITE, el: t !== 'Normal' ? t : null };
     if (spec.fast && spec.v === 'charge' && !(spec.n > 1)) return dashStrike(f, d, m, o, hit, spec);
+    if (canRush(f, d, m, o)) return rush(f, d, m, o, hit, spec);
     await runUp(f, d, 300);
     if (!on || f.state !== 'idle' || d.state !== 'idle') return;
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
@@ -3378,10 +3391,12 @@ const Retro = (() => {
       };
       await strike(f, d, spec, h, landed);
       landed();
-      if (n > 1 && h < n - 1) await wait(70);
+      if (n > 1 && h < n - 1) await wait(Math.max(35, 110 - h * 25));   // a flurry speeds up
     }
     // impact camera sized by the damage the battle code actually dealt
     if (!f.whiff) camPunch(d.cx, d.cy, 0.03 + clamp(d.lastFrac || 0, 0, 0.6) * 0.12, big ? 0.32 : 0.24);
+    // a heavy blow launches it, and the attacker follows it up
+    if (!f.whiff && !multi && d.state === 'idle' && (d.lastFrac || 0) >= 0.28 && (forced('launch') || Math.random() < 0.5)) await airCombo(f, d);
     f.whiff = false;
     await wait(big ? 300 : 200);                                  // hold the impact pose a beat
     await recover(f, s, big);
@@ -5052,6 +5067,7 @@ const Retro = (() => {
     impactAt(type, at.x, at.y, d.y, pw);
     d.white = 1; d.whiteCol = '#ffffff'; d.bump(4 + pw * 3); d.shiver = 0.12;
     const foe = foeOf(d); d.rotSV += (Math.sign(d.x - (foe ? foe.x : d.x - 1)) || 1) * 5 * pw;
+    if (foe) camKick(d.x - foe.x, d.y - foe.y, 2 + pw * 4);
     const stg = clamp((frac - 0.12) * 2.2, 0, 0.8) + (crit ? 0.3 : 0);
     if (stg > 0.08) { d.stagger = Math.max(d.stagger || 0, T + stg); d.goal = null; }
     if (d.live) d.live.play(stg > 0.08 ? 'stun' : 'hurt');   // a stagger dazes it, then the recovery clip plays when it ends
@@ -5081,6 +5097,8 @@ const Retro = (() => {
     }
   }
   function dodge(d, from) {
+    // a fast Pokémon flash-steps away (sometimes right behind the attacker) and counters soon after
+    if (fastMon(d)) { flashStep(d, from, Math.random() < 0.4); d.cd = Math.min(d.cd, 0.45); return; }
     const dx = d.x - from.x, dy = d.y - from.y, L = Math.hypot(dx, dy) || 1, s = side();
     d.kx += -dy / L * 380 * s; d.ky += dx / L * 380 * s;
     d.after = 0.3; d.afterCol = '#ffffff';
@@ -5149,6 +5167,294 @@ const Retro = (() => {
     if (m.ailment !== 'none' && !inflictRT(d, m.ailment, m.name) && !m.stats.length) text(d, 'BUT IT FAILED!', 'miss');
     if (m.stats.length) changeStatsRT(d, m.stats);
   }
+  // =====================================================================
+  //  ANIME FIGHT LAYER
+  //  The grammar of anime fights on top of the battle (none of it changes
+  //  damage - the battle code deals that once per move):
+  //    rhythm     stand-offs before big moves, cut-ins for ultimate moves,
+  //               rush exchanges where both trade blows at speed
+  //    speed      flash-step dodges that leave an afterimage, launches with
+  //               an air follow-up spike, smears, speed lines
+  //    impact     one-beat impact frames, focus lines, a camera kick in the
+  //               direction of the blow
+  //    the arena  knockback trenches, crashes into the fences and stands
+  //               (which break), spreading shockwaves, lingering dust and
+  //               rubble, a dramatic launch on the deciding knockout
+  // =====================================================================
+  const flashesOn = () => prefs.flashes !== false;
+  const forced = k => !!(globalThis.RETRO_FORCE && globalThis.RETRO_FORCE[k]);   // tests can force the chance-based ones
+  const cutinsOn = () => prefs.cutins !== false;
+  // camera kick: a spring offset pushed in the direction of a blow (slams kick downward)
+  let kickX = 0, kickY = 0, kickVX = 0, kickVY = 0;
+  function camKick(dx, dy, amt) {
+    if (calm()) amt *= 0.35;
+    const L = Math.hypot(dx, dy) || 1;
+    kickVX += dx / L * amt * 55; kickVY += dy / L * amt * 55;
+  }
+  function kickStep(dt) {
+    kickVX += (-kickX * 320 - kickVX * 20) * dt; kickVY += (-kickY * 320 - kickVY * 20) * dt;
+    kickX += kickVX * dt; kickY += kickVY * dt;
+  }
+  // impact frame: one beat of a high-contrast negative (CSS filter on the canvas: no extra drawing), focus lines on
+  // the point of impact. Kept rare - at most one every 1.5 s - so it stays a punctuation mark
+  let impactUntil = 0, impactPt = null, lastImpact = -9, focusUntil = 0;
+  function impactFrame(x, y) {
+    impactPt = { x, y }; focusUntil = FT + 0.22;
+    if (!flashesOn() || FT - lastImpact < 1.5) return;
+    lastImpact = FT; impactUntil = FT + 0.075;
+    cv.style.filter = 'grayscale(1) invert(1) contrast(2.4)';
+  }
+  function impactStep() { if (impactUntil && FT > impactUntil) { impactUntil = 0; cv.style.filter = ''; } }
+  // speed lines across the view while something moves very fast (a dash, a launch), focus lines on an impact
+  let speedA = 0, speedAng = 0;
+  function speedStep(dt) {
+    let best = 0, ang = speedAng;
+    for (const f of F) if (f && f.state !== 'gone') { const s = Math.hypot(f.mvx || 0, f.mvy || 0); if (s > best) { best = s; ang = Math.atan2(f.mvy || 0, f.mvx || 0); } }
+    const want = clamp((best - 900) / 1400, 0, 0.7);
+    speedA += (want - speedA) * Math.min(1, dt * 10);
+    if (want > 0.05) speedAng = ang;
+  }
+  function drawLines(v) {
+    if (speedA > 0.04) {
+      const c = Math.cos(speedAng), s = Math.sin(speedAng), w = v.x1 - v.x0, h = v.y1 - v.y0;
+      ctx.globalAlpha = speedA * 0.5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = PX;
+      ctx.beginPath();
+      for (let i = 0; i < 18; i++) {
+        const k = hash(i, Math.floor(T * 20)), px = v.x0 + w * hash(i, 7, Math.floor(T * 20)), py = v.y0 + h * k, L = 80 + 160 * hash(i, 3);
+        ctx.moveTo(px, py); ctx.lineTo(px - c * L, py - s * L);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (impactPt && FT < focusUntil) {
+      // dark wedges from the edges of the view toward the point of impact (shuuchuu-sen)
+      const a = (focusUntil - FT) / 0.22, R0 = Math.max(v.x1 - v.x0, v.y1 - v.y0);
+      ctx.globalAlpha = 0.55 * a; ctx.fillStyle = FT < impactUntil ? '#ffffff' : '#140c1c';
+      for (let i = 0; i < 26; i++) {
+        const an = i / 26 * 6.283 + hash(i, 1) * 0.2, r1 = R0 * (0.32 + 0.12 * hash(i, 2)), sp = 0.035;
+        ctx.beginPath();
+        ctx.moveTo(impactPt.x + Math.cos(an - sp) * R0, impactPt.y + Math.sin(an - sp) * R0);
+        ctx.lineTo(impactPt.x + Math.cos(an) * r1, impactPt.y + Math.sin(an) * r1);
+        ctx.lineTo(impactPt.x + Math.cos(an + sp) * R0, impactPt.y + Math.sin(an + sp) * R0);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  // a Pokémon's on-screen velocity this frame, whatever moved it (walking, tweens, knockback): smears, speed lines
+  function trackMotion(f, dt) {
+    if (f.lx != null && dt > 0) { f.mvx = (f.x - f.lx) / dt; f.mvy = (f.y - f.jz - (f.ly ?? f.y)) / dt; }
+    f.lx = f.x; f.ly = f.y - f.jz;
+  }
+
+  // ---- flash step: it vanishes, an afterimage is left behind (and takes the hit), it reappears beside or behind ----
+  const fastMon = f => spd(f.mon) >= 100 && !f.stuck;
+  function flashStep(f, from, behind = false) {
+    if (f.state !== 'idle') return;
+    const dx = f.x - from.x, dy = f.y - from.y, L = Math.hypot(dx, dy) || 1, s = side();
+    const x0 = f.x, y0 = f.y;
+    f.trail.push({ x: f.x, y: f.y - f.z, a: 1.4, sx: f.faceVis, t: T, rot: 0 });   // the afterimage (fades slowly)
+    let tx = f.x - dy / L * 190 * s, ty = f.y + dx / L * 120 * s;
+    if (behind) { tx = from.x - dx / L * (f.r + from.r) * 0.9; ty = from.y - dy / L * 30; }
+    f.x = clamp(tx, field.x0, field.x1); f.y = clamp(ty, field.y0, field.y1); f.kx = f.ky = 0;
+    f.after = 0.35; f.afterCol = '#ffffff'; f.bump(-4); f.goal = null;
+    for (let i = 0; i < 6; i++) { const k = i / 5; spawn({ kind: 'streak', c: ['#ffffff'], x: x0 + (f.x - x0) * k, y: y0 + (f.y - y0) * k - f.h * 0.4, life: 0.18, len: 30, ang: Math.atan2(f.y - y0, f.x - x0), delay: i * 0.01 }); }
+    glowP(f.cx, f.cy, 6, 50, '#ffffff', 0.18, 0.7);
+    SFX.whoosh();
+    if (!f.hover) dust(x0, y0, 0.8);
+  }
+
+  // ---- knockback across the ground: a trench where it slides, a crash where it meets the fences or the stands ----
+  function slideStep(f) {
+    const ks = Math.hypot(f.kx, f.ky);
+    if (ks < 260 || f.hover || f.z > 6) { f.trenchAt = null; return; }
+    if (!f.trenchAt) f.trenchAt = { x: f.x, y: f.y };
+    if (Math.hypot(f.x - f.trenchAt.x, f.y - f.trenchAt.y) > 16) { addDecal('furrow', f.x, f.y, Math.min(1.6, ks / 400), Math.atan2(f.y - f.trenchAt.y, f.x - f.trenchAt.x)); f.trenchAt = { x: f.x, y: f.y }; if (Math.random() < 0.5) dust(f.x, f.y, 0.7); }
+  }
+  function edgeCrash(f) {
+    const ks = Math.hypot(f.kx, f.ky);
+    if (ks < 90 || T < (f.crashT || 0)) return;                  // (knockback slows fast: anything still sliding counts)
+    const out = f.x < field.x0 ? 'l' : f.x > field.x1 ? 'r' : f.y < field.y0 ? 't' : f.y > field.y1 ? 'b' : null;
+    if (!out) return;
+    f.crashT = T + 0.6;
+    const x = clamp(f.x, field.x0, field.x1), y = clamp(f.y, field.y0, field.y1);
+    const wx = out === 'l' ? field.x0 - 16 * PX : out === 'r' ? field.x1 + 16 * PX : x, wy = out === 't' ? field.y0 - 10 : out === 'b' ? field.y1 + 14 : y;
+    SFX.impact('Rock', 1.3); shakeIt(10); hitStop(60);
+    camKick(out === 'l' ? -1 : out === 'r' ? 1 : 0, out === 't' ? -1 : out === 'b' ? 1 : 0, 9);
+    dust(wx, wy, 2.4);
+    const col = TH.side === 'fence' ? ['#6e4a2a', '#9a6e44', '#3e2a18'] : TH.side === 'rope' ? ['#8a6a44', '#e8d8b0', '#5a4428'] : ['#2e2430', '#5a4a58', '#1a141c'];
+    for (let i = 0; i < 14; i++) spawn({ kind: 'debris', c: col, x: wx, y: wy, z: R(10, 40), vz: R(160, 360), g: 1000, vx: R(-220, 220), vy: R(-90, 90), life: R(0.7, 1.1), s0: pick([2, 2, 3]), rot: R(0, 6), spin: R(-12, 12), bounce: true });
+    if (out === 'l' || out === 'r') breakFence(wx, y);
+    else { addDecal('crack', wx, wy, 1.4); if (out === 'b') { cheer = 1; AudioFX.Crowd.gasp(); } }
+    // it bounces off what it hit
+    if (out === 'l' || out === 'r') f.kx = -f.kx * 0.25; else f.ky = -f.ky * 0.25;
+    f.stagger = Math.max(f.stagger || 0, T + 0.4); f.bump(7);
+  }
+  // a broken stretch of the side fence / posts: painted over on the decal layer with the ground, splintered stubs left
+  function breakFence(x, y) {
+    if (!decal || !TH) return;
+    const g = decal.getContext('2d'), ax = Math.round(x / PX), ay = Math.round(y / PX), base = groundRGB();
+    for (let yy = -9; yy <= 9; yy++) for (let xx = -2; xx <= 4; xx++) P_(g, rgbStr(mix(base, (hash(ax + xx, ay + yy, 5) - 0.5) * 0.25)), ax + xx, ay + yy);
+    const wood = TH.side === 'fence' ? '#6e4a2a' : TH.side === 'rope' ? '#8a6a44' : '#2e2430';
+    for (let i = 0; i < 3; i++) { const sy = ay + R(-8, 6); P_(g, wood, ax + R(-1, 2), sy, 2, R(2, 4)); P_(g, '#1a141c', ax + R(-1, 2), sy - 1, 1, 1); }   // snapped stubs
+    for (let i = 0; i < 14; i++) P_(g, wood, ax + R(-14, 14), ay + R(-12, 12), pick([1, 2, 3]), 1);                 // splinters
+    addDecal('crack', x, y, 0.9);
+  }
+
+  // ---- shockwaves: a ring runs out over the ground, cracking it and kicking up slabs, then dust hangs in the air ----
+  let wear = 0;
+  function shockwave(x, y, pw) {
+    const R1 = 90 + pw * 90, steps = 6;
+    ringP(x, y, 10, R1, '#ffffff', 0.5, { w: 2 }); ringP(x, y, 10, R1 * 0.75, 'rgba(255,240,220,.7)', 0.42, { delay: 0.05 });
+    camKick(0, 1, 4 + pw * 3);
+    const base = groundRGB(), slab = [rgbStr(mix(base, 0.1)), rgbStr(base), rgbStr(mix(base, -0.45))];
+    for (let i = 1; i <= steps; i++) later(() => {
+      if (!on) return;
+      const r = R1 * i / steps;
+      for (let j = 0; j < 3 + i; j++) {
+        const an = R(0, 6.283), px = x + Math.cos(an) * r, py = y + Math.sin(an) * r * 0.45;
+        if (i % 2 === 0 && Math.random() < 0.6) addDecal('crack', px, py, R(0.5, 0.9));
+        spawn({ kind: 'debris', c: slab, x: px, y: py, z: 0, vz: R(120, 260) * pw, g: 1000, vx: Math.cos(an) * R(30, 90), vy: Math.sin(an) * R(10, 40), life: R(0.5, 0.8), s0: pick([2, 2, 3]), rot: R(0, 6), spin: R(-8, 8), bounce: true });
+      }
+    }, i * 55);
+    // dust that lingers and drifts, half hiding the spot for a moment
+    for (let i = 0; i < 4 + pw * 2; i++) smokeP(x + R(-R1 * 0.6, R1 * 0.6), y + R(-14, 14), R(8, 13), R(2.2, 3.4), ['#d8c8b0', '#c4b296', '#a89478'], { vx: R(-18, 18), vy: R(-14, -4), a: 0.3, delay: R(0.1, 0.4), grow: 1.4 });
+    // the arena wears: every big blow leaves more rubble lying around
+    wear++;
+    for (let i = 0; i < Math.min(8, 2 + wear); i++) addDecal('rubble', x + R(-R1, R1), y + R(-R1, R1) * 0.45, 1);
+  }
+
+  // ---- launch: the blow sends the target up, the attacker leaps after it and spikes it back into the ground ----
+  async function airCombo(f, d) {
+    if (d.state !== 'idle' || f.state !== 'idle' || d.hover) return;
+    const dir = Math.sign(d.x - f.x) || f.face, H = 150;
+    SFX.whoosh(); d.after = 0.6; d.afterCol = '#ffffff'; d.rotSV += dir * 8;
+    await tw(0.22, k => { if (d.state === 'idle') d.jz = easeOut(k) * H; });
+    if (!on || d.state !== 'idle') return;
+    // the attacker flash-steps up above it
+    f.trail.push({ x: f.x, y: f.y - f.z, a: 1.2, sx: f.faceVis, t: T, rot: 0 });
+    f.x = d.x - dir * 20; f.y = d.y; f.jz = H + 40; f.after = 0.4; f.afterCol = '#ffffff';
+    liveAct(f, 'attack', 'slam');
+    glowP(f.cx, f.cy, 8, 60, '#ffffff', 0.2, 0.8);
+    await wait(90);
+    if (!on || d.state !== 'idle') { f.jz = 0; return; }
+    powAt(d.cx, d.cy, 46, POW_C, { life: 0.25 }); SFX.impact('Fighting', 1.2, 1); hitStop(90);
+    // spiked down: both drop, the target craters the ground
+    await tw(0.14, k => { if (d.state === 'idle') d.jz = H * (1 - easeIn(k)); f.jz = (H + 40) * (1 - easeIn(k)) + 20 * k; });
+    d.jz = 0; f.jz = 0;
+    crater(d.x, d.y, 30); impactFrame(d.cx, d.cy);
+    shakeIt(13); camKick(0, 1, 12); dust(d.x, d.y, 2.6);
+    shockwave(d.x, d.y, 1.4);
+    d.bump(10); d.stagger = Math.max(d.stagger || 0, T + 0.5);
+  }
+
+  // ---- rush: both meet mid-field and trade blows at speed, flash-stepping around each other; the attacker's real
+  // blow lands last (only it deals damage) ----
+  let lastRush = -99;
+  function canRush(f, d, m, o) {
+    if (multi || o.miss || d.state !== 'idle' || d.busy || d.stuck || d.hover || f.hover || T < (d.stagger || 0) || d.protectUntil > T) return false;
+    if (forced('rush')) return true;
+    if (T - lastRush < 9) return false;
+    return Math.random() < (fastMon(f) && fastMon(d) ? 0.5 : 0.3);
+  }
+  async function rush(f, d, m, o, hit, spec) {
+    lastRush = T;
+    d.busy = true; d.rushing = true;
+    try {
+      const mx = (f.x + d.x) / 2, my = (f.y + d.y) / 2, dir = Math.sign(d.x - f.x) || 1;
+      dimTo(0.3, 2.2);
+      if (!calm()) camShot('anticipate', { x: mx, y: my - 40, w: 0.4, z: 1.1, hold: 2.0 });
+      // both dash in
+      const fx0 = f.x, fy0 = f.y, dx0 = d.x, dy0 = d.y;
+      f.dashing = d.dashing = true; f.after = d.after = 0.4; f.afterCol = spec.c[1]; d.afterCol = '#ffffff';
+      SFX.whoosh();
+      await tw(0.16, k => { const e = easeIn(k); f.x = fx0 + (mx - dir * 26 - fx0) * e; f.y = fy0 + (my - fy0) * e; d.x = dx0 + (mx + dir * 26 - dx0) * e; d.y = dy0 + (my - dy0) * e; });
+      if (!on || d.state !== 'idle') return;
+      // clash
+      powAt(mx, my - 40, 44, POW_C, { life: 0.25 }); SFX.impact('Normal', 1.3); hitStop(70); shakeIt(8);
+      ringP(mx, my, 10, 130, '#ffffff', 0.4, { w: 2 }); dust(mx, my, 2);
+      floatAt(mx, my - 90, 'CLASH!', 'clash', 900);
+      // the exchange: 5 blows, alternating, each striker flash-stepping to a new side; faster and faster
+      for (let i = 0; i < 5; i++) {
+        if (!on || d.state !== 'idle' || f.state !== 'idle') return;
+        const atk = i % 2 ? d : f, tgt = i % 2 ? f : d, s = side(), an = R(-0.6, 0.6) + (s > 0 ? 0 : Math.PI);
+        atk.trail.push({ x: atk.x, y: atk.y - atk.z, a: 0.9, sx: atk.faceVis, t: T, rot: 0 });
+        atk.x = clamp(tgt.x + Math.cos(an) * (atk.r + tgt.r) * 0.75, field.x0, field.x1); atk.y = clamp(tgt.y + Math.sin(an) * 26, field.y0, field.y1);
+        atk.face = Math.sign(tgt.x - atk.x) || atk.face;
+        liveAct(atk, 'attack', i % 3 === 2 ? 'snapkick' : 'jab');
+        const at = { x: (atk.cx + tgt.cx) / 2, y: (atk.cy + tgt.cy) / 2 };
+        powAt(at.x, at.y, 26 + i * 3, POW_C, { life: 0.16 });
+        shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 14, r1: 56, col: '#ffffff', n: 8, life: 0.14, age: 0, rot: R(0, 1) });
+        SFX.impact('Fighting', 0.7 + i * 0.08, 1); shakeIt(3 + i);
+        // the one receiving braces: a flash of guard, a shove
+        tgt.white = 0.6; tgt.whiteCol = '#e8f0ff'; tgt.bump(3); tgt.kx += Math.sign(tgt.x - atk.x) * 90;
+        camKick(tgt.x - atk.x, tgt.y - atk.y, 3);
+        await wait(Math.max(70, 150 - i * 20));
+      }
+      if (!on || d.state !== 'idle') return;
+      // the attacker's blow breaks through
+      flashStep(f, d, true);
+      f.face = Math.sign(d.x - f.x) || f.face;
+      liveAct(f, 'attack', spec.v === 'kick' ? 'kick' : 'fist');
+      await wait(60);
+      const hp = d.mon.hp;
+      hit();
+      if (d.mon.hp < hp) { if ((d.lastFrac || 0) >= 0.15) impactFrame(d.cx, d.cy); camKick(d.x - f.x, d.y - f.y, 10); hitStop(110); impactAt(spec.el || m.type || 'Normal', d.cx, d.cy, d.y, 1.4, { quiet: true }); }
+    } finally {
+      d.busy = false; d.rushing = false; f.dashing = d.dashing = false;
+    }
+    await wait(250);
+  }
+
+  // ---- stand-off before a big move: both hold still, the scene dims, wind crosses between them; then the burst ----
+  async function standoff(f, d) {
+    if (multi || !d || d.state !== 'idle') return;
+    const hold = 0.6;
+    f.holdT = d.holdT = T + hold; d.cd = Math.max(d.cd, hold + 0.3);
+    f.vx = f.vy = d.vx = d.vy = 0;
+    dimTo(0.45, hold + 0.3);
+    if (!calm()) camShot('anticipate', { x: (f.x + d.x) / 2, y: (f.y + d.y) / 2 - 40, w: 0.5, z: 1.04, hold: hold });
+    AudioFX.Crowd.gasp();
+    const v = viewRect(), y = (f.y + d.y) / 2;
+    for (let i = 0; i < 10; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: v.x0, y: y + R(-80, 40), vx: R(700, 1000), vy: 0, life: 0.6, len: R(40, 90), ang: 0, delay: i * 0.05 });
+    for (let i = 0; i < 4; i++) smokeP(v.x0 + R(0, 200), y + R(-20, 20), 5, 1.2, ['#d8c8b0', '#c4b296'], { vx: R(300, 500), vy: R(-10, 10), a: 0.35, delay: i * 0.1 });
+    await wait(hold * 1000);
+  }
+  // ---- cut-in for an ultimate move: the screen darkens, a band of speed lines with the Pokémon slides across ----
+  async function cutIn(f, m) {
+    const P = PAL(m), el = document.createElement('div');
+    el.className = 'r-cutin' + (f.p % 2 ? ' r-cutin-r' : '');
+    el.style.setProperty('--c1', P.c[1]); el.style.setProperty('--c2', P.c[2] || P.c[1]);
+    el.innerHTML = `<div class="r-cutin-band"><img src="${esc(f.mon.sprite)}" alt=""><b>${esc(m.name)}</b></div>`;
+    hudEl.appendChild(el);
+    SFX.banner(); dimTo(0.6, 1.0);
+    const slow = World.slowmo(0.15, 750);
+    await new Promise(r => setTimeout(r, 750));
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 300);
+    await slow;
+  }
+  const ULTIMATE = new Set(['flare-blitz', 'close-combat', 'wave-crash', 'hydro-cannon', 'blast-burn', 'frenzy-plant', 'psystrike', 'draco-meteor', 'giga-impact', 'hyper-beam', 'v-create', 'head-smash', 'origin-pulse', 'precipice-blades', 'dragon-ascent', 'spacial-rend', 'roar-of-time']);
+  // before a move plays: an ultimate gets a cut-in, other big moves a stand-off (now and then)
+  async function prelude(f, d, m) {
+    if (m.cat === 'status' || !d || d === f || d.state !== 'idle') return;
+    if (cutinsOn() && (ULTIMATE.has(m.id) || RECHARGE.has(m.id) || (m.power || 0) >= 130) && (!multi || spot === f)) return cutIn(f, m);
+    if ((m.power || 0) >= 95 && Math.random() < 0.45) return standoff(f, d);
+  }
+
+  // ---- the deciding knockout, when the blow is big enough: it is launched across the arena into the fence ----
+  async function launchKO(f, by) {
+    const dx = f.x - by.x, dy = f.y - by.y, L = Math.hypot(dx, dy) || 1;
+    // the edge of the field in the direction of the blow
+    const tx = dx / L > 0 ? field.x1 + 4 : field.x0 - 4, ty = clamp(f.y + dy / L * 160, field.y0, field.y1);
+    const x0 = f.x, y0 = f.y;
+    f.after = 1; f.afterCol = '#ffffff';
+    SFX.whoosh();
+    await tw(0.55, k => { const e = easeOut(k); f.x = x0 + (tx - x0) * e; f.y = y0 + (ty - y0) * e; f.jz = Math.sin(k * Math.PI) * 90; f.rotS = k * 0.45 * Math.sign(dx); });
+    f.jz = 0; f.rotS = 0;
+    f.kx = Math.sign(dx) * 400; f.crashT = 0; edgeCrash(f); f.kx = 0;
+    f.x = clamp(f.x, field.x0, field.x1);
+    crater(f.x, f.y, 26); shockwave(f.x, f.y, 1.2);
+  }
   function resolveHit(f, d, m, miss, mult = 1) {
     const u = f.mon, t = d.mon, p = f.p;
     const selfT = SELF_TARGETS.has(m.target) || m.id === 'rest';
@@ -5187,6 +5493,7 @@ const Retro = (() => {
     if (eff > 1 || crit) { trainerPose(p, 'cheer', 1.1); cheer = Math.max(cheer, 0.8); AudioFX.Crowd.cheer(0.6); }
     hud(d.p);
     const ko = t.hp <= 0;
+    if (ko || (crit && total / t.maxhp >= 0.2) || total / t.maxhp >= 0.4) impactFrame(d.cx, d.cy);
     const score = (ko ? 3 : 0) + (crit ? 2 : 0) + (eff > 1 ? 1.5 : 0) + total / t.maxhp * 2;
     if (score >= 2) later(() => Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : crit ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!'), 60);
     if (ko) { u.kos = (u.kos || 0) + 1; koFighter(d, f); }
@@ -5259,6 +5566,7 @@ const Retro = (() => {
     let done = false;
     const hit = (mult = 1) => { if (done || tk !== token) return; done = true; resolveHit(f, d, m, miss, mult); };
     const fx = SIG[m.id] || S[style] || S.generic;
+    await prelude(f, selfT ? f : d, m); chk(tk);
     let r;
     try { r = await fx(f, selfT ? f : d, m, { miss }, hit, style === 'orb' && !SIG[m.id] ? variant === 'big' : variant); }
     catch (e) { if (e instanceof BattleAbort) throw e; console.warn('retro fx', m.id, e); }
@@ -5499,8 +5807,11 @@ const Retro = (() => {
     (async () => {
       // knocked up, crash down, then the trainer's ball recalls it in a red beam
       f.white = 1; f.whiteCol = '#ffffff'; f.dashing = false;
-      await tw(0.28, k => { f.jz = Math.sin(k * Math.PI) * 26; });
-      f.jz = 0; f.bump(10); dust(f.x, f.y, 1.8); shakeIt(4);
+      if (last && by && by !== f && (f.lastFrac || 0) >= 0.3) await launchKO(f, by);   // sent flying across the arena
+      else {
+        await tw(0.28, k => { f.jz = Math.sin(k * Math.PI) * 26; });
+        f.jz = 0; f.bump(10); dust(f.x, f.y, 1.8); shakeIt(4);
+      }
       await tw(0.4, k => { f.sink = k * 0.45; f.white = 0; }); chk(tk);
       await wait(250); chk(tk);
       await recallFx(f, tk);
@@ -5840,6 +6151,7 @@ const Retro = (() => {
     if (running) for (const f of F) if (f) think(f, dt);
     ambient(dt);
     stepFx(dt / FX_SLOW);
+    kickStep(dt); speedStep(dt); impactStep();
     render();
     rpTick();
     timerTick();
@@ -5876,7 +6188,7 @@ const Retro = (() => {
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; topEl.innerHTML = ''; fxEl.style.transform = ''; lastTz = 0;
     cameraReset(); dimA = dimTarget = 0;
     root.classList.add('hidden');
-    World.skip3D = false; World.captureSource = null;
+    World.captureSource = null;
     if (rj) rj(new BattleAbort());
   }
   function battle(opts = {}) {
@@ -5886,7 +6198,7 @@ const Retro = (() => {
     const tk = token;
     T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; firstOut = -1; heat.fill(0); SW.n = [0, 0]; SW.t = [-99, -99]; cameraReset();
     root.classList.remove('hidden');
-    World.skip3D = true; World.captureSource = cv;
+    World.captureSource = cv;
     resize(); layout(); cameraReset();
     decal = null;
     const key = settings.theme === 'random' ? pick(Object.keys(THEMES)) : (THEME_MAP[settings.theme] || 'plaza');

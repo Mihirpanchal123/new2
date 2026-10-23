@@ -24,17 +24,12 @@ const OUTFITS = {
   ethan: { label: 'Ethan', hat: 'capback', hatColor: 0x222222, hatFront: 0xe9b949, hair: 0x2b1d14, hairStyle: 'short', top: 0xd62828, sleeves: 'short', inner: 0xe9b949, legs: 0x2f3e5f, legStyle: 'shorts', shoes: 0xd62828, bag: 0xe9b949 }
 };
 
-// stand-ins until the 3D engine loads (arenas.js / actors.js / trainers.js replace them)
-const NOOP = () => {};
+// the arena choices (Retro picks the matching place: retro.js THEME_MAP), frame capture and slow motion
 const THEME_NAMES = { stadium: 'Pokémon Stadium', forest: 'Viridian Forest', volcano: 'Mt. Chimney Crater', beach: 'Sunny Beach', icecave: 'Ice Path Cavern', city: 'Lumiose Night Arena' };
 const World = {
-  has3D: false,
   themeKeys: Object.keys(THEME_NAMES),
   themeName: k => THEME_NAMES[k] || k,
-  setTheme: k => k,
-  setShorts: NOOP, cheer: NOOP, reset: NOOP, resize: NOOP, preload: NOOP,
-  actors: [],
-  trainers: { setup: NOOP, place: NOOP, reset: NOOP, hide: NOOP, spotsOff: NOOP, list: [], spot: () => null }
+  captureSource: null                                // the battle canvas (Retro sets it), for thumbnails
 };
 
 // ---------------------------------------------------------------------
@@ -55,7 +50,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------------------------------------------------------------------
-//  Render loop: updaters run in order; the 3D engine adds World.renderFrame
+//  Render loop: tweens, frame hooks and updaters (Retro) run in order
 // ---------------------------------------------------------------------
 const updaters = [];
 const captureWaiters = [];
@@ -83,9 +78,8 @@ function startLoop() {
     }
     frameHooks.forEach(fn => fn(dt, t));
     for (const u of updaters) u(dt, t);
-    if (World.renderFrame) World.renderFrame(dt);
     if (captureWaiters.length) {
-      const src = (World.skip3D && World.captureSource) || World.canvas3D || World.captureSource;
+      const src = World.captureSource;
       if (src) { const url = src.toDataURL('image/jpeg', 0.92); captureWaiters.splice(0).forEach(fn => fn(url)); }
     }
   })();

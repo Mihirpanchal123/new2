@@ -143,7 +143,6 @@ const Tour = {
     if (!s) return;
     s.names.forEach((n, i) => PLAYER[i] = n);
     settings.outfits = s.outfits; s.controllers.forEach((c, i) => controllers[i] = c); settings.hpMult = s.hpMult;
-    [0, 1].forEach(p => World.trainers.setup(p, settings.outfits[p], PLAYER[p]));
     this.saved = null;
   }
 };
@@ -228,12 +227,10 @@ function showBracket() {
   const [w, h] = frameSize();
   B.querySelector('.brc').style.transform = `translate(-50%, -50%) scale(${Math.min(w / L.W, h / L.H)})`;
   B.classList.remove('hidden');
-  document.getElementById('hud').classList.add('hidden');
   document.getElementById('endScreen').classList.add('hidden');
   if (nx) document.getElementById('brPlay').onclick = () => Tour.play();
   else {
     document.getElementById('brNew').onclick = () => { Tour.quit(); hideBracket(); exitToBuilder(); openTourneySetup(); };
-    if (World.has3D && !World.skip3D) VFX.victory(new THREE.Vector3(0, 0, 0));
     AudioFX.Music.victory();
   }
   document.getElementById('brQuit').onclick = () => { Tour.quit(); hideBracket(); exitToBuilder(); };
