@@ -8,6 +8,22 @@ draws that frame like any sprite, so the camera, effects, flashes, HUD and battl
 Live models are preferred over the baked `sprites25d/` sheets. Settings → "Live 3D Pokémon" turns them off.
 A Mega Evolution switches to its pixel sprite.
 
+## Voxel 3D (any Pokémon, prototype)
+Pokémon without a model can be shown as **voxel 3D** instead: `retro3d.js` inflates each frame of the
+Pokémon's animated pixel sprite into a voxel volume. Depth grows with distance from the silhouette edge,
+so bodies come out round and wings, claws and tails thin. The volume is textured with the sprite itself,
+then rendered through the same camera, outline and cast-shadow pipeline as the real models. It keeps the
+sprite's own animation and adds procedural 3D motion: facing the foe in a slight 3/4 view, turning
+around through edge-on, an attack twist, a hit jolt, a stagger wobble, toppling over onto its back on
+faint, and a victory spin. Mega forms are voxelized from the Mega sprite.
+
+Enabled species are listed in `VOXEL3D` in `retro.js` (currently `charizard`). Precedence:
+real model > baked 2.5D sheet > voxel > pixel sprite.
+
+Limits: the sprites only show one side, so the back is the mirror image and the model never turns fully
+side-on to the camera. Overlapping limbs merge into one rounded volume, giving a "plush" look. Cost per
+sprite: 0.2–0.6 s to build (done during the battle intro) and about 10 MB of GPU memory (at most 24 frames).
+
 ## Current models
 | species | file | source | clips used |
 |---|---|---|---|

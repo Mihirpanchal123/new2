@@ -331,6 +331,15 @@ const Retro = (() => {
   const preloadLive = species => hasLive(species).then(ok => ok && live3D().then(L => L && L.preload(species))).catch(() => null);
   const getLive = species => hasLive(species).then(ok => ok ? live3D().then(L => L && L.create(species)) : null).catch(e => { console.warn('live 3D model unavailable for', species, e); return null; });
   function dropLive(f) { if (f.live) { f.live.dispose(); f.live = null; } lives.delete(f); }
+  // Voxel 3D (prototype): Pokémon without a model get their animated sprite inflated into a voxel volume.
+  // Species listed here only, for now (Mega forms of a listed species included)
+  const VOXEL3D = new Set(['charizard']);
+  const getVoxel = (mon, anim) => prefs.live3d !== false && VOXEL3D.has(mon.species) && anim.frames.length
+    ? live3D().then(L => L && L.voxel(anim)).catch(e => { console.warn('voxel 3D unavailable for', mon.species, e); return null; })
+    : Promise.resolve(null);
+  // during the intro: build the voxel models of every voxel Pokémon in the teams (and its Mega form), unless it has a real model
+  const prepVoxel = m => prefs.live3d === false || !VOXEL3D.has(m.species) ? null : hasLive(m.species).then(real => real ? null : live3D().then(L => L &&
+    Promise.all([m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])].map(src => getAnim(src).then(a => a.frames.length && L.prepareVoxel(a)))))).catch(() => null);
   // which baked animation a fighter is showing, and how far into it
   function clipOf(f, t) {
     const s = f.set25;
@@ -368,7 +377,7 @@ const Retro = (() => {
     if (o.white > 0) {
       if (scratch.width !== a.w || scratch.height !== a.h) { scratch.width = a.w; scratch.height = a.h; }
       sctx.globalCompositeOperation = 'source-over';
-      sctx.clearRect(0, 0, a.w, a.h); sctx.drawImage(img, 0, 0);
+      sctx.clearRect(0, 0, a.w, a.h); sctx.drawImage(img, 0, 0, a.w, a.h);   // (a live 3D frame's canvas can be finer than a.w x a.h)
       sctx.globalCompositeOperation = 'source-atop';
       sctx.fillStyle = o.whiteCol || '#fff'; sctx.globalAlpha = o.white; sctx.fillRect(0, 0, a.w, a.h); sctx.globalAlpha = 1;
       ctx.drawImage(scratch, -ox, -oy, w, h);
@@ -4846,15 +4855,19 @@ const Retro = (() => {
     for (let i = 0; i < 70; i++) { const an = R(0, 6.28), r0 = R(160, 260); spawn({ kind: 'streak', c: [RB[i % 7]], x: 0, y: 0, life: 0.5, delay: i * 0.015, len: 26, ang: an + Math.PI, path: k => ({ x: f.cx + Math.cos(an) * r0 * (1 - easeIn(k)), y: f.cy + Math.sin(an) * r0 * 0.7 * (1 - easeIn(k)) }) }); }
     await tw(1.15, k => { f.white = 0.6 + k * 0.4; f.shiver = k > 0.5 ? 0.08 : 0; if (k > 0.6) shake = Math.max(shake, (k - 0.6) * 8); }); chk(tk);
     const anim = await getAnim(fm.sprite); chk(tk);
+    const vox = await getVoxel(u, anim);
+    if (vox && (tk !== token || !on)) vox.dispose();
+    chk(tk);
     f.set25 = null;                                    // the Mega form has no baked sheet: its pixel sprite takes over
-    dropLive(f);                                       // ...nor a live model (f.anim is replaced just below)
+    dropLive(f);                                       // ...nor a live model (a voxel one if its species has them; f.anim is replaced below)
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
     shapes.push({ kind: 'megaorb', f, phase: 'burst', life: 0.45, age: 0 });
     flash('#ffffff', 0.95); shakeIt(13); hitStop(140); camPunch(f.cx, f.cy, 0.12, 0.7);
     u.modelKey = fm.name; u.isMega = true; u.name = fm.display; u.types = fm.types.slice(); u.stats = calcStats(fm.base, u.level); u.sprite = fm.sprite;
     if (fm.cry) u.cry = fm.cry;
-    f.anim = anim; f.fit(); f.bump(-10); f.white = 1;
+    if (vox) { f.live = vox; lives.add(f); }
+    f.anim = vox ? vox.anim : anim; f.fit(); f.bump(-10); f.white = 1;
     for (let i = 0; i < 40; i++) { const an = R(0, 6.28), sp = R(220, 520); spawn({ bm: 'shard', c: ['#ffffff', RB[i % 7], RB[(i + 3) % 7]], x: f.cx, y: f.cy, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp * 0.75, drag: 2.2, life: R(0.6, 1.1), s0: 3, s1: 2, rot: R(0, 6), spin: R(-14, 14), must: true }); }
     for (let i = 0; i < 28; i++) { const an = i / 28 * 6.28; spawn({ kind: 'streak', c: [RB[i % 7]], x: f.cx, y: f.cy, vx: Math.cos(an) * 700, vy: Math.sin(an) * 520, life: 0.5, len: 60, ang: an, must: true }); }
     ringP(f.x, f.y, 10, 220, '#ffffff', 0.6, { w: 2 }); ringP(f.x, f.y, 10, 160, '#ffd6ff', 0.6, { delay: 0.08 }); ringP(f.cx, f.cy, 10, 120, '#ffffff', 0.5, { flat: 1 });
@@ -4964,7 +4977,9 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const [anim, set25, live] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species), getLive(mon.isMega ? null : mon.species)]);
+    const [anim, set25, model] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species), getLive(mon.isMega ? null : mon.species)]);
+    // a real model first, then the baked sheet, then the voxel sprite
+    const live = model || (set25 ? null : await getVoxel(mon, anim));
     if (live && (tk !== token || !on)) live.dispose();
     chk(tk);
     const tr = trOf(p);
@@ -5444,7 +5459,7 @@ const Retro = (() => {
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
-    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.flatMap(m => [get25(m.species), preloadLive(m.species)]))]);
+    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.flatMap(m => [get25(m.species), preloadLive(m.species), prepVoxel(m)]))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);
