@@ -131,7 +131,9 @@ function renderer() {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
   quad.frustumCulled = false;
   const post = new THREE.Scene(); post.add(quad);
-  R = { gl, mat, post, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), w: 0, h: 0, lost: false };
+  // sized up front for a typical batch (a few Pokémon side by side): growing it later reallocates its buffer mid-battle
+  gl.setSize(1024, 512, false);
+  R = { gl, mat, post, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), w: 1024, h: 512, lost: false };
   gl.compileAsync(post, R.cam).catch(() => {});        // the reduction pass compiles in the background, not on the first draw
   gl.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); R.lost = true; });
   gl.domElement.addEventListener('webglcontextrestored', () => { R.lost = false; });
@@ -237,6 +239,7 @@ class Stage {
     const r = R, fr = this.fr, y = r.h - fr.h;           // viewport y counts from the bottom, canvas rows from the top
     this.cx.clearRect(0, 0, fr.w, fr.h); this.cx.drawImage(r.gl.domElement, x, y, fr.w, fr.h, 0, 0, fr.w, fr.h);
     this.shx.clearRect(0, 0, fr.w, fr.h); this.shx.drawImage(r.gl.domElement, x + fr.w, y, fr.w, fr.h, 0, 0, fr.w, fr.h);
+    this.anim.ver = (this.anim.ver || 0) + 1; this.shadow.ver = this.anim.ver;   // cached tints of the old frame are stale
   }
   render() { renderAll([this]); }
   dispose() {
@@ -675,6 +678,10 @@ const ACTIONS = {
     [0.62, { lean: 0.7, shift: 0.13, squash: -0.1, head: -0.4, laUp: -0.8, baUp: -0.8, llUp: 0.5, blUp: -0.6 }]]),
   slam: act(0.6, [[0.3, { hop: 0.22, lean: -0.25, squash: -0.1, head: 0.2, laUp: 2.4, baUp: 2.4, llBend: 0.6, blBend: 0.6 }], [0.45, { lean: 0.45, squash: 0.22, crouch: 0.4, head: -0.3, laUp: 0.6, baUp: 0.6 }], [0.62, { lean: 0.35, squash: 0.12, crouch: 0.3 }]]),
   wingstrike: act(0.55, [[0.3, { wing: 1, flap: 0.6, lean: -0.2, hop: 0.05, laUp: 0.6, baUp: 0.6, laOut: 1.2, baOut: 1.2 }], [0.45, { wing: 0.4, flap: -0.8, lean: 0.5, shift: 0.1, laUp: 1.4, baUp: 1.4, laOut: -0.2, baOut: -0.2 }], [0.62, { wing: 0.4, flap: -0.6, lean: 0.4, shift: 0.08, laUp: 1.2, baUp: 1.2 }]]),
+  // quick blows for a flurry (Close Combat): a jab, a snap kick, the launching uppercut
+  jab: act(0.22, [[0.35, { twist: -0.3, crouch: 0.2, laUp: -0.3, laBend: 1.4 }], [0.6, { twist: 0.4, lean: 0.4, shift: 0.08, laUp: 1.7, laBend: 0, baUp: -0.3 }]]),
+  snapkick: act(0.24, [[0.35, { lean: -0.1, llUp: 0.6, llBend: 1.5 }], [0.6, { lean: -0.3, shift: 0.05, llUp: 1.6, llBend: 0, laOut: 0.6, baOut: 0.6 }]]),
+  uppercut: act(0.42, [[0.3, { crouch: 0.5, lean: 0.1, laUp: -0.4, laBend: 1.2 }], [0.55, { hop: 0.1, lean: -0.2, twist: 0.4, squash: -0.12, laUp: 2.8, laBend: 0.3 }], [0.75, { hop: 0.06, lean: -0.15, twist: 0.35, laUp: 2.6 }]]),
   clap: act(0.55, [[0.3, { lean: -0.1, laUp: 1, baUp: 1, laOut: 1.3, baOut: 1.3 }], [0.42, { lean: 0.25, shift: 0.05, laUp: 1.2, baUp: 1.2, laOut: -0.4, baOut: -0.4 }], [0.6, { lean: 0.2, shift: 0.04, laUp: 1.2, baUp: 1.2, laOut: -0.4, baOut: -0.4 }]]),
   // special: gather (rear back), release, hold while it fires
   breath: act(0.75, [[0.35, { lean: -0.35, head: 0.55, chest: 0.3, jaw: 0.5, crouch: 0.15, laUp: 0.4, baUp: 0.4, laOut: 0.5, baOut: 0.5 }], [0.45, { lean: 0.25, shift: 0.04, head: -0.05, chest: -0.1, jaw: 1, laUp: -0.2, baUp: -0.2 }], [0.85, { lean: 0.3, shift: 0.05, head: -0.05, jaw: 1 }]]),
@@ -702,7 +709,7 @@ const STYLE = {
   tail: 'tailwhip', spin: 'spin', charge: 'tackle', slam: 'slam', wing: 'wingstrike', clap: 'clap',
   stream: 'breath', beam: 'breath', 'orb:big': 'breath', orb: 'cast', multi: 'cast', drain: 'cast', vortex: 'cast', bolt: 'zap', sky: 'zap',
   quake: 'stomp', rockslide: 'stomp', spikes: 'stomp', geyser: 'stomp', wave: 'sweep', wind: 'sweep', sound: 'roar',
-  shield: 'guard', buff: 'flex', heal: 'heal'
+  shield: 'guard', buff: 'flex', heal: 'heal', jab: 'jab', snapkick: 'snapkick', uppercut: 'uppercut'
 };
 // four-legged: arm actions become a pounce of the front paws, a kick bucks the hind legs
 const QUAD = { kick: 'buck', chop: 'slash', cross: 'slash', clap: 'slash', cast: 'breath', heal: 'roar', flex: 'roar' };

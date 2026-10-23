@@ -126,8 +126,9 @@ const Retro = (() => {
     const [fw, fh] = frameSize();
     portrait = fh > fw;
     if (portrait) { VW = 720; VH = Math.round(720 * fh / fw); } else { VH = 720; VW = Math.round(720 * fw / fh); }
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    const k = Math.min(dpr * fw / VW, 2560 / Math.max(VW, VH));
+    // drawn at CSS resolution at most, and at most 1920 px on the long side: it is pixel art, so the browser's pixelated
+    // upscale to a high-DPI screen (#rcv) looks the same, while every extra pixel drawn costs fill rate
+    const k = Math.min(fw / VW, 1920 / Math.max(VW, VH));
     cv.width = Math.round(VW * k); cv.height = Math.round(VH * k);
     SC = cv.width / VW;
     UNIT = fw / VW;
@@ -359,6 +360,26 @@ const Retro = (() => {
   }
   const scratch = document.createElement('canvas');
   const sctx = scratch.getContext('2d');
+  // a tinted or filtered copy of a sprite frame, made once and reused: afterimages draw the same frame several times a
+  // frame, and a canvas filter (frozen, poisoned) is costly to run on every draw. A live 3D frame is redone when its
+  // canvas has changed (a.ver)
+  const TINT = new WeakMap();
+  function tinted(img, a, key, paint, filter) {
+    let m = TINT.get(img);
+    if (!m) TINT.set(img, m = new Map());
+    let e = m.get(key);
+    const ver = a.ver || 0;
+    if (e && e.ver === ver) return e.c;
+    if (!e) m.set(key, e = { c: newCanvas(a.w, a.h) });
+    e.ver = ver;
+    const c = e.c, g = c.getContext('2d');
+    if (c.width !== a.w || c.height !== a.h) { c.width = a.w; c.height = a.h; }
+    g.globalCompositeOperation = 'source-over'; g.filter = filter || 'none';
+    g.clearRect(0, 0, a.w, a.h); g.drawImage(img, 0, 0, a.w, a.h); g.filter = 'none';
+    if (paint) paint(g);
+    return c;
+  }
+  const paintOver = col => g => { g.globalCompositeOperation = 'source-atop'; g.fillStyle = col; g.fillRect(0, 0, g.canvas.width, g.canvas.height); };
   // draws an animated sprite standing at (x, y) (feet), optionally mirrored / flashed / tinted.
   // o.sx / o.sy: signed stretch (a turn passes sx through 0), o.skew: lean, o.rot: tilt
   function drawSprite(a, t, x, y, s, flip, o = {}) {
@@ -373,15 +394,18 @@ const Retro = (() => {
     if (o.skew) ctx.transform(1, 0, o.skew, 1, 0, 0);
     if (o.rot) ctx.rotate(o.rot);
     ctx.scale(o.sx ?? (flip ? -1 : 1), o.sy || 1);
-    if (o.filter) ctx.filter = o.filter;
-    if (o.white > 0) {
+    // a full-white silhouette (afterimages) or a status tint comes from the cache; a partial hit flash is mixed here
+    const col = o.whiteCol || '#fff';
+    const src = o.white >= 0.99 ? tinted(img, a, 'w' + col, paintOver(col)) : o.filter && !(o.white > 0) ? tinted(img, a, 'f' + o.filter, null, o.filter) : img;
+    if (src === img && o.filter) ctx.filter = o.filter;
+    if (src === img && o.white > 0) {
       if (scratch.width !== a.w || scratch.height !== a.h) { scratch.width = a.w; scratch.height = a.h; }
       sctx.globalCompositeOperation = 'source-over';
       sctx.clearRect(0, 0, a.w, a.h); sctx.drawImage(img, 0, 0, a.w, a.h);   // (a live 3D frame's canvas can be finer than a.w x a.h)
       sctx.globalCompositeOperation = 'source-atop';
       sctx.fillStyle = o.whiteCol || '#fff'; sctx.globalAlpha = o.white; sctx.fillRect(0, 0, a.w, a.h); sctx.globalAlpha = 1;
       ctx.drawImage(scratch, -ox, -oy, w, h);
-    } else ctx.drawImage(img, -ox, -oy, w, h);
+    } else ctx.drawImage(src, -ox, -oy, w, h);
     ctx.restore();
   }
 
@@ -1111,20 +1135,37 @@ const Retro = (() => {
   // ---------------------------------------------------------------------
   const lightsFx = [];
   let camX = 0, camY = 0, camZ = 1, dimA = 0, dimTarget = 0, dimUntil = 0, hsTimer = null;
-  const discCache = new Map();
+  // pixel discs (most particles are made of them) all live on shared atlas sheets, packed in shelves: draws from one
+  // source image batch on the GPU, where a canvas per disc made every particle its own draw call
+  const discCache = new Map(), ATLAS = 1024, sheets = [];
+  let shelfX = 0, shelfY = 0, shelfH = 0;
   function disc(r, col) {
     r = clamp(Math.round(r), 1, 26);
     const key = r + col;
-    let c = discCache.get(key);
-    if (c) return c;
-    c = newCanvas(2 * r + 1, 2 * r + 1);
-    const g = c.getContext('2d');
+    let d = discCache.get(key);
+    if (d) return d;
+    const n = 2 * r + 1;
+    if (!sheets.length || shelfX + n > ATLAS) { shelfX = 0; shelfY += shelfH + 1; shelfH = 0; }
+    if (!sheets.length || shelfY + n > ATLAS) { sheets.push(newCanvas(ATLAS, ATLAS)); shelfX = shelfY = shelfH = 0; }
+    const c = sheets[sheets.length - 1], g = c.getContext('2d');
+    d = { c, sx: shelfX, sy: shelfY, n };
+    shelfX += n + 1; shelfH = Math.max(shelfH, n);
     g.fillStyle = col;
-    for (let y = -r; y <= r; y++) { const w = Math.round(Math.sqrt(Math.max(0, r * r - y * y))); g.fillRect(r - w, r + y, 2 * w + 1, 1); }
-    discCache.set(key, c);
-    return c;
+    for (let y = -r; y <= r; y++) { const w = Math.round(Math.sqrt(Math.max(0, r * r - y * y))); g.fillRect(d.sx + r - w, d.sy + r + y, 2 * w + 1, 1); }
+    discCache.set(key, d);
+    return d;
   }
-  function drawDisc(x, y, r, col) { const c = disc(r, col), s = c.width * PX; ctx.drawImage(c, sn(x) - s / 2, sn(y) - s / 2, s, s); }
+  // every type's particle colours at the common particle sizes, made while a battle loads: a burst of new colours
+  // in the middle of a move would grow the atlas and re-upload it several times in one frame
+  let discsWarm = false;
+  function warmDiscs() {
+    if (discsWarm) return;
+    discsWarm = true;
+    const cols = new Set(['#ffffff', ...POW_C]);
+    for (const t of Object.values(TP)) for (const c of t.c || []) cols.add(c);
+    for (const c of cols) for (let r = 1; r <= 10; r++) disc(r, c);
+  }
+  function drawDisc(x, y, r, col) { const d = disc(r, col), s = d.n * PX; ctx.drawImage(d.c, d.sx, d.sy, d.n, d.n, sn(x) - s / 2, sn(y) - s / 2, s, s); }
   const glowCache = new Map();
   function glowTex(col) {
     let c = glowCache.get(col);
@@ -1161,8 +1202,18 @@ const Retro = (() => {
     hsTimer = setTimeout(() => { if (TIME_SCALE === 0.04) TIME_SCALE = prev; }, ms);
   }
   // particles. kinds: flame smoke blob drop spark mote glow ring streak debris + bm / sq bitmaps
+  // the particle budget adapts to the machine: slow frames shrink it, fast frames let it grow back (a big burst gets
+  // a little sparser on a slow machine instead of stuttering)
+  let partCap = 1900, lastFrameAt = 0;
+  function partBudget() {                              // per rendered frame, on the real clock (game time is scaled)
+    const now = performance.now(), dt = (now - lastFrameAt) / 1000;
+    lastFrameAt = now;
+    if (dt > 0.25) return;                             // a paused or hidden tab says nothing about speed
+    if (dt > 1 / 45) partCap = Math.max(500, partCap * 0.9);
+    else if (dt < 1 / 58) partCap = Math.min(1900, partCap + 4);
+  }
   function spawn(o) {
-    if (parts.length > 1900 && !o.must) return o;
+    if (parts.length > partCap && !o.must) return o;
     o.age = -(o.delay || 0); o.z = o.z || 0; o.seed = Math.random() * 9;
     if (!o.kind) o.kind = o.bm ? 'bm' : o.sq ? 'sq' : 'blob';
     parts.push(o);
@@ -2514,9 +2565,10 @@ const Retro = (() => {
     'steel-beam': { c: ['#ffffff', '#f2f6ff', '#c3cedd', '#7d899a'], w: 30, dim: 0.35, shake: 5 }
   };
   S.beam = async (f, d, m, o, hit) => {
-    const P = PAL(m), B = BEAM[m.id] || { c: P.c.slice(0, 4), w: (m.power || 60) >= 100 ? 24 : 16, deco: m.type === 'Ice' ? 'ice' : m.type === 'Fire' ? 'fire' : null };
+    // o.beam: a custom look; o.charged: the move did its own charge-up
+    const P = PAL(m), B = o.beam || BEAM[m.id] || { c: P.c.slice(0, 4), w: (m.power || 60) >= 100 ? 24 : 16, deco: m.type === 'Ice' ? 'ice' : m.type === 'Fire' ? 'fire' : null };
     if (m.cat !== 'status') maybeClash(d, f);
-    await charge(f, m, m.id === 'solar-beam' ? 0.9 : 0.34, { dim: B.dim || 0.15, col: B.c[1], size: B.w * 2.2, hold: 1.0, motes: m.id === 'solar-beam' ? 40 : 18, moteCol: m.id === 'solar-beam' ? '#fff8a0' : null });
+    if (!o.charged) await charge(f, m, m.id === 'solar-beam' ? 0.9 : 0.34, { dim: B.dim || 0.15, col: B.c[1], size: B.w * 2.2, hold: 1.0, motes: m.id === 'solar-beam' ? 40 : 18, moteCol: m.id === 'solar-beam' ? '#fff8a0' : null });
     if (!on || f.state !== 'idle') return;
     SFX.beam(m.type, 0.6);
     const mo = f.mouth(), mOff = side();
@@ -4175,6 +4227,354 @@ const Retro = (() => {
     return S.beam(f, d, m, o, hit);
   };
   SIG['hydro-cannon'] = SIG['roar-of-time'] = SIG['prismatic-laser'] = SIG['eternabeam'] = S.beam;
+
+  // =====================================================================
+  //  SIGNATURE MOVES, STAGED: anime-style sequences that change the arena
+  //  Flamethrower, Flare Blitz, Psychic, Ancient Power, Aura Sphere,
+  //  Close Combat, Hydro Cannon, Wave Crash. Each has a gathering phase, the
+  //  attack itself and an aftermath that stays on the ground (scorched and
+  //  burning ground, craters, cracks, boulders, a soaked arena).
+  // =====================================================================
+  const inArena = (x, y) => ({ x: clamp(x, field.x0, field.x1), y: clamp(y, field.y0, field.y1) });
+  const liveAct = (f, kind, style) => { if (f.live) f.live.play(kind, style); };
+  // a sphere of gathered energy at the attacker's hands / mouth: s.at() is where, s.r its radius now
+  SHAPE2.chargeorb = s => {
+    const p = s.at(), r = s.r, c = s.c;
+    glow(p.x, p.y, r * 3.2, c[1], 0.9);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) { const a = T * 5 + i * 1.047, rr = r * (1.15 + 0.2 * Math.sin(T * 13 + i)); drawDisc(p.x + Math.cos(a) * rr, p.y + Math.sin(a) * rr * 0.8, Math.max(1, r / PX * 0.22), c[1]); }
+    ctx.globalCompositeOperation = 'source-over';
+    orbBody(p.x, p.y, r, c);
+  };
+  function orbBody(x, y, r, c) {
+    drawDisc(x, y, r / PX, c[3]); drawDisc(x, y - r * 0.08, r / PX * 0.8, c[2]); drawDisc(x - r * 0.15, y - r * 0.22, r / PX * 0.45, c[1]); drawDisc(x - r * 0.25, y - r * 0.32, Math.max(1, r / PX * 0.16), c[0]);
+    ctx.strokeStyle = c[1]; ctx.lineWidth = PX; ctx.beginPath(); ctx.ellipse(x, y, r * 1.5, r * 0.45, T * 4, 0, 6.28); ctx.stroke();
+  }
+  // a tidal wave: a wall of water across the whole arena, its crest at s.x, rolling in direction s.dir
+  SHAPE2.tidal = s => {
+    const a = s.fade ?? 1;
+    if (a <= 0) return;
+    const dir = s.dir, step = 3 * PX, bands = [[1, '#1b3f8a'], [0.7, '#2b6fd6'], [0.42, '#3a8ae6'], [0.2, '#5ab4ff']];
+    ctx.globalAlpha = 0.85 * a;
+    for (let y = s.y0; y <= s.y1; y += step) {
+      const fx = s.x + (Math.sin(y * 0.03 + T * 7) * 14 + Math.sin(y * 0.011 - T * 3) * 22) * dir;
+      for (const [k, col] of bands) { const w = s.body * k; ctx.fillStyle = col; ctx.fillRect(sn(dir > 0 ? fx - w : fx), sn(y), sn(w), step); }
+      ctx.fillStyle = '#e8f8ff'; ctx.fillRect(sn(dir > 0 ? fx - 3 * PX : fx), sn(y), 3 * PX + (Math.sin(y * 0.2 + T * 20) > 0.3 ? 2 * PX : 0), step);   // foam on the crest
+    }
+    ctx.globalAlpha = 1;
+  };
+  // a psychic field over the ground: a pink glow and ripples running outward
+  SHAPE2.psyzone = (s, k) => {
+    const a = k < 0.15 ? k / 0.15 : k > 0.85 ? (1 - k) / 0.15 : 1;
+    ctx.save(); ctx.translate(s.x, s.y); ctx.scale(1, 0.42); glow(0, 0, s.r * 1.3, '#ff6ec0', 0.35 * a); ctx.restore();
+    ctx.globalAlpha = 0.8 * a;
+    for (let i = 0; i < 3; i++) pixRing(s.x, s.y, s.r * ((T * 0.8 + i / 3) % 1), 0.42, '#ff9ccf', 1);
+    ctx.globalAlpha = 1;
+  };
+  function spray(w) {
+    for (let i = 0; i < 4; i++) spawn({ kind: 'blob', c: [pick(['#ffffff', '#e8f8ff', '#8fd0ff']), '#ffffff'], x: w.x + R(-10, 10), y: R(w.y0, w.y1), z: R(20, 90), vz: R(60, 220), g: 700, vx: w.dir * R(80, 240), vy: R(-30, 30), life: R(0.4, 0.7), s0: R(2, 3.5), s1: 1 });
+  }
+
+  // FLAMETHROWER: a roaring stream that sweeps a wide fan; the ground under it burns and stays scorched
+  SIG['flamethrower'] = async (f, d, m, o, hit) => {
+    const offY = o.miss ? R(45, 65) * side() : 0;
+    await charge(f, m, 0.28, { col: '#ffb347', dim: 0.22, size: 34, motes: 16, recoil: 20, hold: 1.9 });
+    if (!on) return;
+    SFX.stream('Fire', 1.8);
+    liveAct(f, 'special', 'stream');
+    const t0 = FT, dur = 1.75;
+    lightAt(f.x, f.y, 200, '#ff8a2a', dur + 0.3, 0.85, () => ({ x: (f.x + d.x) / 2, y: (f.y + d.y) / 2 }));
+    let hitDone = false, nextScar = 0;
+    while (FT - t0 < dur && on) {
+      const e = (FT - t0) / dur, sweep = Math.sin(e * Math.PI * 3) * 0.16;
+      const mo = f.mouth(), tx = d.cx, ty = d.cy + offY, dx = tx - mo.x, dy = ty - mo.y, L = Math.hypot(dx, dy) || 1;
+      const c = Math.cos(sweep), sw = Math.sin(sweep), ux = (dx * c - dy * sw) / L, uy = (dx * sw + dy * c) / L;
+      for (let i = 0; i < 6; i++) streamEmit(m, mo.x, mo.y, ux, uy, L * 1.3, R(1.4, 1.9));
+      // flames rolling along the ground under the stream
+      if (Math.random() < 0.6) { const kk = R(0.3, 1.2); flameP(f.x + (d.x - f.x) * kk + R(-20, 20), f.y + (d.y - f.y) * kk + sweep * L * kk + R(-8, 8), R(-30, 30), R(-90, -40), R(3, 5), R(0.5, 0.9)); }
+      f.kx -= f.face * 10;
+      if (!hitDone && e > 0.2) { hitDone = true; hit(); }
+      if (hitDone && !o.miss && Math.random() < 0.3) impactAt('Fire', tx + R(-14, 14), ty + R(-14, 14), d.y, 0.4, { quiet: true });
+      // the swept fan is scorched as it goes
+      if (FT > nextScar) { nextScar = FT + 0.12; const kk = R(0.25, 1.25), p = inArena(f.x + (d.x - f.x) * kk + R(-25, 25), f.y + (d.y - f.y) * kk + sweep * L * kk + R(-30, 30)); addDecal('scorch', p.x, p.y, R(0.7, 1.3)); }
+      if (Math.random() < 0.25) shakeIt(3);
+      await wait(30);
+    }
+    if (!hitDone) hit();
+    if (!o.miss && d.state === 'idle') for (let i = 0; i < 26; i++) flameP(d.x + R(-d.w / 2, d.w / 2), d.y - R(0, d.h), R(-30, 30), R(-160, -60), R(3, 6), R(0.5, 0.9), { delay: i * 0.02 });
+    // the burned fan keeps burning a while
+    for (let kk = 0.35; kk <= 1.25; kk += 0.3) { const p = inArena(f.x + (d.x - f.x) * kk + R(-20, 20), f.y + (d.y - f.y) * kk + R(-25, 25)); terrainAdd('fire', p.x, p.y, R(18, 26), R(3, 5)); }
+    for (let i = 0; i < 8; i++) smokeP(d.x + R(-60, 60), d.y - R(0, 40), R(4, 6), R(1, 1.6), undefined, { delay: i * 0.05, a: 0.55 });
+  };
+
+  // FLARE BLITZ: it bursts into flame, charges as a fireball that scorches a trail, explodes on the target and is
+  // thrown back by its own blast
+  SIG['flare-blitz'] = async (f, d, m, o, hit) => {
+    liveAct(f, 'roar');
+    SFX.stream('Fire', 0.7); dimTo(0.32, 1.6);
+    if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.08, hold: 0.8 });
+    f.aura = '#ff7a1a'; f.auraT = FT + 1.5;
+    addDecal('scorch', f.x, f.y, 1.4); ringP(f.x, f.y, 8, 90, '#ffb347', 0.45);
+    await tw(0.55, k => {
+      for (let i = 0; i < 4; i++) { const a = R(0, 6.28); flameP(f.x + Math.cos(a) * f.w * 0.45, f.y - R(0, f.h * 0.9), -Math.cos(a) * 40, R(-220, -90), R(3.5, 6), R(0.4, 0.7)); }
+      f.white = 0.25 + Math.sin(k * 40) * 0.1; f.whiteCol = '#ffb347';
+      if (Math.random() < 0.3) shakeIt(2);
+    });
+    if (!on) return;
+    lightAt(f.x, f.y, 180, '#ff8a2a', 1.2, 0.9, () => ({ x: f.x, y: f.y }));
+    spawn({ kind: 'glow', c: ['#ff9a3a'], x: 0, y: 0, s0: f.w * 0.9, s1: f.w * 1.3, life: 0.6, a: 0.9, must: true, path: () => ({ x: f.cx, y: f.cy }) });
+    liveAct(f, 'attack', 'charge');
+    const sx0 = f.x, sy0 = f.y;
+    const s = await dashTo(f, d, 0.2, { afterCol: '#ffb347', trail: f2 => {
+      for (let i = 0; i < 3; i++) flameP(f2.x + R(-f2.w / 3, f2.w / 3), f2.cy + R(-f2.h / 2, f2.h / 3), -f2.face * R(60, 160), R(-90, -20), R(4, 7), R(0.35, 0.6));
+      if (Math.random() < 0.6) addDecal('scorch', f2.x + R(-10, 10), f2.y + R(-6, 6), 0.7);
+    } });
+    for (let kk = 0.25; kk < 1; kk += 0.25) terrainAdd('fire', sx0 + (f.x - sx0) * kk, sy0 + (f.y - sy0) * kk, 16, R(2.5, 4));
+    f.white = 0;
+    if (o.miss || d.state !== 'idle') { impactAt('Fire', f.x + f.face * 30, f.cy, f.y, 1.2); hit(); await bounceBack(f, s, 20); return; }
+    hit();
+    hitStop(140); flash('#ffd27a', 0.35); shakeIt(14); camPunch(d.cx, d.cy, 0.1, 0.5);
+    impactAt('Fire', d.cx, d.cy, d.y, 2.2);
+    shapes.push({ kind: 'boom', x: d.cx, y: d.cy, s: 7, c: ['#fff7c2', '#ffd23f', '#ff7a1a', '#c22a10'], life: 0.5, age: 0 });
+    for (let i = 0; i < 3; i++) ringP(d.x, d.y, 10, 150 + i * 40, i ? '#ff9a3a' : '#ffffff', 0.5, { delay: i * 0.08, w: 2 });
+    crater(d.x, d.y, 34); addDecal('scorch', d.x, d.y, 2.2);
+    for (let i = 0; i < 4; i++) { const a = i / 4 * 6.28 + R(-0.3, 0.3); terrainAdd('fire', d.x + Math.cos(a) * 55, d.y + Math.sin(a) * 24, 18, R(3, 5)); }
+    for (let i = 0; i < 10; i++) smokeP(d.x + R(-40, 40), d.y - R(0, 30), R(5, 8), R(1.2, 1.8), undefined, { vy: R(-70, -30), delay: 0.15 + i * 0.04, a: 0.6 });
+    // recoil: thrown back out of its own blast
+    f.kx -= f.face * 320;
+    await bounceBack(f, s, 26);
+    for (let i = 0; i < 6; i++) smokeP(f.x + R(-10, 10), f.y - R(0, f.h * 0.6), 3, 0.9, undefined, { delay: i * 0.05 });
+  };
+
+  // PSYCHIC: the ground around the target comes under its power - a rippling field, chunks of arena tear loose and
+  // float while the target is lifted and wrung - then everything slams down together
+  SIG['psychic'] = async (f, d, m, o, hit) => {
+    liveAct(f, 'special', 'orb');
+    await charge(f, m, 0.35, { col: '#ff9ccf', dim: 0.38, hold: 2.0, size: 40, motes: 22 });
+    if (!on) return;
+    SFX.cast('Psychic');
+    for (let i = 0; i < 4; i++) ringP(f.cx, f.cy, 10, 120, '#ff9ccf', 0.5, { flat: 1, delay: i * 0.1 });
+    if (o.miss || d.state !== 'idle') { ringP(d.x + 80, d.cy, 8, 60, '#ff9ccf', 0.5, { flat: 1 }); hit(); return; }
+    const R0 = 150, chunks = [];
+    shapes.push({ kind: 'psyzone', x: d.x, y: d.y, r: R0, life: 1.6, age: 0 });
+    SFX.rumble(1.2);
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * 6.28 + R(-0.2, 0.2), rr = R(60, R0), gx = d.x + Math.cos(a) * rr, gy = d.y + Math.sin(a) * rr * 0.45, h = R(50, 120), ph = R(0, 6.28), sp = R(1.5, 3);
+      addDecal('crack', gx, gy, 0.6); dust(gx, gy, 0.8);
+      chunks.push({ gx, gy });
+      spawn({ kind: 'glow', c: ['#ff9ccf'], x: gx, y: gy, s0: 16, s1: 22, life: 1.25, a: 0.5, must: true, path: k => ({ x: gx, y: gy - h * (k < 0.25 ? easeOut(k / 0.25) : k < 0.85 ? 1 : 1 - easeIn((k - 0.85) / 0.15)) }) });
+      spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: gx, y: gy, life: 1.25, s0: pick([4, 5, 6]), rot: R(0, 6), spin: R(-3, 3), must: true,
+        path: k => { const up = k < 0.25 ? easeOut(k / 0.25) : k < 0.85 ? 1 : 1 - easeIn((k - 0.85) / 0.15); return { x: gx + Math.sin(T * sp + ph) * 6, y: gy - h * up + Math.sin(T * 2 + ph) * 4 }; } });
+    }
+    d.whiteCol = '#ff9ccf';
+    for (let i = 0; i < 4; i++) ringP(d.cx, d.cy, 10, 80, '#ff9ccf', 0.6, { flat: 1, delay: i * 0.15 });
+    await tw(0.5, k => { if (d.state === 'idle') { d.jz = easeOut(k) * 80; d.white = 0.45 + Math.sin(k * 30) * 0.2; d.shiver = 0.1; d.rotS = Math.sin(k * 18) * 0.25; } });
+    await tw(0.45, k => { if (d.state === 'idle') { d.jz = 80 + Math.sin(k * 25) * 6; d.rotS = Math.sin(k * 30) * 0.3; } });   // wrung in the air
+    d.white = 0;
+    await tw(0.1, k => { if (d.state === 'idle') d.jz = 80 * (1 - easeIn(k)); });
+    d.jz = 0; d.rotS = 0;
+    hit();
+    shakeIt(13); hitStop(90); camPunch(d.x, d.y, 0.08, 0.4); flash('#ffd0ec', 0.25);
+    crater(d.x, d.y, 30); addDecal('crack', d.x, d.y, 1.6);
+    ringP(d.x, d.y, 10, R0 * 1.3, '#ff9ccf', 0.5, { w: 2 }); ringP(d.x, d.y, 10, R0, '#ffffff', 0.35);
+    for (const c of chunks) { dust(c.gx, c.gy, 1.2); addDecal('crack', c.gx, c.gy, 0.8); }
+    impactAt('Psychic', d.cx, d.cy, d.y, 1.3, { quiet: true });
+    await wait(300);
+  };
+
+  // ANCIENT POWER: rocks burst out of the arena around the user, rise glowing and gather above it, then are hurled
+  // at the target one after another, the big one last
+  SIG['ancient-power'] = async (f, d, m, o, hit) => {
+    liveAct(f, 'special', 'quake');
+    SFX.quake(); shakeIt(7); dimTo(0.25, 2.2);
+    glowP(f.cx, f.cy, 10, 110, '#f2e6c8', 0.7, 0.6);
+    const n = 7, rocks = [];
+    for (let i = 0; i < n; i++) {
+      const a = i / n * 6.28 + R(-0.25, 0.25), rr = R(70, 150), p = inArena(f.x + Math.cos(a) * rr, f.y + Math.sin(a) * rr * 0.5), t0 = i * 0.07;
+      later(() => {
+        if (!on) return;
+        crater(p.x, p.y, R(12, 18)); dust(p.x, p.y, 1.4);
+        for (let j = 0; j < 6; j++) spawn({ kind: 'debris', c: ['#7a5432', '#a8773e', '#3b2814'], x: p.x, y: p.y, z: 0, vz: R(140, 280), g: 1000, vx: R(-60, 60), vy: R(-20, 20), life: R(0.6, 0.9), s0: 2, rot: R(0, 6), spin: R(-10, 10), bounce: true });
+      }, t0 * 1000);
+      const big = i === n - 1, ph = i / n * 6.28, s0 = big ? 9 : pick([5, 6]);
+      const hx = () => f.cx + Math.cos(ph + T * 1.6) * f.w * 0.9, hy = () => f.top - 50 + Math.sin(ph + T * 1.6) * 18;
+      const at = k => { const e = easeOut(Math.min(1, k / 0.45)); return { x: p.x + (hx() - p.x) * e, y: p.y + (hy() - p.y) * e - Math.sin(e * Math.PI) * 30 }; };
+      rocks.push({ s0, hx, hy, big });
+      spawn({ kind: 'debris', c: ['#8a7a62', '#bcae90', '#4a4032'], x: p.x, y: p.y, life: 1.4 - t0, delay: t0, s0, rot: R(0, 6), spin: R(-2, 2), must: true, path: at });
+      spawn({ kind: 'glow', c: ['#fff2c8'], x: 0, y: 0, s0: 16 * s0 / 4, s1: 26 * s0 / 4, life: 1.4 - t0, delay: t0, a: 0.85, must: true, path: at });
+    }
+    await wait(1400);
+    if (!on) return;
+    liveAct(f, 'special', 'orb');
+    let first = null;
+    for (const r of rocks) {
+      const pr = shoot({ x: r.hx(), y: r.hy(), to: d, miss: o.miss, missOff: 70 * side(), speed: r.big ? 640 : 820, r: r.s0 * PX,
+        draw: (q, x, y) => { glow(x, y, r.big ? 60 : 36, '#fff2c8', 0.8); drawBm('rock', ['#8a7a62', '#bcae90', '#4a4032'], x, y, r.s0, false, q.age * 9); },
+        trail: q => { if (Math.random() < 0.5) moteP(q.x, q.y - (q.arcK || 0), '#f2e6c8', { life: 0.4 }); } });
+      pr.then(q => {
+        if (!on) return;
+        dust(q.x, q.y + 30, r.big ? 2 : 1); SFX.impact('Rock', r.big ? 1.4 : 0.7);
+        if (o.miss) return;
+        shakeIt(r.big ? 10 : 4);
+        if (r.big) { crater(d.x, d.y, 26); terrainAdd('boulder', d.x + R(-30, 30), d.y + R(-10, 10), 14); impactAt('Rock', q.x, q.y, d.y, 1.4); }
+        else impactAt('Rock', q.x, q.y, d.y, 0.5, { quiet: true });
+      });
+      if (!first) first = pr.then(() => hit());
+      await wait(r.big ? 0 : 110);
+    }
+    await first; await wait(450);
+  };
+
+  // AURA SPHERE: aura drawn in from all around grows a sphere between its hands; it flies big, trailing aura, and
+  // bursts in a blue blast
+  SIG['aura-sphere'] = async (f, d, m, o, hit) => {
+    liveAct(f, 'special', 'orb');
+    const C = ['#ffffff', '#bfe4ff', '#4aa8ff', '#1a4fb8'], orb = { kind: 'chargeorb', at: () => f.mouth(), r: 4, c: C, life: 9, age: 0 };
+    shapes.push(orb);
+    dimTo(0.4, 2.0); SFX.cast('Fighting');
+    if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.1, hold: 1.3 });
+    f.crouchT = 1; f.aura = '#6ab8ff'; f.auraT = FT + 1.4;
+    const t0 = FT, dur = 1.15;
+    while (FT - t0 < dur && on) {
+      const k = (FT - t0) / dur, mo = f.mouth();
+      orb.r = 4 + 26 * easeOut(k);
+      for (let i = 0; i < 3; i++) { const an = R(0, 6.28), r0 = R(70, 140); moteP(0, 0, pick(['#8fd0ff', '#ffffff', '#4aa8ff']), { life: 0.35, path: kk => ({ x: mo.x + Math.cos(an) * r0 * (1 - kk), y: mo.y + Math.sin(an) * r0 * 0.7 * (1 - kk) }) }); }
+      if (Math.random() < 0.35) sparkP(mo.x, mo.y, R(0, 6.28), R(60, 160), '#bfe4ff', 0.2);
+      if (Math.random() < 0.2) ringP(mo.x, mo.y, orb.r * 2.4, orb.r, '#8fd0ff', 0.25, { flat: 1 });
+      if (k > 0.6 && Math.random() < 0.3) shakeIt(2);
+      await wait(30);
+    }
+    orb.age = orb.life;                                // the gathered sphere becomes the projectile
+    f.crouchT = 0;
+    if (!on) return;
+    f.bump(-6); f.kx -= f.face * 120;
+    liveAct(f, 'special', 'orb');
+    SFX.beam('Fighting', 0.5); flash('#bfe4ff', 0.2);
+    const R1 = 30;
+    const q = await fire(f, d, m, o, { r: R1, speed: 620, curve: 0.35 * side(),
+      draw: (p, x, y) => { glow(x, y, R1 * 3.6, '#6ab8ff', 0.95); orbBody(x, y, R1, C); },
+      trail: p => { moteP(p.x + R(-12, 12), p.y - (p.arcK || 0) + R(-12, 12), pick(['#8fd0ff', '#ffffff']), { life: 0.45 }); if (Math.random() < 0.3) ringP(p.x, p.y - (p.arcK || 0), 6, 30, '#8fd0ff', 0.25, { flat: 1 }); } });
+    hit();
+    if (o.miss) { impactAt('Fighting', q.x, q.y, q.y + 30, 0.8); return; }
+    hitStop(80); shakeIt(11); camPunch(d.cx, d.cy, 0.08, 0.4); flash('#bfe4ff', 0.3);
+    glowP(d.cx, d.cy, 20, 200, '#6ab8ff', 0.5, 1);
+    for (let i = 0; i < 3; i++) ringP(d.cx, d.cy, 10, 110 + i * 40, i ? '#4aa8ff' : '#ffffff', 0.45, { flat: 1, delay: i * 0.07, w: 2 });
+    for (let i = 0; i < 26; i++) { const an = R(0, 6.28), sp = R(200, 480); spawn({ kind: 'streak', c: [pick(['#ffffff', '#8fd0ff'])], x: d.cx, y: d.cy, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp * 0.7, drag: 4, life: 0.35, len: 34, ang: an }); }
+    addDecal('crack', d.x, d.y, 1.2); crater(d.x, d.y, 20);
+    impactAt('Fighting', d.cx, d.cy, d.y, 1.2, { quiet: true });
+  };
+
+  // CLOSE COMBAT: a flurry of jabs and kicks in the target's face, every blow harder, finished by a launching uppercut
+  SIG['close-combat'] = async (f, d, m, o, hit) => {
+    f.aura = '#ffb04a'; f.auraT = FT + 2.2;
+    const s = await dashTo(f, d, 0.13, { afterCol: '#ffd59a' });
+    if (o.miss || d.state !== 'idle') { impactAt('Fighting', f.x + f.face * 30, f.cy, f.y, 0.6); hit(); await bounceBack(f, s, 18); return; }
+    dimTo(0.3, 1.6);
+    if (!calm()) camShot('anticipate', { f: d, w: 0.35, z: 1.12, hold: 1.4 });
+    addDecal('crack', d.x, d.y, 1.0);
+    const N = 9;
+    for (let i = 0; i < N; i++) {
+      if (!on || d.state !== 'idle') break;
+      const kick = i % 3 === 2, dir = Math.sign(d.x - f.x) || f.face;
+      // it stays in the target's face, stepping side to side between blows
+      f.y = clamp(d.y + (i % 2 ? 10 : -10), field.y0, field.y1); f.x = d.x - dir * (f.r + d.r) * 0.62; f.face = dir; f.after = 0.1; f.afterCol = '#ffd59a';
+      liveAct(f, 'attack', kick ? 'snapkick' : 'jab');
+      const at = { x: d.cx + dir * R(-10, 4), y: d.cy + (kick ? d.h * 0.2 : -d.h * R(0, 0.25)) };
+      powAt(at.x, at.y, 22 + i * 1.5, POW_C, { life: 0.18 });
+      shapes.push({ kind: 'lines', x: at.x, y: at.y, r0: 14, r1: 54, col: '#ffffff', n: 8, life: 0.14, age: 0, rot: R(0, 1) });
+      for (let j = 0; j < 3; j++) spawn({ bm: 'star', c: ['#ffffff', '#ffd59a'], x: at.x, y: at.y, vx: dir * R(80, 260), vy: R(-160, 60), drag: 3, life: 0.3, s0: 2, s1: 1 });
+      SFX.impact('Fighting', 0.6 + i * 0.05, 1);
+      d.white = 1; d.whiteCol = '#ffffff'; d.bump(3); d.shiver = 0.1; d.kx += dir * 40; d.rotSV += dir * 4;
+      shakeIt(3 + i * 0.5);
+      if (i % 3 === 0) dust(d.x, d.y, 0.8);
+      if (i === 0) hit();
+      await wait(i < N - 1 ? 95 : 140);
+    }
+    if (on && d.state === 'idle') {
+      const dir = Math.sign(d.x - f.x) || f.face;
+      liveAct(f, 'attack', 'uppercut');
+      hitStop(130); flash('#fff1c2', 0.3); shakeIt(14); camPunch(d.cx, d.cy, 0.12, 0.45);
+      powAt(d.cx, d.cy - d.h * 0.2, 54, POW_C, { life: 0.3 });
+      shapes.push({ kind: 'boom', x: d.cx, y: d.cy, s: 5, c: ['#ffffff', '#fff1c2', '#ffb04a', '#a03a10'], life: 0.4, age: 0 });
+      impactAt('Fighting', d.cx, d.cy, d.y, 1.6, { quiet: true });
+      for (let i = 0; i < 2; i++) ringP(d.x, d.y, 10, 120 + i * 50, '#ffd08a', 0.45, { delay: i * 0.08, w: 2 });
+      crater(d.x, d.y, 24); addDecal('crack', d.x, d.y, 1.6);
+      d.kx += dir * 520;
+      tw(0.45, k => { if (d.state === 'idle') d.jz = Math.sin(k * Math.PI) * 70; }).then(() => { if (d.state === 'idle') { d.jz = 0; d.bump(6); dust(d.x, d.y, 1.6); } });
+    }
+    await bounceBack(f, s, 22);
+  };
+
+  // HYDRO CANNON: water spirals in from the ground into a growing sphere, then fires as a beam twice as thick with a
+  // recoil that drives the user back; the target is hit by a huge splash and the ground floods
+  SIG['hydro-cannon'] = async (f, d, m, o, hit) => {
+    liveAct(f, 'special', 'beam');
+    const C = ['#ffffff', '#bfe9ff', '#3a8ae6', '#1b3f8a'], orb = { kind: 'chargeorb', at: () => f.mouth(), r: 4, c: C, life: 9, age: 0 };
+    shapes.push(orb);
+    dimTo(0.4, 3.0); SFX.stream('Water', 1.3);
+    if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.1, hold: 1.3 });
+    f.crouchT = 1;
+    const t0 = FT, dur = 1.1;
+    while (FT - t0 < dur && on) {
+      const k = (FT - t0) / dur, mo = f.mouth();
+      orb.r = 4 + 30 * easeOut(k);
+      for (let i = 0; i < 4; i++) { const an = R(0, 6.28), r0 = R(80, 160); spawn({ kind: 'blob', c: [pick(['#5ab4ff', '#8fd0ff', '#3a8ae6']), '#ffffff'], x: 0, y: 0, life: 0.4, s0: R(2, 3.5), s1: 1.5, path: kk => ({ x: mo.x + Math.cos(an + kk * 3) * r0 * (1 - kk), y: mo.y + Math.sin(an + kk * 3) * r0 * 0.6 * (1 - kk) }) }); }
+      if (Math.random() < 0.25) ringP(mo.x, mo.y, orb.r * 2.6, orb.r, '#bfe9ff', 0.3, { flat: 1 });
+      if (k > 0.6 && Math.random() < 0.3) shakeIt(2.5);
+      await wait(30);
+    }
+    orb.age = orb.life; f.crouchT = 0;
+    if (!on || f.state !== 'idle') return;
+    liveAct(f, 'special', 'beam');
+    f.kx -= f.face * 260; flash('#bfe9ff', 0.3); shakeIt(10);
+    const r = await S.beam(f, d, m, { ...o, charged: true, beam: { c: C, deco: 'rings', w: 48, dim: 0.45, shake: 8 } }, hit);
+    if (r === 'nohit' || o.miss) return r;
+    camPunch(d.cx, d.cy, 0.1, 0.5); hitStop(90);
+    impactAt('Water', d.cx, d.cy, d.y, 2.0);
+    for (let i = 0; i < 4; i++) { const a = R(0, 6.28); terrainAdd('puddle', d.x + Math.cos(a) * R(20, 70), d.y + Math.sin(a) * R(10, 30), R(24, 34)); }
+    for (let kk = 0.3; kk < 1; kk += 0.2) addDecal('wet', f.x + (d.x - f.x) * kk, f.y + (d.y - f.y) * kk, 1.2);
+    addDecal('wet', d.x, d.y, 2.4);
+    for (let i = 0; i < 30; i++) spawn({ kind: 'drop', c: [pick(['#5ab4ff', '#8fd0ff', '#ffffff'])], x: d.x + R(-30, 30), y: d.y, z: R(20, 80), vx: R(-260, 260), vy: R(-120, 120), vz: R(200, 480), g: 950, life: 1.3, s0: R(1, 2.5), splash: true });
+    return r;
+  };
+
+  // WAVE CRASH: a tidal wave rises behind the user and rolls across the whole arena; the user rides its crest into
+  // the target, and the wave breaks and drains away, leaving the arena soaked
+  SIG['wave-crash'] = async (f, d, m, o, hit) => {
+    const dir = Math.sign(d.x - f.x) || f.face, edge0 = dir > 0 ? field.x0 - 60 : field.x1 + 60, edge1 = dir > 0 ? field.x1 + 80 : field.x0 - 80;
+    liveAct(f, 'roar');
+    dimTo(0.3, 2.8); SFX.stream('Water', 2.2); SFX.rumble(1.6);
+    f.aura = '#5ab4ff'; f.auraT = FT + 2.6;
+    const wave = { kind: 'tidal', x: edge0, dir, y0: field.y0 - 40, y1: field.y1 + 30, body: 60, life: 99, age: 0, fade: 1 };
+    shapes.push(wave);
+    const startX = f.x - dir * 120;
+    await tw(0.6, k => { wave.x = edge0 + (startX - edge0) * easeOut(k); wave.body = 60 + 160 * k; spray(wave); if (Math.random() < 0.3) shakeIt(3); });
+    if (!on) { wave.age = wave.life; return; }
+    liveAct(f, 'attack', 'charge');
+    const sx = f.x, sy = f.y, stopX = d.x - dir * (f.r + d.r) * 0.7;
+    f.dashing = true; f.after = 3; f.afterCol = '#bfe9ff';
+    const dur = clamp(Math.abs(edge1 - startX) / 1100, 0.9, 1.8);
+    let hitDone = false;
+    await tw(dur, k => {
+      wave.x = startX + (edge1 - startX) * (k * 0.6 + easeIn(k) * 0.4);
+      // the user rides just behind the crest until it reaches the target
+      const fx = wave.x - dir * 40;
+      if ((stopX - fx) * dir > 0 && (fx - f.x) * dir > 0) { f.x = fx; f.y = sy + (d.y - sy) * clamp((fx - sx) / ((stopX - sx) || 1), 0, 1); }
+      spray(wave);
+      if (!hitDone && (wave.x - d.x) * dir > -10) {
+        hitDone = true; hit();
+        if (!o.miss && d.state === 'idle') { impactAt('Water', d.cx, d.cy, d.y, 2.2); hitStop(110); camPunch(d.cx, d.cy, 0.1, 0.5); shakeIt(14); flash('#bfe9ff', 0.3); d.kx += dir * 420; }
+      }
+      if (Math.random() < 0.35) addDecal('wet', wave.x - dir * R(0, 100), R(field.y0, field.y1), R(0.8, 1.5));
+    });
+    if (!hitDone) hit();
+    f.dashing = false; f.after = 0;
+    await tw(0.5, k => { wave.fade = 1 - k; wave.body = 220 * (1 - k * 0.5); });
+    wave.age = wave.life;
+    for (let i = 0; i < 6; i++) terrainAdd('puddle', R(field.x0 + 40, field.x1 - 40), R(field.y0 + 20, field.y1 - 20), R(26, 40));
+    f.kx -= dir * 200;                                  // recoil
+    await bounceBack(f, { sx, sy }, 18);
+  };
   SIG['blast-burn'] = async (f, d, m, o, hit) => {
     // the ground erupts in a ring of fire, then the blast detonates on the target
     await charge(f, m, 0.5, { dim: 0.45, size: 70, hold: 1.6 });
@@ -5203,9 +5603,10 @@ const Retro = (() => {
   //  recorders take turns keeping the last few seconds; after the knockout
   //  the hit plays back in slow motion before the winner is announced
   // ---------------------------------------------------------------------
-  const RP_MIME = window.MediaRecorder ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '' : '';
+  // VP8 first: two recorders encode while the battle plays, and VP8 costs far less to encode in real time than VP9
+  const RP_MIME = window.MediaRecorder ? ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '' : '';
   const RP_SEG = 3.4;                                  // each recorder restarts after this many seconds; the two run half a segment apart
-  const RP = { cv: null, g: null, stream: null, slots: [], offT: 0, keep: null, ko: null, clip: null };
+  const RP = { cv: null, g: null, stream: null, slots: [], offT: 0, keep: null, ko: null, clip: null, copyT: 0 };
   const rpNow = () => performance.now() / 1000;
   function rpSlot() {
     const s = { chunks: [], t0: rpNow(), rec: null };
@@ -5223,9 +5624,10 @@ const Retro = (() => {
     if (RP.clip) RP.clip.then(c => c && URL.revokeObjectURL(c.url));
     RP.stream = RP.keep = RP.ko = RP.clip = null; RP.slots = [];
   }
-  // every frame, after render(): copy the frame and start / roll the recorders
+  // every frame, after render(): copy the frame and start / roll the recorders. The stream is 30 fps, so a copy every
+  // other frame is enough, and it is scaled with hard pixel edges (pixel art; smoothing is the costly part of the copy)
   function rpTick() {
-    if (RP.stream && (RP.keep || RP.slots.some(Boolean))) RP.g.drawImage(cv, 0, 0, RP.cv.width, RP.cv.height);
+    if (RP.stream && (RP.keep || RP.slots.some(Boolean)) && rpNow() - RP.copyT >= 1 / 31) { RP.copyT = rpNow(); RP.g.drawImage(cv, 0, 0, RP.cv.width, RP.cv.height); }
     if (RP.ko) return;
     const pinch = running && RP_MIME && prefs.replays !== false && nearEnd();
     if (!pinch) { if (RP.stream) rpReset(); return; }
@@ -5234,7 +5636,7 @@ const Retro = (() => {
       RP.cv = RP.cv || document.createElement('canvas');
       RP.cv.width = VW; RP.cv.height = VH;              // the virtual resolution keeps every art pixel
       RP.g = RP.cv.getContext('2d');
-      RP.g.imageSmoothingQuality = 'high';
+      RP.g.imageSmoothingEnabled = false;
       RP.g.drawImage(cv, 0, 0, VW, VH);
       try { RP.stream = RP.cv.captureStream(30); } catch (e) { return; }
       RP.slots = [rpSlot(), null];
@@ -5428,6 +5830,7 @@ const Retro = (() => {
   // ---------------------------------------------------------------------
   function update(dt) {
     if (!on) return;
+    partBudget();
     T += dt;
     if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
@@ -5510,6 +5913,7 @@ const Retro = (() => {
     // models of this battle (Mega forms included); older ones beyond a few are freed
     const keys = new Set(state.players.flatMap(pl => pl.team.flatMap(m => [m.species, ...(m.megaForm ? [m.megaForm.name] : [])])));
     if (L3m) L3m.trim(keys);
+    warmDiscs();
     const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(preloadLive), ...state.players.flatMap(pl => pl.team.flatMap(m => [hasLive(m.species).then(l => l ? null : get25(m.species)), prepVoxel(m)]))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
