@@ -1,0 +1,3 @@
+{
+ "mewtwo": { "file": "models3d/mewtwo.glb", "heightPx": 106, "source": "Pokémon 3D API assets models/regular-150.glb (git b596552), slimmed by tools/slim-glb.mjs" }
+}

@@ -313,6 +313,24 @@ const Retro = (() => {
     ANIM.set(key, pr);
     return pr;
   }
+  // ---------------------------------------------------------------------
+  //  Live 3D Pokémon (retro3d.js): the real animated model, lit and rendered
+  //  as pixel art every frame and drawn like any sprite. Preferred over the
+  //  baked sheet when the species has a model in models3d/; three.js only
+  //  loads when such a Pokémon is in the battle. Any failure (no WebGL, model
+  //  missing) falls back to the 2.5D sheet or the pixel sprite.
+  // ---------------------------------------------------------------------
+  let L3 = null, MAN3 = null;
+  const lives = new Set();                             // fighters showing a live model (released when they leave the field)
+  const live3D = () => L3 || (L3 = import('./retro3d.js').catch(e => { console.warn('live 3D unavailable', e); return null; }));
+  function hasLive(species) {
+    if (prefs.live3d === false || !species) return Promise.resolve(false);
+    if (!MAN3) MAN3 = fetch('models3d/manifest.json').then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    return MAN3.then(m => !!m[species]);
+  }
+  const preloadLive = species => hasLive(species).then(ok => ok && live3D().then(L => L && L.preload(species))).catch(() => null);
+  const getLive = species => hasLive(species).then(ok => ok ? live3D().then(L => L && L.create(species)) : null).catch(e => { console.warn('live 3D model unavailable for', species, e); return null; });
+  function dropLive(f) { if (f.live) { f.live.dispose(); f.live = null; } lives.delete(f); }
   // which baked animation a fighter is showing, and how far into it
   function clipOf(f, t) {
     const s = f.set25;
@@ -892,6 +910,7 @@ const Retro = (() => {
     f.sq = clamp(f.sq + f.sqv * dt, -0.45, 0.45);
     f.crouch += (f.crouchT - f.crouch) * Math.min(1, dt * 14);
     f.faceVis += (f.face - f.faceVis) * Math.min(1, dt * 15);
+    if (f.live) f.live.drive(dt, { face: f.faceVis, vx: f.vx, vy: f.vy, moving: f.state === 'idle' && (f.dashing || f.speed > 60), sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
     f.shiver = Math.max(0, f.shiver - dt);
     f.rotSV += (-f.rotS * 200 - f.rotSV * 11) * dt; f.rotS = clamp(f.rotS + f.rotSV * dt, -0.45, 0.45);
     if (!f.busy && !f.dashing) f.rotA *= Math.exp(-dt * 8);
@@ -1894,11 +1913,12 @@ const Retro = (() => {
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
     const fa = f.alpha * (f.fadeA ?? 1);
-    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: -g.sx * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
+    // a live 3D model turns in 3D (its yaw follows faceVis), so it is never mirrored
+    for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: (f.live ? 1 : -g.sx) * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     const clip = clipOf(f, t + f.p * 0.37);
     drawSprite(clip ? clip[0] : f.anim, clip ? clip[1] : t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
-      { sx: -f.faceVis * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
+      { sx: (f.live ? 1 : -f.faceVis) * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
   // draw the visible part of a world-sized art layer (1 art pixel = PX world units)
   function drawLayer(img, v) {
@@ -1933,9 +1953,13 @@ const Retro = (() => {
       pixRing(r.x, r.y, rr, r.flat, r.col, r.w);
     }
     ctx.globalAlpha = 1;
+    // live 3D models render their frame (and cast shadow) for this frame first
+    for (const f of F) if (f && f.live && f.state !== 'gone') f.live.render();
     // shadows (Pokémon, and anything flying through the air)
     for (const f of F) if (f && f.state !== 'gone') {
       const lift = clamp(f.z / 120, 0, 0.5);
+      // a live model casts its own shadow (a hard pixel mask), drawn with the same tone as the blob shadows
+      if (f.live) { drawSprite(f.live.shadow, 0, f.x, f.y, f.scale * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6), false, { sx: 1, alpha: 0.32 * f.alpha * (1 - lift) }); continue; }
       ctx.fillStyle = `rgba(0,0,0,${0.32 * f.alpha * (1 - lift)})`;
       const rx = f.w * 0.36 * (f.hover ? 0.75 : 1) * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6);
       ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill();
@@ -3927,7 +3951,7 @@ const Retro = (() => {
     clones: (s, k) => {
       const f = s.f; if (!f || f.state !== 'idle') return;
       const n = 4, spread = Math.sin(Math.min(1, k * 1.4) * Math.PI) * f.w * 1.1, sc = f.scale;
-      for (let i = 0; i < n; i++) { const an = i / n * 6.28 + T * 4; drawSprite(f.anim, T, f.x + Math.cos(an) * spread, f.y - f.z + Math.sin(an) * spread * 0.3, sc, false, { sx: -f.faceVis, alpha: 0.45 * (1 - k * 0.6), white: 0.5, whiteCol: '#cfe6ff' }); }
+      for (let i = 0; i < n; i++) { const an = i / n * 6.28 + T * 4; drawSprite(f.anim, T, f.x + Math.cos(an) * spread, f.y - f.z + Math.sin(an) * spread * 0.3, sc, false, { sx: f.live ? 1 : -f.faceVis, alpha: 0.45 * (1 - k * 0.6), white: 0.5, whiteCol: '#cfe6ff' }); }
     }
   });
   // Strength: heave a boulder overhead and hurl it
@@ -4575,6 +4599,7 @@ const Retro = (() => {
     const foe = foeOf(d); d.rotSV += (Math.sign(d.x - (foe ? foe.x : d.x - 1)) || 1) * 5 * pw;
     const stg = clamp((frac - 0.12) * 2.2, 0, 0.8) + (crit ? 0.3 : 0);
     if (stg > 0.08) { d.stagger = Math.max(d.stagger || 0, T + stg); d.goal = null; }
+    if (d.live) d.live.play(stg > 0.08 ? 'stun' : 'hurt');   // a stagger dazes it, then the recovery clip plays when it ends
     if (crit) shapes.push({ kind: 'dizzy', f: d, life: 0.9, age: 0 });
     if (eff < 1) shapes.push({ kind: 'dome', f: d, col: '#9fc4ff', life: 0.35, age: 0 });
     if (eff > 1 || crit) trainerPose(d.p, 'dismay', 0.9);
@@ -4753,6 +4778,7 @@ const Retro = (() => {
         text(f, 'HURT ITSELF!', 'info'); SFX.status('confusedselfhit');
         const dmg = Math.max(1, calcDamage(u, u, { id: 'confusion-hit', type: null, cat: 'physical', power: 40 }));
         u.hp = Math.max(0, u.hp - dmg); number(f, dmg); f.white = 1; f.whiteCol = '#ffffff'; f.bump(6); f.shiver = 0.3; hud(p);
+        if (f.live) f.live.play('hurt');
         impactAt('Normal', f.cx, f.cy, f.y, 0.5, { quiet: true });
         if (u.hp <= 0) koFighter(f);
         await wait(500);
@@ -4763,6 +4789,7 @@ const Retro = (() => {
     if (idx >= 0) m.ppLeft--;
     f.lastMove = m;
     if (m.cat !== 'status') f.atkT = T;                // 2.5D sprites play their attack animation
+    if (f.live && m.ailment !== 'protect') f.live.play(m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar');
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
     if (!multi || spot === f) callout(f, m.name, m.type);
@@ -4820,6 +4847,7 @@ const Retro = (() => {
     await tw(1.15, k => { f.white = 0.6 + k * 0.4; f.shiver = k > 0.5 ? 0.08 : 0; if (k > 0.6) shake = Math.max(shake, (k - 0.6) * 8); }); chk(tk);
     const anim = await getAnim(fm.sprite); chk(tk);
     f.set25 = null;                                    // the Mega form has no baked sheet: its pixel sprite takes over
+    dropLive(f);                                       // ...nor a live model (f.anim is replaced just below)
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
     shapes.push({ kind: 'megaorb', f, phase: 'burst', life: 0.45, age: 0 });
@@ -4936,7 +4964,9 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const [anim, set25] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species)]); chk(tk);
+    const [anim, set25, live] = await Promise.all([getAnim(mon.sprite), get25(mon.isMega ? null : mon.species), getLive(mon.isMega ? null : mon.species)]);
+    if (live && (tk !== token || !on)) live.dispose();
+    chk(tk);
     const tr = trOf(p);
     const dest = multi ? multiSpot(p) : { ...spots.start[p] };
     const foe = multi ? null : F[1 - p];
@@ -4962,12 +4992,14 @@ const Retro = (() => {
     for (let i = 0; i < 14; i++) moteP(dest.x, dest.y - 24, '#ffffff', { vx: R(-200, 200), vy: R(-200, 100), drag: 3, life: 0.6 });
     ringP(dest.x, dest.y, 6, 70, '#ffffff', 0.4);
     flash('#ffffff', 0.12);
-    const f = new Fighter(p, mon, set25 ? set25.idle : anim);
-    f.set25 = set25;
+    const f = new Fighter(p, mon, live ? live.anim : set25 ? set25.idle : anim);
+    f.set25 = live ? null : set25;
+    if (live) { f.live = live; lives.add(f); }
     f.x = dest.x; f.y = dest.y; f.face = f.faceVis = multi ? (Math.sign((field.x0 + field.x1) / 2 - dest.x) || 1) : p ? -1 : 1; f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     F[p] = f;
     focusOn(f.x, f.y - 30, 0.9);
     playCry(mon);
+    if (f.live) f.live.play('roar');                   // the model roars with its cry
     await tw(0.32, k => { f.pop = easeOut(k); f.white = 1 - k * 0.6; }); chk(tk);
     f.pop = 1; f.bump(-7);
     dust(f.x, f.y, 1.5);
@@ -4980,6 +5012,7 @@ const Retro = (() => {
     loudUntil = T + 0.8;                               // a knockout always gets the full punch
     f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
     f.state = 'faint'; f.faintT = T;
+    if (f.live) f.live.play('down');
     const p = f.p, mon = f.mon, tk = token;
     playCry(mon, 0.8); SFX.faint();
     if (multi) {
@@ -5273,7 +5306,7 @@ const Retro = (() => {
       cheer = 1; AudioFX.Crowd.cheer(1);
       big(`${sideName(w).toUpperCase()} WINS!`, 'win', 3600);
       sidePose(w, 'cheer', 5); if (!multi || multi.mode === 'brawl') sidePose(1 - w, 'dismay', 5);
-      for (const f of F) if (f && f.state === 'idle' && sideOf(f.p) === w) { f.aura = '#fff3a0'; f.auraT = FT + 4; for (let i = 0; i < 3; i++) later(() => f.bump(-9), i * 260); }
+      for (const f of F) if (f && f.state === 'idle' && sideOf(f.p) === w) { f.aura = '#fff3a0'; f.auraT = FT + 4; if (f.live) f.live.play('win'); for (let i = 0; i < 3; i++) later(() => f.bump(-9), i * 260); }
       confetti();
       const endL = state.meta.endLines;
       if (endL && !multi) { speech(w, endL[w] && endL[w].win, 2800); speech(1 - w, endL[1 - w] && endL[1 - w].lose, 2800); }
@@ -5336,6 +5369,7 @@ const Retro = (() => {
     if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     if (running) heatStep(dt);
+    for (const f of lives) if (F[f.p] !== f || f.state === 'gone') dropLive(f);   // recalled, fainted and gone, or switched out
     for (const f of F) if (f) stepFighter(f, dt);
     if (running) for (const f of F) if (f) think(f, dt);
     ambient(dt);
@@ -5368,6 +5402,7 @@ const Retro = (() => {
     root.classList.remove('sd', 'replaying');
     root.querySelectorAll('.rreplay, .rrp').forEach(n => n.remove());
     parts.length = beams.length = bolts.length = rings.length = projs.length = shapes.length = lightsFx.length = terrain.length = 0;
+    for (const f of lives) dropLive(f);
     F.length = 0; F.push(null, null);
     multi = null; elim = [];
     acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
@@ -5409,7 +5444,7 @@ const Retro = (() => {
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
-    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.map(m => get25(m.species)))]);
+    const loading = Promise.all([...srcs.map(getAnim), ...state.players.flatMap(pl => pl.team.flatMap(m => [get25(m.species), preloadLive(m.species)]))]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);
