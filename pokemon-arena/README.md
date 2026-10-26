@@ -27,6 +27,16 @@ Real-time Pokémon battles in Retro 2D pixel art with 481 Pokémon from all nine
   - *Voxel 3D (prototype):* a Pokémon's animated sprite inflated into a voxel 3D volume, for species without a model. No species uses it now (`VOXEL3D` in `retro.js`).
 - **👑 Battle Royale & 👥 Team Brawl** (pick the format at the top of the team builder): up to 8 Pokémon on the field at once. *Battle Royale* is a free-for-all (2–8 entrants, last one standing wins); *Team Brawl* puts both whole teams on the field together (1–4 per side). Each Pokémon picks its own target (close, weakened or one it hits hard), gets a name tag and HP bar over its head, and the HUD shows a mini card per Pokémon plus a knockout feed. Intro card, sudden death, the final-blow replay and the MVP end card all work here too. To keep a busy field readable: Pokémon pair off into duels (they leave alone a Pokémon that is already under attack; in Team Brawl each one has a lane opponent) and keep away from other duels; at most two attacks play at once, and a big move (Mega Evolution, the deciding blow, a sure knockout or a 120+ power move, at most every 4 s) takes the stage alone while the camera zooms onto that duel and everyone else fades back; minor texts, move names and screen shake/flashes of ordinary hits are toned down; Team Brawl draws a team-coloured ring under each Pokémon and lock-on brackets mark every new target. Multi battles are CPU only and are not added to the records.
 
+- **🌲 Adventure (open-world survival RPG):** control one Pokémon in a top-down pixel world and grow it from level 5. Wild Pokémon fight with the very same engine as the battles (moves, animations, official damage formula, type chart, status, AI); only the frame around it changes.
+  - *The world* (`world.js`): a seeded 200 × 150-tile map (about 45 s to walk across) of connected regions, built so the danger grows away from the start: **Starting Grassland** (Lv 1–5) → **Whispering Forest** (4–10, dense trees and hidden trails) → **Riverlands** (7–15, lakes and a river with bridges) → **Echo Caves** (12–22, dark: a pool of light around you) → **Windswept Highlands** (18–30, cliffs and snow; you get hungry faster) → **Ancient Ruins** (25–45). Paths are carved between all regions with A*, so every region, landmark and resource is reachable; the start is a clear camp. The same seed always builds the same world (a save stores the seed, not the map). Ground is painted in chunks on first sight; trees, rocks, walls and landmarks are depth-sorted with the Pokémon. A minimap with fog of war shows what you have explored.
+  - *Wild Pokémon*: spawn just out of sight, never near a camp, on ground you can reach, at most a few at a time; they despawn when left far behind. Each biome has its own encounter table (rare finds included); the level comes from the region's danger within the biome's range, pulled a little toward your level, with random spread, and a Pokémon evolves to the stage its level allows. About 1 in 20 is an **Alpha** (bigger, stronger, more HP, better loot). Each landmark is guarded by a **boss** (beaten bosses stay beaten). Temperament comes from the species: aggressive ones spot you (a "!") and give chase, neutral ones only fight back, timid ones run when they are losing; they give up when you get away or retreat to camp.
+  - *Your Pokémon*: experience on the official "medium fast" curve, stats from the official formulas on every level-up, new moves from its real level-up learnset (four equipped, swap them with **M**), level evolutions (Charmander → Charmeleon at 16). Moves cost **stamina** (from their power and PP) instead of PP; stamina also powers the dash. **Hunger** drops over time: low hunger slows stamina, starving drains HP down to a quarter (it can't kill). Out of combat and fed, HP slowly returns.
+  - *Gathering, items, crafting*: berry bushes, herbs, mushrooms, apple trees, sticks, stones, ore and crystals regrow after a while; hidden caches hold supplies. Berries heal or cure (Oran, Sitrus, Pecha, Rawst, Cheri, Leppa), food fills you up; craft Berry Juice, Forest Stew, Energy Tonic, Max Elixir and a **Campfire Kit** (a new rest-and-save spot).
+  - *Quests and places*: three quests at a time (forage, defeat, craft, discover a landmark, reach a level, beat a boss) with XP and item rewards; discovering landmarks and new biomes gives XP.
+  - *Rest and saving*: rest at the camp (or a campsite) with **E** to heal fully and save; the game also autosaves every 45 s out of combat and when you leave. Fainting wakes you at your last rest spot. Saves are validated when loaded (anything missing or invalid falls back to a safe value).
+  - *Controls*: **WASD/arrows** move, **Shift/Space** dash, **1–4** attack the nearest wild Pokémon in range (it locks on), **E** interact, **5–7** quick items, **I** bag & crafting, **M** moves & stats, **J** quests & places, **Esc** pause.
+  - All balancing (speeds, ranges, XP, stamina, hunger, spawn rules, level formula, encounter tables, items, recipes, quests) is in the tables at the top of `adventure.js`.
+
 ## Run it
 Double-click **`start.bat`**. It starts a tiny local server and opens http://localhost:8080 in Chrome/Edge.
 The game must run through that server (the live 3D Pokémon load three.js as modules); opening `index.html` directly shows a reminder.
@@ -40,6 +50,7 @@ three.js and the 3D models only load when a battle has live 3D Pokémon in it (S
    Evolved forms can't go below their real evolution level (Charizard ≥ 36). Pick Human or CPU for each player.
 2. **Battle:** choose a move, or switch. If your Pokémon holds a Mega Stone, toggle **Mega Evolve** before picking a move (once per battle).
 3. **Auto-play:** tick "Auto-play next random battle" for endless CPU vs CPU battles.
+4. **Adventure:** click **🌲 Adventure** in the team builder, pick a partner (and optionally a world seed), or **Continue** your saved adventure.
 
 ## Record for upload
 Click **⏺ Record** (or press **R**), then pick **this tab** and tick "share tab audio" for the cries.
@@ -60,6 +71,8 @@ node tools/build-lib.mjs       three.js r170 + the loaders the live 3D Pokémon 
 node tools/build-live3d.mjs    a model for every Pokémon and Mega form, into models3d/ (see models3d/README.md)
 ```
 `tools/live3d-preview.html` (open via the server) shows every model through the battle pipeline.
+
+`node tools/test-world.mjs [seeds]` checks the Adventure world generator over many random seeds (same seed = same world, a clear start, every biome present, every region, landmark and resource reachable).
 
 The Retro 2D font is Tiny5 (SIL Open Font License, Google Fonts) in `lib/fonts/`.
 

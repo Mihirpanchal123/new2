@@ -285,10 +285,10 @@ function calcStats(base, level) {
 }
 const blankStages = () => ({ atk: 0, def: 0, spa: 0, spd: 0, spe: 0, acc: 0, eva: 0 });
 
-function makeMon(spec, owner) {
+function makeMon(spec, owner, hpMult = settings.hpMult) {
   const sp = DEX.species[spec.species];
-  // official HP formula; the optional 'Battle length' setting multiplies it for longer battles
-  const maxhp = (Math.floor((2 * sp.base[0] + 31) * spec.level / 100) + spec.level + 10) * settings.hpMult;
+  // official HP formula; the optional 'Battle length' setting multiplies it for longer battles (Adventure passes 1)
+  const maxhp = (Math.floor((2 * sp.base[0] + 31) * spec.level / 100) + spec.level + 10) * hpMult;
   return {
     owner, species: sp.name, name: sp.display, level: spec.level, types: sp.types.slice(),
     stats: calcStats(sp.base, spec.level), maxhp, hp: maxhp, sprite: sp.sprite, cry: sp.cry, modelKey: sp.name,
@@ -454,6 +454,7 @@ function abortBattle() {
   setPaused(false);
 }
 function exitToBuilder() {
+  if (Adventure.active) Adventure.leave();             // saves the adventure before the engine stops
   abortBattle();
   Tour.inMatch = false;
   Tour.restore();
@@ -509,6 +510,7 @@ $('thumbBtn').onclick = async () => {
   toast('Thumbnail saved to your Downloads folder');
 };
 $('tourneyBtn').onclick = () => openTourneySetup();
+$('advBtn').onclick = () => Adventure.open();
 $('recordsBtn').onclick = () => openRecords();
 $('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))), { format: settings.format }); };
 $('builderBtn').onclick = exitToBuilder;

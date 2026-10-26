@@ -71,10 +71,13 @@ const Retro = (() => {
   //  Multi-Pokémon battles (Battle Royale / Team Brawl): every Pokémon is
   //  its own slot p with a side; in 1v1 the slot is the player and the side
   // ---------------------------------------------------------------------
-  let multi = null;                                    // { mode: 'royale' | 'brawl', side: [...], names: [...] } or null for 1v1
+  let multi = null;                                    // { mode: 'royale' | 'brawl' | 'wild', side: [...], names: [...] } or null for 1v1
+  // Adventure (open world, see OPEN WORLD near the end): slot 0 is the player's Pokémon, the other slots are wild
+  // Pokémon that come and go. WM holds that mode's state while it runs (null otherwise).
+  let WM = null;
   const sideOf = p => multi ? multi.side[p] : p;
   const trOf = p => multi ? (multi.mode === 'brawl' ? TR[sideOf(p)] : null) : TR[p];
-  const isCpu = p => !!multi || controllers[p] === 'cpu';
+  const isCpu = p => WM ? p !== 0 : !!multi || controllers[p] === 'cpu';
   const enemiesOf = f => F.filter(o => o && o !== f && o.state === 'idle' && sideOf(o.p) !== sideOf(f.p));
   const sidesAlive = () => [...new Set(state.players.flatMap((pl, p) => pl.team.some(m => m.hp > 0) ? [sideOf(p)] : []))];
   const sideMons = s => state.players.flatMap((pl, p) => sideOf(p) === s ? pl.team : []);
@@ -93,11 +96,11 @@ const Retro = (() => {
     const s = sideOf(p), mates = state.players.map((_, q) => q).filter(q => sideOf(q) === s), k = (mates.indexOf(p) + 1) / (mates.length + 1);
     return portrait ? { x: field.x0 + fw * k, y: s ? field.y0 + fh * 0.2 : field.y1 - fh * 0.2 } : { x: s ? field.x1 - fw * 0.18 : field.x0 + fw * 0.18, y: field.y0 + fh * k };
   }
-  const foeOf = f => multi ? targetOf(f) : F[1 - f.p];
+  const foeOf = f => WM ? wmFoe(f) : multi ? targetOf(f) : F[1 - f.p];
   // pacing: at most two attacks play at once, and a big move takes the stage alone (the spotlight)
   let acting = 0, spot = null, spotFoe = null, pendingSpot = null, pendingT = 0, loudUntil = 0, spotEndT = -99;
-  const calm = () => !!multi && !spot && T > loudUntil;            // ordinary hits get toned-down screen effects
-  const inSpot = f => f === spot || f === spotFoe;
+  const calm = () => !!multi && !WM && !spot && T > loudUntil;     // ordinary hits get toned-down screen effects
+  const inSpot = f => WM ? f.p === 0 || !!f.aggro : f === spot || f === spotFoe;   // open world: the player's fights count
   const engaged = (e, f) => F.filter(o => o && o !== f && o.state === 'idle' && o.target === e).length;
   // pick an enemy to go after: close, weakened, or one it hits hard; stay on it for a few seconds
   function targetOf(f) {
@@ -798,7 +801,7 @@ const Retro = (() => {
     }
     fit() {
       const h = Math.max(this.anim.bh, this.anim.bw * 0.8), th = h <= 85 ? h : 85 + (h - 85) * 0.4;
-      this.scale = th / h * SPR * (multi ? multi.spr : 1);
+      this.scale = th / h * SPR * (multi ? multi.spr : 1) * (this.size || 1);   // size: open-world elites and bosses stand taller
       this.h = this.anim.bh * this.scale; this.w = this.anim.bw * this.scale;
       this.r = Math.max(20, this.w * 0.34);
     }
@@ -820,7 +823,7 @@ const Retro = (() => {
     return (f.prof = { anim: f.anim, heavy, small, accel: fast ? 1.45 : heavy ? 0.6 : small ? 1.2 : 1, stop: heavy ? 0.65 : 1, stride: small ? 0.75 : heavy ? 1.25 : 1, hop: heavy ? 0.45 : small ? 1.3 : 1 });
   }
   const center = f => ({ x: f.cx, y: f.cy });
-  const clampField = f => { f.x = clamp(f.x, field.x0, field.x1); f.y = clamp(f.y, field.y0, field.y1); };
+  const clampField = f => { const b = WM ? WM.bounds : field; f.x = clamp(f.x, b.x0, b.x1); f.y = clamp(f.y, b.y0, b.y1); };
   // everything about timing comes from the real stats
   const spd = m => speedOf(m);                                            // Speed x stage x paralysis
   const tempo = f => clamp((spd(f.mon) + 60) / 170, 0.7, 1.45);           // >1 = snappier body motion
@@ -839,6 +842,7 @@ const Retro = (() => {
   }
   function maxSpeed(f) {
     const m = f.mon;
+    if (WM) return WM.host.speed(f);                                      // open world: the walking pace is configured
     return clamp(80 + spd(m) * 0.6, 90, 240) * (m.hp / m.maxhp < 0.25 ? 0.85 : 1);
   }
   const isContact = mv => !!mv && classify({ id: mv.id, ...mv }).startsWith('contact');
@@ -868,6 +872,7 @@ const Retro = (() => {
     return pm && isContact(pm) ? space(f, foe) * 1.2 : wantDist(f, foe);
   }
   function pickGoal(f) {
+    if (WM) { const g = wmGoal(f); if (g !== undefined) return g; }   // open world: wandering, fleeing, going home
     const foe = foeOf(f);
     const inField = g => ({ x: clamp(g.x, field.x0 + 8, field.x1 - 8), y: clamp(g.y, field.y0 + 6, field.y1 - 6) });
     if (!foe || foe.state !== 'idle') return inField({ x: f.x + R(-220, 220), y: f.y + R(-110, 110) });
@@ -909,6 +914,7 @@ const Retro = (() => {
       else if (mode === 'sidestep') sc = -Math.abs(df - L) * 0.5 - wall + R(0, 30);
       else sc = -Math.abs(df - want) + Math.min(travel, 400) * 0.4 - wall + R(0, 50);
       if (df < space(f, foe)) sc -= 600;                                // never pick a spot right next to the foe
+      if (WM && !Overworld.free(g.x, g.y, WM_FOOT, !!f.hover)) sc -= 900;  // open world: not inside a tree, a rock or the water
       // no sudden about-turns: a goal behind the way it is already moving costs (unless it is getting away)
       if (f.speed > 60 && mode !== 'retreat' && mode !== 'backoff') { const dot = ((g.x - f.x) * f.vx + (g.y - f.y) * f.vy) / (travel * f.speed + 1e-6); if (dot < -0.3) sc += 160 * dot; }
       if (!multi && (mode === 'flank' || mode === 'arc' || mode === 'cross' || mode === 'retreat')) sc -= heat[heatCell(g.x, g.y)] * 18;   // a duel prefers parts of the arena it hasn't used yet
@@ -945,13 +951,20 @@ const Retro = (() => {
     const bob = f.hover ? f.hover + Math.sin(T * 2.6 + f.p * 2) * 5 : 0;
     if (f.state !== 'idle') { f.z = bob * (1 - f.sink) + f.jz; return; }
     // knockback slide
-    f.x += f.kx * dt; f.y += f.ky * dt;
+    if (WM) wmMove(f, f.kx * dt, f.ky * dt, true); else { f.x += f.kx * dt; f.y += f.ky * dt; }
     slideStep(f);
     const fr = Math.exp(-dt * 6); f.kx *= fr; f.ky *= fr;
     if (Math.hypot(f.kx, f.ky) > 110 && !f.hover && Math.random() < dt * 40) dust(f.x - Math.sign(f.kx) * 8, f.y, 0.8);
     let tvx = 0, tvy = 0;
     const canWalk = !f.busy && !f.stuck && running && !f.dashing && !(T < (f.stagger || 0)) && !(T < (f.holdT || 0)) && !megaHold();
-    if (canWalk) {
+    const steer = WM && f.p === 0;                     // open world: the player walks where the keys say
+    if (canWalk && steer) {
+      const inp = WM.host.input(f, dt);
+      tvx = inp.x * maxSpeed(f); tvy = inp.y * maxSpeed(f) * 0.8;
+      f.goal = null; f.goalPace = inp.dash ? 1.2 : 1;
+      if (inp.dash && f.speed > 150) { f.after = Math.max(f.after, 0.06); f.afterCol = '#ffffff'; if (!f.hover && Math.random() < dt * 14) dust(f.x, f.y, 0.7); }
+    }
+    if (canWalk && !steer) {
       f.goalT -= dt;
       // about to act: set up at the range of the planned move, once per attack cycle (it cuts a wander or a pause short)
       if (f.cd < 1.3 && !f.setupDone && f.mode !== 'retreat') { f.setupDone = true; f.pauseT = 0; f.replan = true; }
@@ -1003,9 +1016,9 @@ const Retro = (() => {
     if (!f.dashing) {
       // personality: fast ones snap into motion, heavy ones take a while to get going and to stop
       const P = motionOf(f), speeding = Math.hypot(tvx, tvy) > f.speed;
-      const k = 1 - Math.exp(-dt * (canWalk ? 4.5 * (speeding ? P.accel : P.stop) : 9));
+      const k = 1 - Math.exp(-dt * (canWalk ? (steer ? 11 * (speeding ? Math.sqrt(P.accel) : 1) : 4.5 * (speeding ? P.accel : P.stop)) : 9));   // the player's own Pokémon answers the keys quickly
       f.vx += (tvx - f.vx) * k; f.vy += (tvy - f.vy) * k;
-      f.x += f.vx * dt; f.y += f.vy * dt;
+      if (WM) wmMove(f, f.vx * dt, f.vy * dt); else { f.x += f.vx * dt; f.y += f.vy * dt; }
     }
     f.speed = Math.hypot(f.vx, f.vy);
     // hop-walk: one hop per stride, a little squash on each footfall
@@ -1026,15 +1039,17 @@ const Retro = (() => {
     const foe = foeOf(f);
     if (foe && foe.state === 'idle' && !f.dashing && !foe.dashing) {
       const dx = f.x - foe.x, dy = f.y - foe.y, d = Math.hypot(dx, dy) || 1, min = f.r + foe.r + 14;
-      if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
-      if (Math.abs(foe.x - f.x) > 12) f.face = Math.sign(foe.x - f.x);
+      if (d < min) { const px = dx / d * (min - d) * 0.5, py = dy / d * (min - d) * 0.5; if (WM) wmMove(f, px, py); else { f.x += px; f.y += py; } }
+      // the player's Pokémon looks where it walks; standing, it keeps its eyes on its target
+      if (steer && f.speed > 60 && canWalk) f.face = Math.sign(f.vx) || f.face;
+      else if (Math.abs(foe.x - f.x) > 12) f.face = Math.sign(foe.x - f.x);
     } else if (f.speed > 40 && !f.dashing) f.face = Math.sign(f.vx) || f.face;
     if (multi && !f.dashing) for (const o of F) {
       if (!o || o === f || o === foe || o.state !== 'idle' || o.dashing) continue;
       const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1, min = f.r + o.r + 10;
-      if (d < min) { f.x += dx / d * (min - d) * 0.5; f.y += dy / d * (min - d) * 0.5; }
+      if (d < min) { const px = dx / d * (min - d) * 0.5, py = dy / d * (min - d) * 0.5; if (WM) wmMove(f, px, py); else { f.x += px; f.y += py; } }
     }
-    edgeCrash(f);
+    if (WM) wmUnstick(f); else edgeCrash(f);
     clampField(f);
     // everyone else turns to watch a Mega Evolution, and status effects wait for it to finish
     if (megaHold() && megaF && f !== megaF && Math.abs(megaF.x - f.x) > 12) f.face = Math.sign(megaF.x - f.x);
@@ -1054,6 +1069,8 @@ const Retro = (() => {
   }
   function statusTick(f) {
     const m = f.mon, foe = foeOf(f);
+    // open world: a burn or poisoning wears off after a while (a battle ends; a long walk shouldn't kill)
+    if (WM) { if (m.status === 'brn' || m.status === 'psn') { if ((f.stTicks = (f.stTicks || 0) + 1) > 6) { m.status = null; f.stTicks = 0; text(f, 'RECOVERED!', 'info'); hud(f.p); } } else f.stTicks = 0; }
     if (m.status === 'brn' || m.status === 'psn') {
       const amt = Math.max(1, Math.floor(m.maxhp / (m.status === 'brn' ? 16 : 8)));
       m.hp = Math.max(0, m.hp - amt); f.white = 0.6;
@@ -1546,6 +1563,7 @@ const Retro = (() => {
   let zHeld = 0, cHeld = null;
   function cameraStep(dt) {
     for (let i = camShots.length - 1; i >= 0; i--) { const s = camShots[i]; if (T > s.until || (s.f && s.f.state === 'gone')) camShots.splice(i, 1); }
+    if (WM) return wmCamera(dt);
     const base = directorView(dt);
     // is anyone already outside the current frame?
     let out = false;
@@ -2004,7 +2022,8 @@ const Retro = (() => {
     const v = { x0: cx - hw - 8, x1: cx + hw + 8, y0: cy - hh - 8, y1: cy + hh + 8 };
     // a spread-out group can need more than the whole world: the area beyond it is a dark backdrop
     if (v.x0 < 0 || v.y0 < 0 || v.x1 > WW || v.y1 > WH) { ctx.fillStyle = '#120c18'; ctx.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0); }
-    drawLayer(bg, v); drawLayer(decal, v);
+    if (WM) { Overworld.drawGround(ctx, v); Overworld.drawWaterGlints(ctx, v, T); } else drawLayer(bg, v);
+    drawLayer(decal, v);
     drawTerrain();
     for (const r of rings) {
       if (r.age < 0) continue;
@@ -2039,6 +2058,8 @@ const Retro = (() => {
     for (const o of projs) if (o.arcK > 6 || o.shadow) { ctx.beginPath(); ctx.ellipse(o.x, o.y + (o.groundOff || 30), 8, 3, 0, 0, 6.28); ctx.fill(); }
     const objs = [];
     for (const t of TR) if (t) objs.push({ y: t.y, d: () => drawTrainer(t) });
+    // open world: trees, rocks, walls, resource nodes and landmarks stand in the same depth order as the Pokémon
+    if (WM) for (const p of WM.host.props(v, Overworld.visibleProps(v, []))) objs.push({ y: p.y, d: () => Overworld.drawProp(ctx, p) });
     for (const f of F) if (f && f.state !== 'gone') objs.push({ y: f.y, d: () => drawFighter(f) });
     objs.sort((a, b) => a.y - b.y).forEach(o => o.d());
     // scene dims for big moves so the effect carries the light
@@ -2063,7 +2084,7 @@ const Retro = (() => {
       const bob = Math.max(0, Math.sin(T * c.sp + c.ph)) * (0.3 + cheer * 3.2);
       ctx.drawImage(c.c, Math.round(c.x) * PX, (Math.round(c.y - 15 - bob)) * PX, 9 * PX, 15 * PX);
     }
-    drawLayer(front, v);
+    if (WM) wmOverlay(v); else drawLayer(front, v);
     if (lights.length) {
       ctx.globalCompositeOperation = 'lighter';
       for (const l of lights) {
@@ -2077,8 +2098,8 @@ const Retro = (() => {
     if (multi) {
       // name tags stack upward instead of overlapping when Pokémon stand close together
       const placed = [];
-      for (const f of F.filter(f => f && f.state === 'idle' && f.alpha > 0.5 && (f.fadeA ?? 1) > 0.7 && !f.invuln).sort((a, b) => a.top - b.top)) {
-        const w = Math.max(20 * PX, f.mon.name.length * 4.2 * PX);
+      for (const f of F.filter(f => f && f.state === 'idle' && f.alpha > 0.5 && (f.fadeA ?? 1) > 0.7 && !f.invuln && !(WM && (f.p === 0 || !WM.lit(f)))).sort((a, b) => a.top - b.top)) {
+        const w = Math.max(20 * PX, tagLabel(f).length * 4.2 * PX);
         let y = sn(f.top - 8);
         for (let n = 0; n < 6 && placed.some(r => Math.abs(r.x - f.x) < (r.w + w) / 2 && Math.abs(r.y - y) < 10 * PX); n++) y -= 10 * PX;
         placed.push({ x: f.x, y, w });
@@ -2088,16 +2109,18 @@ const Retro = (() => {
     drawLines(v);
     if (flashA > 0) { ctx.globalAlpha = flashA; ctx.fillStyle = flashCol; ctx.fillRect(-40, -40, WW + 80, WH + 80); ctx.globalAlpha = 1; }
   }
-  // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl)
+  // multi battles: a name and HP bar over every Pokémon (in its team colour in Team Brawl); in the open world a wild
+  // Pokémon's tag carries its level (and ALPHA / BOSS for the dangerous ones)
+  const tagLabel = f => (WM ? (f.tag ? f.tag + ' ' : '') + 'LV' + f.mon.level + ' ' : '') + f.mon.name.toUpperCase();
   function drawTag(f, y = sn(f.top - 8)) {
-    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX, x = sn(f.x - w / 2);
+    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX * (f.tag ? 1.5 : 1), x = sn(f.x - w / 2);
     ctx.fillStyle = '#1b1530'; ctx.fillRect(x - PX, y - PX, w + PX * 2, PX * 3);
     ctx.fillStyle = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'; ctx.fillRect(x, y, Math.max(PX, Math.round(w * k / PX) * PX), PX);
     ctx.font = `${6 * PX}px Tiny5, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.lineWidth = PX * 1.6; ctx.strokeStyle = '#1b1530'; ctx.lineJoin = 'round';
-    ctx.strokeText(m.name.toUpperCase(), f.x, y - PX * 2);
-    ctx.fillStyle = multi.mode === 'brawl' ? (sideOf(f.p) ? '#ff8fb8' : '#8fb4ff') : '#ffffff';
-    ctx.fillText(m.name.toUpperCase(), f.x, y - PX * 2);
+    ctx.strokeText(tagLabel(f), f.x, y - PX * 2);
+    ctx.fillStyle = WM ? (f.tag ? '#ffb347' : f.aggro ? '#ffd0d0' : '#ffffff') : multi.mode === 'brawl' ? (sideOf(f.p) ? '#ff8fb8' : '#8fb4ff') : '#ffffff';
+    ctx.fillText(tagLabel(f), f.x, y - PX * 2);
   }
   function ambient(dt) {
     if (!TH || !TH.amb) return;
@@ -2194,6 +2217,7 @@ const Retro = (() => {
     later(() => row.remove(), 4200);
   }
   function hud(p) {
+    if (WM) { WM.hudDirty = true; return; }            // the open world has its own HUD (adventure.js redraws it)
     if (p === undefined) { state.players.forEach((_, q) => hud(q)); return; }
     if (multi) return hudMini(p);
     const el = document.getElementById('rp' + p);
@@ -5390,7 +5414,7 @@ const Retro = (() => {
   // before a move plays: an ultimate gets a cut-in, other big moves a stand-off (now and then)
   async function prelude(f, d, m) {
     if (m.cat === 'status' || !d || d === f || d.state !== 'idle') return;
-    if (cutinsOn() && (ULTIMATE.has(m.id) || RECHARGE.has(m.id) || (m.power || 0) >= 130) && (!multi || spot === f)) return cutIn(f, m);
+    if (cutinsOn() && (ULTIMATE.has(m.id) || RECHARGE.has(m.id) || (m.power || 0) >= 130) && (!multi || spot === f || (WM && f.p === 0))) return cutIn(f, m);
     if ((m.power || 0) >= 95 && Math.random() < 0.45) return standoff(f, d);
   }
 
@@ -5413,6 +5437,7 @@ const Retro = (() => {
     const selfT = SELF_TARGETS.has(m.target) || m.id === 'rest';
     if (f.state !== 'idle' && m.cat === 'status') return;
     if (!selfT && d.state !== 'idle') return;
+    if (WM && !selfT) wmProvoked(d, f);                // open world: a wild Pokémon that is attacked fights back
     if (!selfT && d.protectUntil > T) { text(d, 'BLOCKED!', 'info'); SFX.block(); ringFx(d.cx, d.cy, d.r, d.r * 2.2, '#b6ffd9', 0.3, { flat: 1 }); return; }
     if (!selfT) { const hk = hiddenCheck(d, m); if (!hk) { text(d, { fly: 'UP IN THE SKY!', dig: 'UNDERGROUND!', dive: 'UNDERWATER!', vanish: 'VANISHED!' }[d.invuln] || 'MISSED!', 'miss'); return; } if (hk > 1) mult *= hk; }
     if (!selfT && miss) { dodge(d, f); text(d, 'MISSED!', 'miss'); AudioFX.Crowd.gasp(); return; }
@@ -5448,7 +5473,7 @@ const Retro = (() => {
     const ko = t.hp <= 0;
     if (ko || (crit && total / t.maxhp >= 0.2) || total / t.maxhp >= 0.4) impactFrame(d.cx, d.cy);
     const score = (ko ? 3 : 0) + (crit ? 2 : 0) + (eff > 1 ? 1.5 : 0) + total / t.maxhp * 2;
-    if (score >= 2) later(() => Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : crit ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!'), 60);
+    if (score >= 2 && !WM) later(() => Broadcast.captureThumb(score, ko ? 'KNOCKOUT!' : crit ? 'CRITICAL HIT!' : 'SUPER EFFECTIVE!'), 60);
     if (ko) { u.kos = (u.kos || 0) + 1; koFighter(d, f); }
     else {
       if (m.ailment !== 'none' && m.ailmentChance > 0 && Math.random() * 100 < m.ailmentChance) inflictRT(d, m.ailment, m.name);
@@ -5501,12 +5526,12 @@ const Retro = (() => {
       }
     }
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
-    if (idx >= 0) m.ppLeft--;
+    if (idx >= 0 && !WM) m.ppLeft--;                   // the open world spends stamina instead (adventure.js)
     f.lastMove = m;
     if (f.live) f.live.play(m.ailment === 'protect' ? 'guard' : m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar', bodyStyle(m));
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
-    if (!multi || spot === f) callout(f, m.name, m.type);
+    if (!multi || spot === f || WM) callout(f, m.name, m.type);
     trainerPose(p, 'throw', 0.6);
     if (!multi && Math.random() < ((m.power || 0) >= 100 ? 0.75 : 0.28)) speech(p, pick([`Use ${m.name}!`, `${m.name}, now!`, `Go, ${m.name}!`]), 1100);
     if (m.cat !== 'status') react(d, f, m);
@@ -5629,12 +5654,15 @@ const Retro = (() => {
       return;
     }
     const foe = foeOf(f);
+    // open world: the player's own cooldown runs down whether or not anything is in reach (the HUD shows it)
+    const own = WM && !f.p;
+    if (own) f.cd = Math.max(0, f.cd - dt);
     if (!foe || foe.state !== 'idle') return;
     if (T < (f.stagger || 0)) return;
     const cpu = isCpu(f.p);
     if (f.queuedSwitch != null) { const i = f.queuedSwitch; f.queuedSwitch = null; if (canSwitchTo(f.p, i)) { f.busy = true; switchOut(f, i, token).catch(swallow); return; } }
     if (cpu && f.plan == null) f.plan = chooseMove(f, foe);
-    f.cd -= dt;
+    if (!own) f.cd -= dt;
     // telegraph: a short ready crouch just before it acts
     f.crouchT = f.rechargeUntil > T ? 0.75 : f.cd > 0 && f.cd < 0.3 ? 0.55 : 0;
     if (f.cd > 0) return;
@@ -5656,7 +5684,7 @@ const Retro = (() => {
       // wait for attacks already in motion (animations, projectiles) to finish before the Mega Evolution starts
       if (F.some(o => o && o !== f && o.busy) || projs.length) { f.cd = R(0.08, 0.16); return; }
     }
-    if (multi && !takeTurn(f, foe)) { f.cd = R(0.15, 0.4); return; }   // wait for a free stage
+    if (WM ? !wmTurn(f, foe) : multi && !takeTurn(f, foe)) { f.cd = R(0.15, 0.4); return; }   // wait for a free stage (open world: in range, not too many at once)
     f.approach = 0;
     f.ready = false;
     document.getElementById('rrow' + f.p)?.classList.remove('ready');
@@ -5667,7 +5695,7 @@ const Retro = (() => {
       if (tk !== token) return;
       if (f.acting) { f.acting = false; acting = Math.max(0, acting - 1); if (spot === f) { spot = spotFoe = null; spotEndT = T; camRelease('anticipate'); } }
       f.busy = false;
-      f.cd = actionGap(f.mon) + R(-0.25, 0.4) + (f.extraCd || 0);
+      f.cd = (WM ? WM.host.gap(f) : actionGap(f.mon)) + R(-0.25, 0.4) + (f.extraCd || 0);
       if (f.lastMove && (f.lastMove.priority || 0) > 0) f.cd *= 0.6;
       if (sd) f.cd *= SD_CD;
       f.extraCd = 0;
@@ -5730,6 +5758,7 @@ const Retro = (() => {
   }
   function koFighter(f, by) {
     if (f.state !== 'idle') return;
+    if (WM) return wmKo(f, by);                        // open world: no trainers, no end of battle
     loudUntil = T + 0.8;                               // a knockout always gets the full punch
     f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
     f.state = 'faint'; f.faintT = T;
@@ -6086,6 +6115,311 @@ const Retro = (() => {
     cheer = 1; AudioFX.Crowd.cheer(0.8);
   }
 
+  // =====================================================================
+  //  OPEN WORLD (Adventure mode). The same fighters, AI, move animations
+  //  and damage as the battles, on the map from world.js: slot 0 is the
+  //  player's Pokémon (walks with the keys, attacks the move it is told),
+  //  the other slots are wild Pokémon that wander near their home, notice
+  //  the player, chase, attack, give up or flee. adventure.js (the host)
+  //  decides what spawns, what a knockout is worth, and draws the HUD.
+  // =====================================================================
+  const WM_FOOT = 14;                                  // footprint radius (world units) used against trees, rocks and water
+  const WM_THEMES = {                                  // per biome: dust colours, crater colours, ambient particles
+    grass: { name: 'Grassland', ground: 'grass', pal: ['#6fb44f', '#64a847', '#78bd57', '#5d9e43'], amb: null },
+    forest: { name: 'Forest', ground: 'grass', pal: ['#3e7d3a', '#367234', '#448640', '#30692f'], amb: 'firefly' },
+    river: { name: 'Riverlands', ground: 'sand', pal: ['#8fcf6a', '#84c260', '#e4cf98', '#7cb85a'], amb: null },
+    cave: { name: 'Caves', ground: 'basalt', pal: ['#8a7266', '#806a5e', '#957c6f', '#76625a'], amb: null },
+    high: { name: 'Highlands', ground: 'snow', pal: ['#9aa58a', '#919c82', '#eaf2fb', '#88937a'], amb: 'snow' },
+    ruins: { name: 'Ruins', ground: 'fan', pal: ['#bcae90', '#b2a486', '#c6b89a', '#a89a7c'], amb: null }
+  };
+  const wmDist = (a, b) => Math.hypot(a.x - b.x, (a.y - b.y) / 0.75);
+  // move with collision: big steps are split so nothing tunnels through a one-tile tree; a fighter already inside an
+  // obstacle (a lunge or a flash step can end there) moves freely until it is out
+  function wmMove(f, dx, dy, knock) {
+    if (!dx && !dy) return;
+    const fly = !!f.hover, n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 20));
+    if (!Overworld.free(f.x, f.y, WM_FOOT, fly)) { f.x += dx; f.y += dy; return; }
+    for (let i = 0; i < n; i++) {
+      const sx = dx / n, sy = dy / n;
+      let hit = false;
+      if (Overworld.free(f.x + sx, f.y, WM_FOOT, fly)) f.x += sx; else { hit = true; if (knock) f.kx = -f.kx * 0.25; else f.vx *= 0.6; }
+      if (Overworld.free(f.x, f.y + sy, WM_FOOT, fly)) f.y += sy; else { hit = true; if (knock) f.ky = -f.ky * 0.25; else f.vy *= 0.6; }
+      if (hit) { if (knock) wmCrash(f); break; }
+    }
+  }
+  // knocked into a tree, a rock or a wall: it stops dead in a burst of dust and bits (like the arena fences)
+  function wmCrash(f) {
+    if (T < (f.crashT || 0)) return;
+    f.crashT = T + 0.6;
+    SFX.impact('Rock', 0.9); shakeIt(6); hitStop(40);
+    dust(f.x, f.y, 2);
+    const col = TH.ground === 'basalt' ? ['#5e5654', '#7a706c', '#3e3236'] : TH.ground === 'fan' ? ['#a89c84', '#c8bca2', '#6e6452'] : ['#3f8a35', '#6e4a2a', '#2f6a2a'];
+    for (let i = 0; i < 10; i++) spawn({ kind: 'debris', c: col, x: f.x, y: f.y, z: R(10, 40), vz: R(140, 300), g: 1000, vx: R(-180, 180), vy: R(-80, 80), life: R(0.6, 1), s0: pick([2, 2, 3]), rot: R(0, 6), spin: R(-12, 12), bounce: true });
+    f.stagger = Math.max(f.stagger || 0, T + 0.35); f.bump(6);
+  }
+  // after an animation (a lunge, a flash step, a rush) a fighter may stand inside an obstacle: step out to the nearest free spot
+  function wmUnstick(f) {
+    if (f.busy || f.dashing || f.state !== 'idle' || Overworld.free(f.x, f.y, WM_FOOT, !!f.hover)) return;
+    const p = Overworld.nearestFree(f.x, f.y, WM_FOOT, !!f.hover);
+    f.x = p.x; f.y = p.y;
+  }
+  // the player's target: the nearest wild Pokémon in range (ahead counts more, so is one already fighting it);
+  // it keeps its target while that one stays within reach, so two foes at the same distance don't flicker
+  function wmTarget(f) {
+    const range = WM.host.cfg.range, t = f.target;
+    if (t && t.state === 'idle' && F[t.p] === t && t !== f && wmDist(t, f) < range * 1.25 && WM.lit(t)) return t;
+    let best = null, bs = Infinity;
+    for (const o of F) {
+      if (!o || o === f || o.state !== 'idle' || !WM.lit(o)) continue;
+      const d = wmDist(o, f);
+      if (d > range) continue;
+      const s = d * (Math.sign(o.x - f.x) === f.face ? 0.8 : 1.15) * (o.aggro ? 0.8 : 1);
+      if (s < bs) { bs = s; best = o; }
+    }
+    if (best && best !== t) shapes.push({ kind: 'lockon', f: best, by: f, life: 0.8, age: 0 });
+    f.target = best;
+    return best;
+  }
+  function wmFoe(f) {
+    if (f.p === 0) return wmTarget(f);
+    const pl = F[0];
+    return f.aggro && !f.flee && pl && pl.state === 'idle' ? pl : null;
+  }
+  // a wild Pokémon's goal when it isn't fighting: wander near home (it walks, and often just stands), or run away.
+  // undefined = it is in a fight: use the battle footwork
+  function wmGoal(f) {
+    if (f.p === 0) return null;
+    const pl = F[0], B = WM.bounds;
+    const ok = g => g.x > B.x0 && g.x < B.x1 && g.y > B.y0 && g.y < B.y1 && Overworld.free(g.x, g.y, WM_FOOT, !!f.hover) && (f.hover || Overworld.reachable(g.x, g.y));
+    f.mode = 'wander';
+    if (f.flee && pl) {
+      f.goalPace = 1.15;
+      const away = Math.atan2(f.y - pl.y, f.x - pl.x);
+      for (let k = 0; k < 12; k++) { const a = away + R(-0.8, 0.8), r = R(280, 480), g = { x: f.x + Math.cos(a) * r, y: f.y + Math.sin(a) * r * 0.7 }; if (ok(g)) return g; }
+      return null;
+    }
+    if (f.aggro && wmFoe(f)) return undefined;
+    f.goalPace = 0.4;
+    if (Math.random() < 0.4) { f.pauseT = R(1.2, 3.5); return null; }
+    const home = f.home || f;
+    for (let k = 0; k < 12; k++) { const a = R(0, 6.28), r = R(60, WM.host.cfg.wander), g = { x: home.x + Math.cos(a) * r, y: home.y + Math.sin(a) * r * 0.7 }; if (ok(g)) return g; }
+    return null;
+  }
+  // it notices the player: a "!" pops over its head and it comes for the player
+  function wmAlert(f) {
+    f.aggro = true; f.flee = false; f.goal = null; f.replan = true;
+    f.cd = Math.max(f.cd, R(0.6, 1.1));                // a beat to react before the first attack
+    floatAt(f.x, f.top - 26, '!', 'crit', 900);
+    f.bump(-6);
+    WM.host.alert(f);
+  }
+  function wmProvoked(d, f) {
+    if (d.p === 0 || f.p !== 0) return;
+    d.hitT = T;
+    if (!d.aggro && !d.flee) wmAlert(d);
+  }
+  // may it act now? Wild Pokémon only from attack range and at most two at once; the player pays stamina
+  function wmTurn(f, foe) {
+    if (f.p === 0) return WM.host.spend(f);
+    if (wmDist(foe, f) > WM.host.cfg.range) return false;
+    if (F.filter(o => o && o.p && o.acting).length >= WM.host.cfg.maxAttackers) return false;
+    f.acting = true; acting++;
+    return true;
+  }
+  function wmKo(f, by) {
+    f.invuln = null; f.alpha = 1; f.sink = 0; f.jz = 0;
+    f.state = 'faint'; f.faintT = T;
+    if (f.live) f.live.play('down');
+    const p = f.p, mon = f.mon, tk = token;
+    playCry(mon, 0.8); SFX.faint();
+    if (p === 0) big(`${mon.name.toUpperCase()} FAINTED!`, '', 2100); else floatAt(f.x, f.top - 16, 'K.O.!', 'crit', 1200);
+    camPunch(f.cx, f.cy, 0.07, 0.6);
+    for (const b of beams) if (b.owner === f) b.life = Math.min(b.life, b.age + 0.1);
+    WM.host.faint(f, by);
+    (async () => {
+      f.white = 1; f.whiteCol = '#ffffff'; f.dashing = false;
+      await tw(0.28, k => { f.jz = Math.sin(k * Math.PI) * 26; });
+      f.jz = 0; f.bump(10); dust(f.x, f.y, 1.8); shakeIt(4);
+      await tw(0.4, k => { f.sink = k * 0.45; f.white = 0; }); chk(tk);
+      await wait(250); chk(tk);
+      await recallFx(f, tk);                           // no trainer: it fades away
+      f.state = 'gone';
+      if (F[p] === f) F[p] = null;
+      WM.host.gone(f);
+    })().catch(swallow);
+  }
+  // follow camera: ahead of where the player walks; in a fight it leans toward the foe and pulls back to keep both
+  // in frame. Event shots (impacts, the finishing blow) still punch in, but only lean a little
+  function wmCamera(dt) {
+    const pl = F[0];
+    let x = camX, y = camY, z = WM.zoom;
+    if (pl) {
+      x = pl.x + clamp(pl.vx * 0.3, -110, 110); y = pl.cy + clamp(pl.vy * 0.25, -70, 70);
+      let fo = null, fd = 900;
+      for (const o of F) if (o && o.p && o.aggro && o.state === 'idle') { const d = wmDist(o, pl); if (d < fd) { fd = d; fo = o; } }
+      if (fo) {
+        x += (fo.x - pl.x) * 0.35; y += (fo.cy - pl.cy) * 0.35;
+        z = clamp(Math.min(VW / (Math.abs(fo.x - pl.x) + 520), VH / (Math.abs(fo.cy - pl.cy) + 420)), WM.zoom * 0.72, WM.zoom);
+      }
+    }
+    let top = null, ease = 0.3;
+    for (const s of camShots) if (s.kind !== 'focus' && (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0))) top = s;
+    if (top) { const px = top.f ? top.f.cx : top.x, py = top.f ? top.f.cy : top.y; x += (px - x) * top.w * 0.3; y += (py - y) * top.w * 0.3; z *= 1 + (top.z - 1) * 0.6; ease = Math.min(ease, CAM_EASE[top.kind]); }
+    const hw = VW / 2 / z, hh = VH / 2 / z;
+    x = clamp(x, hw, WW - hw); y = clamp(y, hh, WH - hh);
+    if (dt <= 0) return;
+    dt = Math.min(dt, 0.05);
+    camX = damp(camX, x, 'x', ease, dt); camY = damp(camY, y, 'y', ease, dt); camZ = damp(camZ, z, 'z', 0.5, dt);
+  }
+  // after the Pokémon and effects: the dark of the caves (a pool of light around the player), then the host's
+  // world-space overlays (interaction prompts) so they stay readable
+  function wmOverlay(v) {
+    const pl = F[0];
+    if (WM.dark > 0.01 && pl) {
+      const g = ctx.createRadialGradient(pl.x, pl.cy, WM.host.cfg.light * 0.35, pl.x, pl.cy, WM.host.cfg.light);
+      g.addColorStop(0, 'rgba(6,4,14,0)'); g.addColorStop(1, `rgba(6,4,14,${(0.94 * WM.dark).toFixed(3)})`);
+      ctx.fillStyle = g; ctx.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0);
+    }
+    WM.host.draw(ctx, v, T);
+  }
+  function wmStep(dt) {
+    const pl = F[0], cfg = WM.host.cfg, B = WM.bounds;
+    if (pl) {
+      // the local "arena": move effects that sweep the field (Thunder's sky, Wave Crash, Psychic's field) play around the player
+      field = { x0: Math.max(B.x0, pl.x - 1100), x1: Math.min(B.x1, pl.x + 1100), y0: Math.max(B.y0, pl.y - 700), y1: Math.min(B.y1, pl.y + 700) };
+      const b = Overworld.biomeAt(pl.x, pl.y);
+      if (b !== WM.biome) { WM.biome = b; TH = WM_THEMES[b]; }
+      WM.dark += ((Overworld.BIOMES[b].dark ? 1 : 0) - WM.dark) * Math.min(1, dt * 1.5);
+    }
+    const pAlive = pl && pl.state === 'idle', safe = pAlive && WM.host.safe(pl.x, pl.y);
+    let engaged = false;
+    for (const f of F) {
+      if (!f || !f.p || f.state !== 'idle') continue;
+      const d = pAlive ? wmDist(f, pl) : Infinity;
+      if (f.flee) { if (d > cfg.detect * 1.8 || !pAlive) { f.flee = false; f.aggro = false; } }
+      else if (f.aggro) {
+        // it gives up when the player gets away, faints or retreats to a camp (unless the player just hit it); a timid one runs when it is losing
+        if (d > cfg.leash || !pAlive || (safe && T - (f.hitT || -9) > 6)) { f.aggro = false; f.goal = null; f.replan = true; f.calmUntil = T + 4; }
+        else if (f.temper === 'timid' && f.mon.hp < f.mon.maxhp * 0.3) { f.flee = true; f.goal = null; f.replan = true; text(f, 'IT FLED!', 'info'); }
+      } else if (pAlive && !safe && f.temper === 'aggressive' && d < cfg.detect * (f.tag ? 1.3 : 1) && T > (f.calmUntil || 0) && WM.lit(f)) wmAlert(f);
+      // away from the fight it licks its wounds
+      if (!f.aggro && f.mon.hp < f.mon.maxhp && T - (f.hitT || -9) > 5) { f.regen = (f.regen || 0) + f.mon.maxhp * 0.04 * dt; if (f.regen >= 1) { f.mon.hp = Math.min(f.mon.maxhp, f.mon.hp + Math.floor(f.regen)); f.regen %= 1; } }
+      if (f.aggro) engaged = true;
+    }
+    if (engaged !== WM.engaged) { WM.engaged = engaged; AudioFX.Music.setLevel(engaged ? 1 : 0); }
+    WM.host.step(dt);
+  }
+  // put a Pokémon on the map in slot p (0 = the player): its sprite / live model, popping in with a rustle of leaves
+  async function wmPlace(p, mon, x, y, o = {}) {
+    const tk = token;
+    const [anim, model] = await Promise.all([getAnim(mon.sprite), getLive(mon.isMega ? mon.modelKey : mon.species)]);
+    if (tk !== token || !on || !WM) { if (model) model.dispose(); return null; }
+    const f = new Fighter(p, mon, model ? model.anim : anim);
+    if (model) { f.live = model; lives.add(f); }
+    Object.assign(f, o.props || {});
+    if (f.size) f.fit();
+    const at = Overworld.nearestFree(x, y, WM_FOOT, !!f.hover);
+    f.x = at.x; f.y = at.y; f.home = f.home || { x: at.x, y: at.y };
+    f.face = f.faceVis = o.face || (Math.random() < 0.5 ? -1 : 1);
+    f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
+    if (!p) f.cd = R(0.2, 0.4);                        // the player is ready to fight at once (the arena's opening pause is for a duel)
+    state.players[p] = { team: [mon], active: 0, usedMega: true };
+    multi.side[p] = p ? 1 : 0; multi.names[p] = mon.name;
+    F[p] = f;
+    if (o.quiet !== true) {
+      for (let i = 0; i < 10; i++) spawn({ bm: 'leaf', c: ['#7be35a', '#3f8a35', '#c8ff9a'], x: f.x + R(-20, 20), y: f.y - R(4, 30), vx: R(-160, 160), vy: R(-200, -40), drag: 2.5, life: R(0.5, 0.9), s0: 2, s1: 1, rot: R(0, 6), spin: R(-10, 10) });
+      dust(f.x, f.y, 1.2);
+    }
+    tw(0.32, k => { f.pop = easeOut(k); f.white = 1 - k * 0.6; }).then(() => { f.pop = 1; });
+    return f;
+  }
+  // the open world's controls, for adventure.js
+  const wmApi = {
+    get player() { return F[0]; },
+    get time() { return T; },
+    get engaged() { return !!(WM && WM.engaged); },
+    get hudDirty() { const d = !!(WM && WM.hudDirty); if (WM) WM.hudDirty = false; return d; },
+    wilds: () => F.filter((f, p) => f && p > 0),
+    // a free wild slot (or -1): slots of fighters that faded away are reused
+    slot() { if (!WM) return -1; for (let p = 1; p <= WM.host.cfg.maxWild; p++) if (!F[p] && !WM.claimed.has(p)) return p; return -1; },
+    async spawn(mon, x, y, props) {
+      const p = this.slot();
+      if (p < 0) return null;
+      WM.claimed.add(p);
+      if (F.length <= p) for (let q = F.length; q <= p; q++) F.push(null);
+      try { return await wmPlace(p, mon, x, y, { props, quiet: props && props.quiet }); }
+      finally { if (WM) WM.claimed.delete(p); }
+    },
+    // remove a wild Pokémon at once (far away, nobody sees it go)
+    despawn(f) { if (!f || F[f.p] !== f) return; f.state = 'gone'; F[f.p] = null; },
+    respawnPlayer(mon, x, y) { if (F[0]) { F[0].state = 'gone'; F[0] = null; } return wmPlace(0, mon, x, y, { face: 1 }); },
+    // the player asks for move i: it needs a target in range and the stamina; then it plays when its cooldown is up
+    queueMove(i) {
+      const f = F[0];
+      if (!f || f.state !== 'idle' || !running) return 'down';
+      if (!f.mon.moves[i]) return 'none';
+      if (f.stuck) return 'stuck';
+      if (!wmTarget(f)) { text(f, 'NO TARGET', 'miss'); return 'notarget'; }
+      if (!WM.host.canAfford(f, i)) { text(f, 'TOO TIRED!', 'info'); return 'tired'; }
+      f.queued = i;
+      return 'ok';
+    },
+    teleport(f, x, y) { const at = Overworld.nearestFree(x, y, WM_FOOT, !!f.hover); f.x = at.x; f.y = at.y; f.vx = f.vy = f.kx = f.ky = 0; f.goal = null; f.home = { x: f.x, y: f.y }; },
+    float: (x, y, html, cls, ms) => floatAt(x, y, html, cls, ms),
+    text: (f, s, cls) => text(f, s, cls),
+    number: (f, amt, kind) => number(f, amt, 0, kind),
+    big: (s, cls, ms) => big(s, cls, ms),
+    notify: html => feed(html),
+    view: () => viewRect(),
+    heal(f, amt) {
+      SFX.heal();
+      if (amt > 0) number(f, amt, 0, 'heal');
+      for (let i = 0; i < 10; i++) spawn({ bm: 'plus', c: ['#7be35a', '#e6ffd0'], x: f.cx + R(-24, 24), y: f.cy + R(-10, 24), vy: R(-80, -40), life: R(0.6, 1), s0: 2, s1: 2, delay: i * 0.04 });
+      glowP(f.cx, f.cy, 10, f.h * 0.7, '#9aff9a', 0.4, 0.5);
+    },
+    levelUp(f) {
+      SFX.buff(); f.bump(-8); f.white = 0.8; f.whiteCol = '#fff6a0';
+      f.aura = '#ffe066'; f.auraT = FT + 1.4;
+      ringP(f.x, f.y, 8, f.r * 3, '#ffe066', 0.6); ringP(f.x, f.y, 8, f.r * 2.2, '#ffffff', 0.5, { delay: 0.1 });
+      for (let i = 0; i < 18; i++) { const an = i / 18 * 6.28; spawn({ kind: 'streak', c: ['#fff6a0'], x: f.cx, y: f.cy, vx: Math.cos(an) * 320, vy: Math.sin(an) * 240, life: 0.4, len: 22, ang: an }); }
+      lightAt(f.x, f.y, 200, '#ffe066', 0.8, 0.8);
+    },
+    pickup(x, y, col = '#ffe066') { SFX.pop(); for (let i = 0; i < 8; i++) sparkP(x, y - 20, R(0, 6.28), R(60, 160), col, 0.35); glowP(x, y - 20, 4, 40, col, 0.3, 0.7); },
+    burst(x, y, type, pw = 1) { impactAt(type, x, y, y + 20, pw, { quiet: true }); },
+    shake: a => shakeIt(a),
+    hudEl, fxEl
+  };
+  // start the open world: opts = { host, player (mon), x, y, zoom }. The map must be generated (Overworld.generate)
+  async function world(opts) {
+    stop();
+    FX_TIME = 1;
+    on = true; ended = false; running = false; token++;
+    T = 0; clockT = 0; cheer = 0; shake = 0; flashA = 0; cinemaUntil = 0; megaF = megaPending = null; firstOut = -1; heat.fill(0);
+    root.classList.remove('hidden');
+    World.captureSource = cv;
+    resize();
+    const sz = Overworld.size, m = Overworld.TW * 3;
+    WW = sz.w; WH = sz.h;
+    WM = { host: opts.host, bounds: { x0: m, y0: m, x1: WW - m, y1: WH - m }, zoom: opts.zoom || 1, dark: 0, biome: null, engaged: false, hudDirty: true, claimed: new Set() };
+    // the darkness of a cave hides what is beyond the light
+    WM.lit = f => WM.dark < 0.5 || !F[0] || wmDist(f, F[0]) < WM.host.cfg.light * 0.9;
+    field = { ...WM.bounds };
+    decal = newCanvas(Math.ceil(WW / PX), Math.ceil(WH / PX));
+    bg = front = null; crowd = []; lights = []; TR[0] = TR[1] = null;
+    multi = { mode: 'wild', side: [0], names: [opts.player.name], spr: 1, space: 0.9 };
+    F.length = 0; F.push(null);
+    TH = WM_THEMES.grass;
+    root.classList.add('multi', 'wild');
+    hudEl.innerHTML = ''; hudEl.classList.remove('hidden'); topEl.innerHTML = '';
+    warmDiscs();
+    camShots.length = 0; camV.x = camV.y = camV.z = 0; camX = opts.x; camY = opts.y - 40; camZ = WM.zoom;
+    const f = await wmPlace(0, opts.player, opts.x, opts.y, { face: 1 });
+    if (!f) throw new BattleAbort();
+    running = true;
+    AudioFX.Music.start(0);
+    return wmApi;
+  }
+
   // ---------------------------------------------------------------------
   //  Main loop hook + public API
   // ---------------------------------------------------------------------
@@ -6093,7 +6427,8 @@ const Retro = (() => {
     if (!on) return;
     partBudget();
     T += dt;
-    if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
+    if (WM) wmStep(dt);                                // open world: no battle clock, no sudden death
+    else if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     if (running) heatStep(dt);
     for (const f of lives) if (F[f.p] !== f || f.state === 'gone') dropLive(f);   // recalled, fainted and gone, or switched out
@@ -6103,12 +6438,14 @@ const Retro = (() => {
     stepFx(dt / FX_SLOW);
     kickStep(dt); speedStep(dt); impactStep();
     render();
+    if (WM) { WM.host.frame(dt); return; }
     rpTick();
     timerTick();
   }
   updaters.push(update);
   addEventListener('resize', () => {
     if (!on) return;
+    if (WM) { resize(); return; }                      // the open world keeps its size; only the canvas follows the window
     const oldW = WW, oldH = WH;
     if (!RP.ko) rpReset();
     resize(); layout();
@@ -6133,8 +6470,9 @@ const Retro = (() => {
     for (const f of lives) dropLive(f);
     F.length = 0; F.push(null, null);
     multi = null; elim = [];
+    if (WM) { WM = null; decal = null; }                // the open world's decal layer is world-sized: let it go
     acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
-    root.classList.remove('multi');
+    root.classList.remove('multi', 'wild');
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; topEl.innerHTML = ''; fxEl.style.transform = ''; lastTz = 0;
     cameraReset(); dimA = dimTarget = 0;
     root.classList.add('hidden');
@@ -6190,7 +6528,7 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ } }),
+  return { battle, world, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ } }),
     // test hook: play one move's effect (no damage) with the battle paused
     _fxMap: () => Object.keys(MOVES).filter(moveSupported).map(id => { const m = { id, ...MOVES[id] }; const [st, v] = classify(m).split(':'); return [id, SIG[id] ? 'sig' : st === 'contact' ? 'ct:' + (CT[id] ? CT[id].v : 'default-' + (v || '')) : st, m.type, m.cat]; }),
     _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = (field.x0 + field.x1) / 2 + (p ? 130 : -130); f.y = (field.y0 + field.y1) / 2; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
