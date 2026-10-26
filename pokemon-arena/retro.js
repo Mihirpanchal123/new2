@@ -802,6 +802,7 @@ const Retro = (() => {
     fit() {
       const h = Math.max(this.anim.bh, this.anim.bw * 0.8), th = h <= 85 ? h : 85 + (h - 85) * 0.4;
       this.scale = th / h * SPR * (multi ? multi.spr : 1) * (this.size || 1);   // size: open-world elites and bosses stand taller
+      if (this.anim.pmd) this.scale = this.anim.px * (this.size || 1);         // pixel sprites (Adventure): one sprite pixel = one art pixel of the world
       this.h = this.anim.bh * this.scale; this.w = this.anim.bw * this.scale;
       this.r = Math.max(20, this.w * 0.34);
     }
@@ -1027,11 +1028,11 @@ const Retro = (() => {
     else f.walkPh += (Math.ceil(f.walkPh) - f.walkPh) * Math.min(1, dt * 10);
     if (Math.floor(f.walkPh) !== Math.floor(prev) && f.speed > 40) {
       // footfalls: heavy Pokémon land with weight (a deeper squash, dust and a faint tremor)
-      f.bump((P.heavy ? 2.6 : 1.4) * (steer ? 0.45 : 1));   // the Pokémon the player steers walks smoother (no jolt or tremor every step)
+      if (!f.anim.pmd) f.bump((P.heavy ? 2.6 : 1.4) * (steer ? 0.45 : 1));   // (a pixel sprite walks with its own animated gait)   // the Pokémon the player steers walks smoother (no jolt or tremor every step)
       if (f.speed > 115 || P.heavy) dust(f.x, f.y, P.heavy ? 0.9 : 0.5);
       if (P.heavy && f.speed > 70 && !steer) shakeIt(1.2);
     }
-    const hop = f.hover ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70) * P.hop * (steer ? 0.45 : 1);
+    const hop = f.hover || f.anim.pmd ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70) * P.hop * (steer ? 0.45 : 1);
     // flyers lift a little as they pick up speed (take-off) and settle when they slow down
     f.z = bob + f.jz + hop + (f.hover ? Math.min(14, f.speed * 0.06) : 0);
     f.lean += (clamp(f.vx / 240, -1, 1) * (f.hover ? 0.2 : 0.1) - f.lean) * Math.min(1, dt * 8);
@@ -1997,7 +1998,7 @@ const Retro = (() => {
     for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: (f.live ? 1 : -g.sx) * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
-      { sx: (f.live ? 1 : -f.faceVis) * sxm, sy, skew: -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
+      { sx: (f.live ? 1 : -f.faceVis) * sxm, sy, skew: f.anim.pmd ? 0 : -f.lean, rot: f.tilt + f.rotA + f.rotS, alpha: fa, white: Math.min(1, f.white), whiteCol: f.whiteCol, filter: STATUS_FILTER[m.status] || null });
   }
   // draw the visible part of a world-sized art layer (1 art pixel = PX world units)
   function drawLayer(img, v) {
@@ -2036,13 +2037,13 @@ const Retro = (() => {
     // live 3D models render their frame (and cast shadow) for this frame first, all in one batch; one far off screen waits
     if (lives.size && L3m) {
       const v = viewRect(), m = 160;
-      L3m.renderAll(F.filter(f => f && f.live && f.state !== 'gone' && f.x > v.x0 - m && f.x < v.x1 + m && f.y > v.y0 - m && f.y < v.y1 + m * 2).map(f => f.live));
+      L3m.renderAll(F.filter(f => f && f.live && !f.live.pmd && f.state !== 'gone' && f.x > v.x0 - m && f.x < v.x1 + m && f.y > v.y0 - m && f.y < v.y1 + m * 2).map(f => f.live));
     }
     // shadows (Pokémon, and anything flying through the air)
     for (const f of F) if (f && f.state !== 'gone') {
       const lift = clamp(f.z / 120, 0, 0.5);
       // a live model casts its own shadow (a hard pixel mask), drawn with the same tone as the blob shadows
-      if (f.live) { drawSprite(f.live.shadow, 0, f.x, f.y, f.scale * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6), false, { sx: 1, alpha: 0.32 * f.alpha * (1 - lift) }); continue; }
+      if (f.live && f.live.shadow) { drawSprite(f.live.shadow, 0, f.x, f.y, f.scale * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6), false, { sx: 1, alpha: 0.32 * f.alpha * (1 - lift) }); continue; }
       ctx.fillStyle = `rgba(0,0,0,${0.32 * f.alpha * (1 - lift)})`;
       const rx = f.w * 0.36 * (f.hover ? 0.75 : 1) * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6);
       ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill();
@@ -6397,7 +6398,9 @@ const Retro = (() => {
   // put a Pokémon on the map in slot p (0 = the player): its sprite / live model, popping in with a rustle of leaves
   async function wmPlace(p, mon, x, y, o = {}) {
     const tk = token;
-    const [anim, model] = await Promise.all([getAnim(mon.sprite), getLive(mon.isMega ? mon.modelKey : mon.species)]);
+    // the look: the animated pixel sprite (PixelMons, Adventure's default) where there is one, else the live 3D model / sprite
+    const pix = WM.host.pixel && await PixelMons.has(mon.species);
+    const [anim, model] = await Promise.all([getAnim(mon.sprite), pix ? PixelMons.create(mon.species) : getLive(mon.isMega ? mon.modelKey : mon.species)]);
     if (tk !== token || !on || !WM) { if (model) model.dispose(); return null; }
     const f = new Fighter(p, mon, model ? model.anim : anim);
     if (model) { f.live = model; lives.add(f); }

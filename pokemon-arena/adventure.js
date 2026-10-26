@@ -1104,6 +1104,8 @@ const Adventure = (() => {
   //  The host: what retro.js asks the open world
   // ---------------------------------------------------------------------
   const host = {
+    // the look of the Pokémon: animated pixel sprites (default) or the live 3D models (Adventure screen setting)
+    get pixel() { return prefs.advSprites !== '3d'; },
     cfg: { range: ADV.range, wildRange: ADV.wildRange, notice: ADV.notice, weakGap: ADV.weakGap, strongGap: ADV.strongGap, detect: ADV.detect, leash: ADV.leash, wander: ADV.wander, light: ADV.light, maxWild: ADV.maxWild, maxAttackers: ADV.maxAttackers },
     input,
     speed(f) {
@@ -1250,11 +1252,13 @@ const Adventure = (() => {
       ${sv ? `<div class="adv-cont"><img src="${DEX.species[sv.species].sprite}" alt=""><div><b>${esc(DEX.species[sv.species].display)}</b> · Lv ${sv.level}<br><small>${sv.discovered.length} places found · ${sv.quests.done.length} quests done · seed ${sv.seed}</small></div><button class="btn" id="advContinue">▶ Continue</button></div>` : ''}
       <h3>${sv ? 'Or start a new adventure' : 'Choose your partner'}</h3>
       <div class="adv-grid">${list.map(n => { const s = DEX.species[n]; return `<button class="adv-st" data-sp="${n}" title="${esc(s.display)}"><img loading="lazy" src="${s.sprite}" alt=""><span>${esc(s.display)}</span><small>${s.types.join(' / ')}</small></button>`; }).join('')}</div>
-      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><button class="btn alt" id="advBack">Back</button></div>
+      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><label title="How the Pokémon look in the world">Pokémon <select id="advLook"><option value="pixel">Pixel sprites</option><option value="3d" ${prefs.advSprites === '3d' ? 'selected' : ''}>3D models</option></select></label><button class="btn alt" id="advBack">Back</button></div>
       ${sv ? '<p class="adv-warn">Starting a new adventure replaces your saved one.</p>' : ''}
+      <p class="adv-credit">Pixel sprites: <a href="https://sprites.pmdcollab.org" target="_blank" rel="noopener">PMD Sprite Collab</a> artists (CC BY-NC 4.0, non-commercial), credits in pmd/CREDITS.md</p>
     </div>`;
     menu.classList.remove('hidden');
     $('builder').classList.add('hidden');
+    menu.querySelector('#advLook').onchange = e => { prefs.advSprites = e.target.value; savePrefs(); };
     menu.querySelector('#advBack').onclick = () => { menu.classList.add('hidden'); $('builder').classList.remove('hidden'); };
     if (sv) menu.querySelector('#advContinue').onclick = () => start(sv);
     menu.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {

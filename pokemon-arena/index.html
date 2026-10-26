@@ -615,6 +615,7 @@
   .adv-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .adv-row input { width: 130px; padding: 6px 8px; border-radius: 8px; border: none; font-size: 15px; }
   .adv-warn { color: #fca5a5; font-size: 13px; margin: 0; }
+  .adv-credit { color: #94a3b8; font-size: 12px; margin: 0; } .adv-credit a { color: #cbd5e1; }
   .ah-card, .ah-map, .ah-quests, .ah-bar, .ah-keys { position: absolute; }
   .ah-card { left: calc(var(--u) * 14); top: calc(var(--u) * 12); width: calc(var(--u) * 380); height: calc(var(--u) * 130); }
   .ah-card .por { position: absolute; left: 0; top: 0; width: calc(var(--u) * 74); height: calc(var(--u) * 74); border: calc(var(--u) * 3.5) solid #f59e0b; border-radius: calc(var(--u) * 9); background: radial-gradient(circle at 50% 40%, #fff6d8, #f2c879 70%); overflow: hidden; box-shadow: 0 0 0 calc(var(--u) * 2) #1b1530, 0 calc(var(--u) * 4) 0 calc(var(--u) * 2) rgba(0,0,0,.35); }
@@ -856,6 +857,6 @@
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
 <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
-<script type="module" src="boot.mjs" data-scripts="data.js,base.js,audio.js,broadcast.js,tournament.js,world.js,retro.js,game.js,adventure.js"></script>
+<script type="module" src="boot.mjs" data-scripts="data.js,base.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js"></script>
 </body>
 </html>
