@@ -1027,11 +1027,11 @@ const Retro = (() => {
     else f.walkPh += (Math.ceil(f.walkPh) - f.walkPh) * Math.min(1, dt * 10);
     if (Math.floor(f.walkPh) !== Math.floor(prev) && f.speed > 40) {
       // footfalls: heavy Pokémon land with weight (a deeper squash, dust and a faint tremor)
-      f.bump(P.heavy ? 2.6 : 1.4);
+      f.bump((P.heavy ? 2.6 : 1.4) * (steer ? 0.45 : 1));   // the Pokémon the player steers walks smoother (no jolt or tremor every step)
       if (f.speed > 115 || P.heavy) dust(f.x, f.y, P.heavy ? 0.9 : 0.5);
-      if (P.heavy && f.speed > 70) shakeIt(1.2);
+      if (P.heavy && f.speed > 70 && !steer) shakeIt(1.2);
     }
-    const hop = f.hover ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70) * P.hop;
+    const hop = f.hover ? 0 : Math.abs(Math.sin(f.walkPh * Math.PI)) * (3 + f.h * 0.035) * Math.min(1, f.speed / 70) * P.hop * (steer ? 0.45 : 1);
     // flyers lift a little as they pick up speed (take-off) and settle when they slow down
     f.z = bob + f.jz + hop + (f.hover ? Math.min(14, f.speed * 0.06) : 0);
     f.lean += (clamp(f.vx / 240, -1, 1) * (f.hover ? 0.2 : 0.1) - f.lean) * Math.min(1, dt * 8);
@@ -1041,9 +1041,10 @@ const Retro = (() => {
       const dx = f.x - foe.x, dy = f.y - foe.y, d = Math.hypot(dx, dy) || 1, min = f.r + foe.r + 14;
       if (d < min) { const px = dx / d * (min - d) * 0.5, py = dy / d * (min - d) * 0.5; if (WM) wmMove(f, px, py); else { f.x += px; f.y += py; } }
       // the player's Pokémon looks where it walks; standing, it keeps its eyes on its target
-      if (steer && f.speed > 60 && canWalk) f.face = Math.sign(f.vx) || f.face;
+      // (it turns only on a clear sideways move, and keeps facing its way a moment after stopping: no flip-flopping)
+      if (steer && canWalk && (f.speed > 60 || T - (f.walkFaceT || -9) < 0.35)) { if (Math.abs(f.vx) > 45) f.face = Math.sign(f.vx); if (f.speed > 60) f.walkFaceT = T; }
       else if (Math.abs(foe.x - f.x) > 12) f.face = Math.sign(foe.x - f.x);
-    } else if (f.speed > 40 && !f.dashing) f.face = Math.sign(f.vx) || f.face;
+    } else if (f.speed > 40 && !f.dashing && (!steer || Math.abs(f.vx) > 45)) f.face = Math.sign(f.vx) || f.face;
     if (multi && !f.dashing) for (const o of F) {
       if (!o || o === f || o === foe || o.state !== 'idle' || o.dashing) continue;
       const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1, min = f.r + o.r + 10;
@@ -2046,6 +2047,7 @@ const Retro = (() => {
       const rx = f.w * 0.36 * (f.hover ? 0.75 : 1) * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6);
       ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill();
     }
+    if (WM) wmRings();
     // Team Brawl: a ring in the team colour under every Pokémon
     if (multi && multi.mode === 'brawl') for (const f of F) if (f && f.state !== 'gone') {
       const rx = f.w * 0.42 * (0.2 + 0.8 * f.pop);
@@ -2114,6 +2116,7 @@ const Retro = (() => {
   // Pokémon's tag carries its level (and ALPHA / BOSS for the dangerous ones)
   const tagLabel = f => (WM ? (f.tag ? f.tag + ' ' : '') + 'LV' + f.mon.level + ' ' : '') + f.mon.name.toUpperCase();
   function drawTag(f, y = sn(f.top - 8)) {
+    if (WM) return wmTag(f, y);
     const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX * (f.tag ? 1.5 : 1), x = sn(f.x - w / 2);
     ctx.fillStyle = '#1b1530'; ctx.fillRect(x - PX, y - PX, w + PX * 2, PX * 3);
     ctx.fillStyle = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'; ctx.fillRect(x, y, Math.max(PX, Math.round(w * k / PX) * PX), PX);
@@ -6168,7 +6171,7 @@ const Retro = (() => {
   // it keeps its target while that one stays within reach, so two foes at the same distance don't flicker
   function wmTarget(f) {
     const range = WM.host.cfg.range, t = f.target;
-    if (t && t.state === 'idle' && F[t.p] === t && t !== f && wmDist(t, f) < range * 1.25 && WM.lit(t)) return t;
+    if (t && t.state === 'idle' && F[t.p] === t && t !== f && wmDist(t, f) < range * (T - (f.pickT || -99) < 8 ? 1.8 : 1.25) && WM.lit(t)) return t;
     let best = null, bs = Infinity;
     for (const o of F) {
       if (!o || o === f || o.state !== 'idle' || !WM.lit(o)) continue;
@@ -6208,12 +6211,16 @@ const Retro = (() => {
   }
   // it notices the player: a "!" pops over its head and it comes for the player
   function wmAlert(f) {
-    f.aggro = true; f.flee = false; f.goal = null; f.replan = true;
-    f.cd = Math.max(f.cd, R(0.6, 1.1));                // a beat to react before the first attack
+    f.aggro = true; f.flee = false; f.goal = null; f.replan = true; f.notice = 0;
+    f.cd = Math.max(f.cd, R(1.1, 1.6));                // time to react (back off, or get ready) before the first attack
     floatAt(f.x, f.top - 26, '!', 'crit', 900);
     f.bump(-6);
+    SFX.beep(false);
     WM.host.alert(f);
   }
+  // how dangerous a wild Pokémon is for the player: its level against the player's
+  const wmGap = f => f.mon.level - (F[0] ? F[0].mon.level : f.mon.level);
+  const onScreen = (f, m = 0) => { const v = viewRect(); return f.x > v.x0 + m && f.x < v.x1 - m && f.y > v.y0 + m * 2 && f.y < v.y1 - m * 0.3; };
   function wmProvoked(d, f) {
     if (d.p === 0 || f.p !== 0) return;
     d.hitT = T;
@@ -6222,7 +6229,8 @@ const Retro = (() => {
   // may it act now? Wild Pokémon only from attack range and at most two at once; the player pays stamina
   function wmTurn(f, foe) {
     if (f.p === 0) return WM.host.spend(f);
-    if (wmDist(foe, f) > WM.host.cfg.range) return false;
+    // never from off screen, and from a shorter reach than the player's
+    if (wmDist(foe, f) > WM.host.cfg.wildRange || !onScreen(f, 30)) return false;
     if (F.filter(o => o && o.p && o.acting).length >= WM.host.cfg.maxAttackers) return false;
     f.acting = true; acting++;
     return true;
@@ -6252,25 +6260,78 @@ const Retro = (() => {
   // follow camera: ahead of where the player walks; in a fight it leans toward the foe and pulls back to keep both
   // in frame. Event shots (impacts, the finishing blow) still punch in, but only lean a little
   function wmCamera(dt) {
-    const pl = F[0];
-    let x = camX, y = camY, z = WM.zoom;
-    if (pl) {
-      x = pl.x + clamp(pl.vx * 0.3, -110, 110); y = pl.cy + clamp(pl.vy * 0.25, -70, 70);
-      let fo = null, fd = 900;
-      for (const o of F) if (o && o.p && o.aggro && o.state === 'idle') { const d = wmDist(o, pl); if (d < fd) { fd = d; fo = o; } }
-      if (fo) {
-        x += (fo.x - pl.x) * 0.35; y += (fo.cy - pl.cy) * 0.35;
-        z = clamp(Math.min(VW / (Math.abs(fo.x - pl.x) + 520), VH / (Math.abs(fo.cy - pl.cy) + 420)), WM.zoom * 0.72, WM.zoom);
-      }
-    }
-    let top = null, ease = 0.3;
-    for (const s of camShots) if (s.kind !== 'focus' && (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0))) top = s;
-    if (top) { const px = top.f ? top.f.cx : top.x, py = top.f ? top.f.cy : top.y; x += (px - x) * top.w * 0.3; y += (py - y) * top.w * 0.3; z *= 1 + (top.z - 1) * 0.6; ease = Math.min(ease, CAM_EASE[top.kind]); }
-    const hw = VW / 2 / z, hh = VH / 2 / z;
-    x = clamp(x, hw, WW - hw); y = clamp(y, hh, WH - hh);
     if (dt <= 0) return;
     dt = Math.min(dt, 0.05);
-    camX = damp(camX, x, 'x', ease, dt); camY = damp(camY, y, 'y', ease, dt); camZ = damp(camZ, z, 'z', 0.5, dt);
+    const pl = F[0], C = WM.cam;
+    let x = camX, y = camY, z = WM.zoom;
+    if (pl) {
+      // look ahead of the walk; the lead itself eases in and out, so starting, stopping and turning never jerk the view
+      const k = 1 - Math.exp(-dt * 2.2);
+      C.lx += (clamp(pl.vx * 0.32, -120, 120) - C.lx) * k; C.ly += (clamp(pl.vy * 0.26, -75, 75) - C.ly) * k;
+      x = pl.x + C.lx; y = pl.cy + C.ly;
+      // in a fight: lean toward the nearest hostile one and pull back to keep both in frame (faded in and out)
+      let fo = null, fd = 900;
+      for (const o of F) if (o && o.p && o.aggro && o.state === 'idle') { const d = wmDist(o, pl); if (d < fd) { fd = d; fo = o; } }
+      const kl = 1 - Math.exp(-dt * 1.8);
+      C.lean += ((fo ? 1 : 0) - C.lean) * kl;
+      if (fo) { C.fx += (fo.x - pl.x - C.fx) * kl; C.fy += (fo.cy - pl.cy - C.fy) * kl; }
+      const fz = clamp(Math.min(VW / (Math.abs(C.fx) + 520), VH / (Math.abs(C.fy) + 420)), WM.zoom * 0.72, WM.zoom);
+      x += C.fx * 0.35 * C.lean; y += C.fy * 0.35 * C.lean; z = lerp(WM.zoom, fz, C.lean);
+    }
+    let top = null, ease = 0.24;
+    for (const s of camShots) if (s.kind !== 'focus' && (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0))) top = s;
+    if (top) { const px = top.f ? top.f.cx : top.x, py = top.f ? top.f.cy : top.y; x += (px - x) * top.w * 0.25; y += (py - y) * top.w * 0.25; z *= 1 + (top.z - 1) * 0.5; ease = Math.min(ease, Math.max(0.12, CAM_EASE[top.kind])); }
+    const hw = VW / 2 / z, hh = VH / 2 / z;
+    x = clamp(x, hw, WW - hw); y = clamp(y, hh, WH - hh);
+    camX = damp(camX, x, 'x', ease, dt); camY = damp(camY, y, 'y', ease, dt); camZ = damp(camZ, z, 'z', 0.7, dt);
+  }
+  // rings under the wild Pokémon (what they are up to) and the player's target marker, drawn on the ground
+  function wmRings() {
+    const pl = F[0], cfg = WM.host.cfg;
+    for (const f of F) {
+      if (!f || !f.p || f.state !== 'idle' || f.alpha < 0.3 || !WM.lit(f)) continue;
+      const rx = f.w * 0.44 * (0.2 + 0.8 * f.pop);
+      let col = null, w = PX, a = 0.85, fill = 0;
+      if (f.aggro) {
+        col = '#ff4040';
+        // about to attack: the ring pulses and fills (the battle's ready crouch shows on the Pokémon too)
+        if (pl && !f.busy && f.cd > 0 && f.cd < 0.85 && wmDist(f, pl) < cfg.wildRange && onScreen(f, 30)) { const k = 1 - f.cd / 0.85; w = PX * (1.4 + k * 1.6); a = 0.55 + 0.45 * Math.abs(Math.sin(T * 16)); fill = 0.28 * k; }
+      } else if (f.notice > 0) { col = '#ffd23f'; a = 0.45 + 0.55 * f.notice; }
+      if (!col) continue;
+      if (fill) { ctx.globalAlpha = fill; ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill(); }
+      ctx.globalAlpha = a * f.alpha; ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.stroke();
+    }
+    const t = pl && pl.state === 'idle' ? pl.target : null;
+    if (t && t.state === 'idle' && F[t.p] === t && WM.lit(t)) {
+      // the target marker: four corners turning slowly under it
+      const rx = t.w * 0.56 * (0.2 + 0.8 * t.pop), sp = T * 1.4;
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffe066'; ctx.lineWidth = PX;
+      for (let i = 0; i < 4; i++) { const a0 = sp + i * Math.PI / 2; ctx.beginPath(); ctx.ellipse(t.x, t.y, rx, rx * 0.32, 0, a0, a0 + 0.7); ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // a wild Pokémon's tag: its level coloured by how dangerous it is for the player (red: much stronger, orange:
+  // stronger, green: weaker), a "?" with a meter while it is noticing the player, a "!" once hostile
+  function wmTag(f, y) {
+    const m = f.mon, k = clamp(m.hp / m.maxhp, 0, 1), w = 16 * PX * (f.tag ? 1.5 : 1), x = sn(f.x - w / 2), gap = wmGap(f);
+    ctx.fillStyle = '#1b1530'; ctx.fillRect(x - PX, y - PX, w + PX * 2, PX * 3);
+    ctx.fillStyle = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'; ctx.fillRect(x, y, Math.max(PX, Math.round(w * k / PX) * PX), PX);
+    ctx.font = `${6 * PX}px Tiny5, monospace`; ctx.textBaseline = 'bottom'; ctx.lineWidth = PX * 1.6; ctx.strokeStyle = '#1b1530'; ctx.lineJoin = 'round';
+    const lv = (f.tag ? f.tag + ' ' : '') + 'LV' + m.level + ' ', nm = m.name.toUpperCase(), wl = ctx.measureText(lv).width, wn = ctx.measureText(nm).width, x0 = f.x - (wl + wn) / 2, ty = y - PX * 2;
+    ctx.textAlign = 'left';
+    ctx.strokeText(lv + nm, x0, ty);
+    ctx.fillStyle = f.tag || gap >= 5 ? '#ff6b6b' : gap >= 2 ? '#ffb347' : gap <= -4 ? '#9ae6a0' : '#ffffff'; ctx.fillText(lv, x0, ty);
+    ctx.fillStyle = f.aggro ? '#ffd0d0' : '#ffffff'; ctx.fillText(nm, x0 + wl, ty);
+    // the mood icon over the tag
+    const iy = ty - 16 * PX;
+    if (f.aggro || f.notice > 0) {
+      const hostile = f.aggro, bw = 7 * PX, bx = sn(f.x - bw / 2);
+      ctx.fillStyle = '#1b1530'; ctx.fillRect(bx - PX, iy - PX, bw + 2 * PX, 8 * PX);
+      ctx.fillStyle = hostile ? '#ff4040' : '#ffd23f'; ctx.fillRect(bx, iy, bw, 6 * PX);
+      if (!hostile) { ctx.fillStyle = '#1b1530'; ctx.fillRect(bx, iy + 6 * PX, bw, PX); ctx.fillStyle = '#ff8a2a'; ctx.fillRect(bx, iy + 6 * PX, Math.round(bw * f.notice / PX) * PX, PX); }
+      ctx.textAlign = 'center'; ctx.fillStyle = '#1b1530'; ctx.fillText(hostile ? '!' : '?', f.x, iy + 6 * PX);
+    }
   }
   // after the Pokémon and effects: the dark of the caves (a pool of light around the player), then the host's
   // world-space overlays (interaction prompts) so they stay readable
@@ -6280,6 +6341,17 @@ const Retro = (() => {
       const g = ctx.createRadialGradient(pl.x, pl.cy, WM.host.cfg.light * 0.35, pl.x, pl.cy, WM.host.cfg.light);
       g.addColorStop(0, 'rgba(6,4,14,0)'); g.addColorStop(1, `rgba(6,4,14,${(0.94 * WM.dark).toFixed(3)})`);
       ctx.fillStyle = g; ctx.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0);
+    }
+    const m = 50 / camZ, cx = (v.x0 + v.x1) / 2, cy = (v.y0 + v.y1) / 2, ax0 = (v.x1 - v.x0) / 2 - m, ay0 = (v.y1 - v.y0) / 2 - m;
+    for (const f of F) {
+      if (!f || !f.p || f.state !== 'idle' || !(f.aggro || f.notice > 0)) continue;
+      if (f.x > v.x0 + 20 && f.x < v.x1 - 20 && f.cy > v.y0 + 20 && f.cy < v.y1 - 20) continue;
+      const dx = f.x - cx, dy = f.cy - cy, k = Math.min(ax0 / Math.max(1e-6, Math.abs(dx)), ay0 / Math.max(1e-6, Math.abs(dy)));
+      const x = cx + dx * k, y = cy + dy * k, an = Math.atan2(dy, dx), s = (13 + Math.sin(T * 8) * 2) / camZ;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(an);
+      ctx.fillStyle = '#1b1530'; ctx.beginPath(); ctx.moveTo(s * 1.5, 0); ctx.lineTo(-s, -s * 1.15); ctx.lineTo(-s, s * 1.15); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = f.aggro ? '#ff4040' : '#ffd23f'; ctx.beginPath(); ctx.moveTo(s * 1.05, 0); ctx.lineTo(-s * 0.6, -s * 0.75); ctx.lineTo(-s * 0.6, s * 0.75); ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
     WM.host.draw(ctx, v, T);
   }
@@ -6300,9 +6372,21 @@ const Retro = (() => {
       if (f.flee) { if (d > cfg.detect * 1.8 || !pAlive) { f.flee = false; f.aggro = false; } }
       else if (f.aggro) {
         // it gives up when the player gets away, faints or retreats to a camp (unless the player just hit it); a timid one runs when it is losing
-        if (d > cfg.leash || !pAlive || (safe && T - (f.hitT || -9) > 6)) { f.aggro = false; f.goal = null; f.replan = true; f.calmUntil = T + 4; }
+        if (d > cfg.leash * (!f.tag && wmGap(f) >= cfg.strongGap ? 0.6 : 1) || !pAlive || (safe && T - (f.hitT || -9) > 6)) { f.aggro = false; f.goal = null; f.replan = true; f.calmUntil = T + 4; }
         else if (f.temper === 'timid' && f.mon.hp < f.mon.maxhp * 0.3) { f.flee = true; f.goal = null; f.replan = true; text(f, 'IT FLED!', 'info'); }
-      } else if (pAlive && !safe && f.temper === 'aggressive' && d < cfg.detect * (f.tag ? 1.3 : 1) && T > (f.calmUntil || 0) && WM.lit(f)) wmAlert(f);
+      } else {
+        // an aggressive one first notices the player ("?" and a filling meter) and only turns hostile if the player
+        // stays close; one far weaker than the player leaves it alone; one far stronger is territorial (it only reacts
+        // up close, and gives up sooner)
+        const gap = wmGap(f), strong = !f.tag && gap >= cfg.strongGap;
+        const hunts = pAlive && !safe && f.temper === 'aggressive' && (f.tag || gap > -cfg.weakGap) && T > (f.calmUntil || 0) && WM.lit(f);
+        const near = cfg.detect * (f.tag ? 1.3 : 1) * (strong ? 0.7 : 1);
+        if (hunts && d < near) {
+          if (!f.notice) floatAt(f.x, f.top - 26, '?', 'info', 900);
+          f.notice = Math.min(1, (f.notice || 0) + dt / cfg.notice * (d < near * 0.45 ? 2.5 : 1));
+          if (f.notice >= 1) wmAlert(f);
+        } else if (f.notice) f.notice = Math.max(0, f.notice - dt / cfg.notice * 0.7);
+      }
       // away from the fight it licks its wounds
       if (!f.aggro && f.mon.hp < f.mon.maxhp && T - (f.hitT || -9) > 5) { f.regen = (f.regen || 0) + f.mon.maxhp * 0.04 * dt; if (f.regen >= 1) { f.mon.hp = Math.min(f.mon.maxhp, f.mon.hp + Math.floor(f.regen)); f.regen %= 1; } }
       if (f.aggro) engaged = true;
@@ -6324,6 +6408,7 @@ const Retro = (() => {
     f.face = f.faceVis = o.face || (Math.random() < 0.5 ? -1 : 1);
     f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     if (!p) f.cd = R(0.2, 0.4);                        // the player is ready to fight at once (the arena's opening pause is for a duel)
+    if (f.live) Object.assign(f.live, p ? { fps: 16 } : { fps: 30, turns: 32, prio: 1 });   // the one you steer animates smoothest
     state.players[p] = { team: [mon], active: 0, usedMega: true };
     multi.side[p] = p ? 1 : 0; multi.names[p] = mon.name;
     F[p] = f;
@@ -6375,6 +6460,25 @@ const Retro = (() => {
       f.queued = i;
       return 'ok';
     },
+    get target() { const f = F[0]; return f && f.state === 'idle' ? wmTarget(f) : null; },
+    setTarget(o) { const f = F[0]; if (!f || !o || !o.p || o.state !== 'idle' || F[o.p] !== o) return false; if (o !== f.target) shapes.push({ kind: 'lockon', f: o, by: f, life: 0.8, age: 0 }); f.target = o; f.pickT = T; return true; },
+    // the next wild Pokémon in range (nearest first), after the current target
+    cycleTarget() {
+      const f = F[0]; if (!f || f.state !== 'idle') return null;
+      const list = F.filter(o => o && o.p && o.state === 'idle' && WM.lit(o) && wmDist(o, f) < WM.host.cfg.range * 1.3).sort((a, b) => wmDist(a, f) - wmDist(b, f));
+      if (!list.length) return null;
+      const next = list[(list.indexOf(f.target) + 1) % list.length];
+      this.setTarget(next);
+      return next;
+    },
+    // a point on the game frame (CSS pixels from its top-left corner) -> world units
+    toWorld(fx, fy) {
+      const z = camZ, hw = VW / 2 / z, hh = VH / 2 / z;
+      const cx = hw * 2 >= WW ? WW / 2 : clamp(camX, hw, WW - hw), cy = hh * 2 >= WH ? WH / 2 : clamp(camY, hh, WH - hh);
+      return { x: cx - hw + fx / UNIT / z, y: cy - hh + fy / UNIT / z };
+    },
+    // the wild Pokémon drawn at a world point (its body, not just its feet)
+    wildAt(x, y) { let best = null, bd = Infinity; for (const o of F) if (o && o.p && o.state === 'idle' && WM.lit(o)) { const d = Math.hypot(o.x - x, (o.cy - y) * 0.8); if (d < Math.max(70, o.w * 0.6) && d < bd) { bd = d; best = o; } } return best; },
     teleport(f, x, y) { const at = Overworld.nearestFree(x, y, WM_FOOT, !!f.hover); f.x = at.x; f.y = at.y; f.vx = f.vy = f.kx = f.ky = 0; f.goal = null; f.home = { x: f.x, y: f.y }; },
     float: (x, y, html, cls, ms) => floatAt(x, y, html, cls, ms),
     text: (f, s, cls) => text(f, s, cls),
@@ -6411,7 +6515,7 @@ const Retro = (() => {
     resize();
     const sz = Overworld.size, m = Overworld.TW * 3;
     WW = sz.w; WH = sz.h;
-    WM = { host: opts.host, bounds: { x0: m, y0: m, x1: WW - m, y1: WH - m }, zoom: opts.zoom || 1, dark: 0, biome: null, engaged: false, hudDirty: true, claimed: new Set(), npcs: [] };
+    WM = { host: opts.host, bounds: { x0: m, y0: m, x1: WW - m, y1: WH - m }, zoom: opts.zoom || 1, dark: 0, biome: null, engaged: false, hudDirty: true, claimed: new Set(), npcs: [], cam: { lx: 0, ly: 0, lean: 0, fx: 0, fy: 0 } };
     // the darkness of a cave hides what is beyond the light
     WM.lit = f => WM.dark < 0.5 || !F[0] || wmDist(f, F[0]) < WM.host.cfg.light * 0.9;
     field = { ...WM.bounds };

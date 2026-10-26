@@ -13,7 +13,10 @@ const Adventure = (() => {
     zoom: 1,
     startLevel: 5,
     move: { walk: 215, dashMul: 1.6 },                 // the player's walking pace (world units / s) and the dash boost
-    range: 620,                                        // attack reach (player and wild Pokémon)
+    range: 620,                                        // the player's attack reach
+    wildRange: 500,                                    // a wild Pokémon's attack reach (and it never attacks from off screen)
+    notice: 1.4,                                       // seconds an aggressive one needs to notice you before it turns hostile ("?" first)
+    weakGap: 6, strongGap: 4,                          // this many levels below you: it won't start a fight; above: territorial (reacts only up close)
     detect: 430,                                       // an aggressive wild Pokémon notices the player this close
     leash: 1400,                                       // ...and gives up past this distance
     wander: 260,                                       // wild Pokémon roam this far from where they appeared
@@ -461,6 +464,7 @@ const Adventure = (() => {
       if (!f.aggro && !f.boss && dist(f, pl) > ADV.spawn.despawn) { wm.despawn(f); continue; }
       if (f.boss && dist(f, pl) > ADV.spawn.despawn * 1.3) wm.despawn(f);
       if (f.rare && !f.seen && inView(f.x, f.y, 0)) { f.seen = true; note(`<b class="am">RARE!</b> A wild ${esc(f.mon.name)} appeared!`); }
+      if (!f.tag && !f.rare && !f.seen && inView(f.x, f.y, 0) && f.mon.level - P.level >= ADV.strongGap + 1) { f.seen = true; note(`<b class="aw">DANGER</b> A wild Lv ${f.mon.level} ${esc(f.mon.name)} is much stronger than you. Keep your distance!`); }
       if (f.tag && !f.seen && inView(f.x, f.y, 0)) { f.seen = true; note(`<b class="aw">${f.boss ? 'BOSS' : 'ALPHA'}!</b> ${f.boss ? esc(BOSSES[f.boss].name) + ': ' : 'A towering '}Lv ${f.mon.level} ${esc(f.mon.name)}`); }
     }
     // territorial bosses wait at their landmark
@@ -777,6 +781,7 @@ const Adventure = (() => {
     if (d && +d[2] >= 1 && +d[2] <= 4) useMove(+d[2] - 1);
     if (d && +d[2] >= 5 && +d[2] <= 7) { const id = P.quick[+d[2] - 5]; if (id) useItem(id); }
     if (e.code === 'KeyE') interact();
+    if (e.code === 'KeyQ' || e.code === 'Tab') { e.preventDefault(); wm.cycleTarget(); }
   }
   const onKeyUp = e => keys.delete(e.code);
   const onBlur = () => keys.clear();
@@ -785,34 +790,76 @@ const Adventure = (() => {
     if (r === 'ok') S.hudMoves = '';
     return r;
   }
-  // ---- touch: a virtual stick (left), DASH and E (right), the menus. Pointer events, so a mouse can use them too.
-  // They show on touch screens (or as soon as the screen is touched) ----
-  const touch = { x: 0, y: 0, mag: 0, dash: false, id: null };
+  // ---- touch: a floating stick (it appears where the left thumb lands), the four moves in an arc around E (right),
+  // RUN (a toggle), the menus. Pointer events, so a mouse can use them too. They show on touch screens, or as soon
+  // as the screen is touched. On a phone held upright the game turns to landscape (see orient) ----
+  const touch = { x: 0, y: 0, mag: 0, run: false, id: null, upT: 0 };
   const isTouch = () => matchMedia('(pointer: coarse)').matches;
-  const onTouchStart = () => document.body.classList.add('touchUI');
+  const onTouchStart = () => { if (!document.body.classList.contains('touchUI')) { document.body.classList.add('touchUI'); orient(); } };
+  const buzz = ms => { try { if (document.body.classList.contains('touchUI') && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+  // a pointer position on the game frame (CSS px from its top-left), also when the frame is turned to landscape
+  function frameXY(e) {
+    if (document.body.classList.contains('rotLand')) return { x: e.clientY, y: innerWidth - e.clientX };
+    const r = document.getElementById('frame').getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
   function bindTouch(el) {
-    const stick = el.querySelector('.ah-stick'), knob = stick.querySelector('i');
+    const zone = el.querySelector('.ah-zone'), stick = el.querySelector('.ah-stick'), knob = stick.querySelector('i');
+    let cx = 0, cy = 0;
     const aim = e => {
-      const r = stick.getBoundingClientRect(), R = r.width / 2;
-      let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R;
+      const p = frameXY(e), R = stick.offsetWidth / 2;
+      let dx = (p.x - cx) / R, dy = (p.y - cy) / R;
       const m = Math.hypot(dx, dy);
       if (m > 1) { dx /= m; dy /= m; }
+      knob.style.transform = `translate(${(dx * 62).toFixed(1)}%, ${(dy * 62).toFixed(1)}%)`;
       const mag = Math.min(1, m);
-      knob.style.transform = `translate(${(dx * 45).toFixed(1)}%, ${(dy * 45).toFixed(1)}%)`;
-      if (mag < 0.18) { touch.mag = 0; return; }                         // dead zone
-      touch.x = dx / (mag || 1); touch.y = dy / (mag || 1); touch.mag = (mag - 0.18) / 0.82;
+      if (mag < 0.14) { touch.mag = 0; return; }                         // dead zone
+      touch.x = dx / mag; touch.y = dy / mag; touch.mag = Math.min(1, (mag - 0.14) / 0.7);   // full speed well before the rim
     };
-    const release = () => { touch.id = null; touch.mag = 0; knob.style.transform = ''; };
-    stick.addEventListener('pointerdown', e => { e.preventDefault(); touch.id = e.pointerId; stick.setPointerCapture(e.pointerId); aim(e); });
-    stick.addEventListener('pointermove', e => { if (e.pointerId === touch.id) aim(e); });
-    stick.addEventListener('pointerup', release); stick.addEventListener('pointercancel', release);
-    const dash = el.querySelector('[data-t="dash"]');
-    dash.addEventListener('pointerdown', e => { e.preventDefault(); touch.dash = true; dash.classList.add('on'); });
-    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) dash.addEventListener(ev, () => { touch.dash = false; dash.classList.remove('on'); });
-    el.querySelector('[data-t="use"]').addEventListener('pointerdown', e => { e.preventDefault(); if (panel === 'talk') closePanel(); else interact(); });
-    el.querySelectorAll('.ah-tmenu [data-t]').forEach(b => b.onclick = () => togglePanel(b.dataset.t));
-    hud.use = el.querySelector('[data-t="use"] small');
+    const release = e => {
+      if (e && e.pointerId !== touch.id) return;
+      touch.id = null; touch.mag = 0; touch.upT = performance.now();
+      knob.style.transform = ''; stick.style.left = stick.style.top = ''; stick.classList.add('idle');
+    };
+    // the stick jumps to where the thumb lands in the left part of the screen
+    zone.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const p = frameXY(e), R = stick.offsetWidth / 2, W = zone.offsetWidth, H = el.offsetHeight;
+      cx = clamp(p.x, R + 8, W - 8); cy = clamp(p.y, R + 8, H - R - 8);
+      stick.style.left = (cx - R) + 'px'; stick.style.top = (cy - R) + 'px'; stick.classList.remove('idle');
+      touch.id = e.pointerId; zone.setPointerCapture(e.pointerId); aim(e);
+    });
+    zone.addEventListener('pointermove', e => { if (e.pointerId === touch.id) aim(e); });
+    zone.addEventListener('pointerup', release); zone.addEventListener('pointercancel', release);
+    const run = el.querySelector('[data-t="run"]');
+    run.addEventListener('pointerdown', e => { e.preventDefault(); touch.run = !touch.run; touch.upT = performance.now(); buzz(10); });   // (it stays on until you stand still a moment)
+    el.querySelector('[data-t="use"]').addEventListener('pointerdown', e => { e.preventDefault(); buzz(10); if (panel === 'talk') closePanel(); else interact(); });
+    el.querySelectorAll('.ah-tmenu [data-t]').forEach(b => b.onclick = () => { buzz(8); if (b.dataset.t === 'rotate') { prefs.advLandscape = prefs.advLandscape === false; savePrefs(); orient(); toast(prefs.advLandscape === false ? 'Landscape off: the game follows your phone.' : 'Landscape on.', 1800); } else togglePanel(b.dataset.t); });
+    hud.tmoves.addEventListener('pointerdown', e => { const b = e.target.closest('[data-i]'); if (!b) return; e.preventDefault(); buzz(12); useMove(+b.dataset.i); });
+    hud.use = el.querySelector('[data-t="use"] small'); hud.run = run;
     if (isTouch()) document.body.classList.add('touchUI');
+  }
+  // pick a target by tapping / clicking a wild Pokémon
+  function onPick(e) {
+    if (!active || panel || !wm) return;
+    const p = frameXY(e), w = wm.toWorld(p.x, p.y), o = wm.wildAt(w.x, w.y);
+    if (o && wm.setTarget(o)) buzz(10);
+  }
+  // landscape on phones: real fullscreen + orientation lock where the browser allows it, else the game frame is
+  // turned 90° while the phone is held upright (Settings: the ⟳ button; remembered)
+  function orient() {
+    const want = active && document.body.classList.contains('touchUI') && prefs.advLandscape !== false && innerHeight > innerWidth;
+    if (document.body.classList.contains('rotLand') === want) return;
+    document.body.classList.toggle('rotLand', want);
+    dispatchEvent(new Event('resize'));
+  }
+  function goLandscape() {
+    if (!isTouch() || prefs.advLandscape === false) return;
+    try {
+      const el = document.documentElement;
+      const fs = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve();
+      fs.then(() => screen.orientation && screen.orientation.lock ? screen.orientation.lock('landscape') : null).catch(() => {}).finally(orient);
+    } catch (e) {}
   }
   function input(f, dt) {
     let x = 0, y = 0;
@@ -822,7 +869,8 @@ const Adventure = (() => {
     if (L) { x /= L; y /= L; }
     else if (touch.mag > 0) { x = touch.x; y = touch.y; L = touch.mag; }
     let dash = false;
-    if (L && (keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('Space') || touch.dash) && S.tired <= 0 && P.stamina > 0) {
+    if (touch.run && (S.tired > 0 || (!touch.mag && touch.id === null && performance.now() - touch.upT > 600))) touch.run = false;
+    if (L && (keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('Space') || touch.run) && S.tired <= 0 && P.stamina > 0) {
       dash = true;
       P.stamina -= ADV.stamina.dash * dt;
       if (P.stamina <= 0) { P.stamina = 0; S.tired = ADV.stamina.tired; wm.text(f, 'OUT OF BREATH', 'info'); }
@@ -873,11 +921,13 @@ const Adventure = (() => {
       <div class="ah-map"><canvas width="${OW.COLS}" height="${OW.ROWS}"></canvas><div class="ah-biome"></div></div>
       <div class="ah-quests"></div>
       <div class="ah-bar"><div class="ah-moves"></div><div class="ah-quick"></div></div>
-      <div class="ah-keys"><kbd>WASD</kbd> move <kbd>Shift</kbd> dash <kbd>1-4</kbd> attack <kbd>E</kbd> interact <kbd>5-7</kbd> items <kbd>I</kbd> bag <kbd>M</kbd> moves <kbd>J</kbd> quests <kbd>Esc</kbd> pause</div>
+      <div class="ah-keys"><kbd>WASD</kbd> move <kbd>Shift</kbd> dash <kbd>1-4</kbd> attack <kbd>E</kbd> interact <kbd>Q</kbd>/click target <kbd>5-7</kbd> items <kbd>I</kbd> bag <kbd>M</kbd> moves <kbd>J</kbd> quests <kbd>Esc</kbd> pause</div>
       <div class="rfeed ah-feed" id="rFeed"></div>
-      <div class="ah-touch"><div class="ah-stick"><i></i></div>
-        <div class="ah-tmenu"><button data-t="bag" title="Bag">BAG</button><button data-t="moves" title="Moves">MOVES</button><button data-t="quests" title="Quests">QUESTS</button></div>
-        <div class="ah-acts"><button class="dash" data-t="dash">DASH</button><button class="use" data-t="use"><b>E</b><small></small></button></div></div>
+      <div class="ah-hurt"></div>
+      <div class="ah-touch"><div class="ah-zone"></div><div class="ah-stick idle"><i></i></div>
+        <button class="ah-run" data-t="run">RUN</button>
+        <div class="ah-tmenu"><button data-t="bag">BAG</button><button data-t="moves">MOVES</button><button data-t="quests">QUESTS</button><button data-t="rotate" title="Landscape on/off">⟳</button></div>
+        <div class="ah-cluster"><div class="ah-tmoves"></div><button class="ah-use" data-t="use"><b>E</b><small></small></button></div></div>
       <div class="ah-panel hidden"></div>`;
     const $q = s => el.querySelector(s);
     hud = { card: $q('.ah-card'), por: $q('.por img'), nm: $q('.nm span'), lv: $q('.nm small'), chips: $q('.chips'),
@@ -889,8 +939,9 @@ const Adventure = (() => {
     hud.moves.onclick = e => { const b = e.target.closest('[data-i]'); if (b) useMove(+b.dataset.i); };
     hud.quick.onclick = e => { const b = e.target.closest('[data-q]'); if (b && P.quick[+b.dataset.q]) useItem(P.quick[+b.dataset.q]); };
     hud.map.onclick = () => togglePanel('quests');
+    hud.tmoves = $q('.ah-tmoves'); hud.hurt = $q('.ah-hurt');
     bindTouch(el);
-    S.hudMoves = S.hudQuick = S.hudQuest = ''; S.hudXp = -1; S.fogDirty = true;
+    S.hudMoves = S.hudTMoves = S.hudQuick = S.hudQuest = ''; S.hudXp = -1; S.fogDirty = true;
     for (const k in S) if (k.startsWith('last')) S[k] = null;
   }
   const setW = (el, k) => { const w = (clamp(k, 0, 1) * 100).toFixed(1) + '%'; if (el.style.width !== w) el.style.width = w; };
@@ -935,6 +986,22 @@ const Adventure = (() => {
       hud.quick.innerHTML = P.quick.map((id, i) => `<button class="ah-qs ${id && count(id) ? '' : 'empty'}" data-q="${i}" title="${id ? esc(ITEMS[id].name + ': ' + ITEMS[id].desc) : 'Empty: set a quick item in the bag (I)'}"><b>${i + 5}</b>${id ? `<img src="${icon(id)}" alt=""><small>${count(id)}</small>` : ''}</button>`).join('');
     }
     if (hud.use) setT(hud.use, near ? near.label.split(' ')[0].toUpperCase() : '');
+    if (hud.run) hud.run.classList.toggle('on', touch.run);
+    if (sig !== S.hudTMoves) {
+      S.hudTMoves = sig;
+      hud.tmoves.innerHTML = m.moves.map((mv, i) => `<button class="ah-tm t${i}" data-i="${i}" style="--c:${TYPE_COLORS[mv.type] || '#888'}"><span>${esc(mv.name)}</span><small>${moveCost(mv)}</small><i class="cd"></i></button>`).join('');
+    }
+    if (f) {
+      const cdk = f.busy ? 1 : clamp(f.cd / S.cdMax, 0, 1);
+      hud.tmoves.querySelectorAll('.ah-tm').forEach((b, i) => {
+        b.querySelector('.cd').style.background = cdk > 0.01 ? `conic-gradient(rgba(10,8,24,.62) ${(cdk * 360).toFixed(0)}deg, transparent 0)` : 'none';
+        b.classList.toggle('q', f.queued === i);
+        b.classList.toggle('poor', P.stamina < moveCost(m.moves[i]));
+      });
+    }
+    // hit: the screen edges flash red (and the phone buzzes)
+    if (S.lastHp != null && m.hp < S.lastHp && f && f.state === 'idle') { buzz(35); hud.hurt.classList.remove('on'); void hud.hurt.offsetWidth; hud.hurt.classList.add('on'); }
+    S.lastHp = m.hp;
     // quest tracker
     const qs = P.quests.active.map(a => { const q = questDef(a.id); return questReady(a) ? `<div class="rdy"><b>✔ ${esc(q.title)}</b><span>Report to ${esc(NPCS.ranger.name)} at camp</span></div>` : `<div><b>${esc(q.title)}</b><span>${esc(q.desc)}</span>${q.goal.n > 1 ? `<i>${Math.min(a.n, q.goal.n)}/${q.goal.n}</i>` : ''}</div>`; }).join('')
       + (nextQuest() && P.quests.active.length < 3 ? `<div class="rdy"><b>${P.quests.active.length ? 'More work' : 'Find work'}</b><span>Talk to ${esc(NPCS.ranger.name)} at camp</span></div>` : '');
@@ -1054,7 +1121,7 @@ const Adventure = (() => {
   //  The host: what retro.js asks the open world
   // ---------------------------------------------------------------------
   const host = {
-    cfg: { range: ADV.range, detect: ADV.detect, leash: ADV.leash, wander: ADV.wander, light: ADV.light, maxWild: ADV.maxWild, maxAttackers: ADV.maxAttackers },
+    cfg: { range: ADV.range, wildRange: ADV.wildRange, notice: ADV.notice, weakGap: ADV.weakGap, strongGap: ADV.strongGap, detect: ADV.detect, leash: ADV.leash, wander: ADV.wander, light: ADV.light, maxWild: ADV.maxWild, maxAttackers: ADV.maxAttackers },
     input,
     speed(f) {
       if (f.p === 0) return ADV.move.walk * (0.9 + baseSpe(f.mon) / 500) * (P.dashing ? ADV.move.dashMul : 1) * (P.hunger <= 0 ? 0.85 : 1);
@@ -1091,6 +1158,7 @@ const Adventure = (() => {
       const b = OW.biomeAt(f.x, f.y);
       if (b !== S.lastBiome) {
         S.lastBiome = b;
+        if (BIOME_PLAY[b].lv[0] >= P.level + 3) note(`<b class="aw">CAREFUL</b> Wild Pokémon in the ${esc(OW.BIOMES[b].name)} are Lv ${BIOME_PLAY[b].lv[0]}-${BIOME_PLAY[b].lv[1]}; you are Lv ${P.level}.`);
         if (!P.biomes.includes(b)) { P.biomes.push(b); if (P.biomes.length > 1) { wm.big(OW.BIOMES[b].name.toUpperCase(), 'small', 2200); gainXp(ADV.xp.biome * OW.ORDER.indexOf(b), `Entered the ${OW.BIOMES[b].name}`); } }
         else note(`${esc(OW.BIOMES[b].name)} · Lv ${BIOME_PLAY[b].lv[0]}-${BIOME_PLAY[b].lv[1]}`);
       }
@@ -1154,6 +1222,8 @@ const Adventure = (() => {
       for (const a of P.quests.active) a.told = questReady(a);
       updateRecButtons();
       addEventListener('keydown', onKeyDown); addEventListener('keyup', onKeyUp); addEventListener('blur', onBlur); addEventListener('touchstart', onTouchStart, { passive: true });
+      document.getElementById('rcv').addEventListener('pointerdown', onPick); addEventListener('resize', orient);
+      orient();
       S.lastBiome = null; S.saveT = 0; S.encT = 2; S.respawnAt = 0; S.combatT = -99;
       if (!P.biomes.length) { P.biomes.push('grass'); S.lastBiome = 'grass'; }
       explore(wm.player);
@@ -1171,7 +1241,11 @@ const Adventure = (() => {
     if (active && doSave) save();
     active = false; panel = null; hud = null; near = null;
     removeEventListener('keydown', onKeyDown); removeEventListener('keyup', onKeyUp); removeEventListener('blur', onBlur); removeEventListener('touchstart', onTouchStart);
-    Object.assign(touch, { mag: 0, dash: false, id: null });
+    Object.assign(touch, { mag: 0, run: false, id: null });
+    document.getElementById('rcv').removeEventListener('pointerdown', onPick);
+    removeEventListener('resize', orient);
+    document.body.classList.remove('rotLand');
+    if (document.fullscreenElement) { try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {} document.exitFullscreen().catch(() => {}); }
     keys.clear();
     document.body.classList.remove('adventure');
     $('pmExit').textContent = '✕ Exit to team builder';
@@ -1196,17 +1270,19 @@ const Adventure = (() => {
       ${sv ? `<div class="adv-cont"><img src="${DEX.species[sv.species].sprite}" alt=""><div><b>${esc(DEX.species[sv.species].display)}</b> · Lv ${sv.level}<br><small>${sv.discovered.length} places found · ${sv.quests.done.length} quests done · seed ${sv.seed}</small></div><button class="btn" id="advContinue">▶ Continue</button></div>` : ''}
       <h3>${sv ? 'Or start a new adventure' : 'Choose your partner'}</h3>
       <div class="adv-grid">${list.map(n => { const s = DEX.species[n]; return `<button class="adv-st" data-sp="${n}" title="${esc(s.display)}"><img loading="lazy" src="${s.sprite}" alt=""><span>${esc(s.display)}</span><small>${s.types.join(' / ')}</small></button>`; }).join('')}</div>
-      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><button class="btn alt" id="advBack">Back</button></div>
+      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><label title="On a phone held upright the game turns to landscape"><input type="checkbox" id="advLand" ${prefs.advLandscape === false ? '' : 'checked'}> 📱 Landscape on phones</label><button class="btn alt" id="advBack">Back</button></div>
       ${sv ? '<p class="adv-warn">Starting a new adventure replaces your saved one.</p>' : ''}
     </div>`;
     menu.classList.remove('hidden');
     $('builder').classList.add('hidden');
+    menu.querySelector('#advLand').onchange = e => { prefs.advLandscape = e.target.checked; savePrefs(); };
     menu.querySelector('#advBack').onclick = () => { menu.classList.add('hidden'); $('builder').classList.remove('hidden'); };
-    if (sv) menu.querySelector('#advContinue').onclick = () => start(sv);
+    if (sv) menu.querySelector('#advContinue').onclick = () => { goLandscape(); start(sv); };
     menu.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {
       if (sv && !confirm('Start over? Your saved adventure will be replaced.')) return;
       const typed = menu.querySelector('#advSeed').value.trim();
       const seed = typed ? (/^\d+$/.test(typed) ? +typed : [...typed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261)) % 4294967295 || 1 : 1 + Math.floor(Math.random() * 2147483646);
+      goLandscape();
       start(newRun(b.dataset.sp, seed));
     });
   }

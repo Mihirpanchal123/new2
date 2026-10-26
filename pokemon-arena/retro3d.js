@@ -265,10 +265,11 @@ export function renderAll(list) {
   if (r.lost) return;
   frameNo++;
   // sprite-like stepping: a Pokémon gets a new frame RETRO.fps times a second, or at once when an action starts
-  const now = performance.now(), due = list.filter(s => s.urgent || now - s.lastT >= 1000 / RETRO.fps - 2);
+  // (a model may set its own fps / turns / prio: the Pokémon the player steers in Adventure renders smoother and first)
+  const now = performance.now(), due = list.filter(s => s.urgent || now - s.lastT >= 1000 / (s.fps || RETRO.fps) - 2);
   if (!due.length) return;
   const n = Math.max(1, Math.min(due.length, Math.floor(BUDGET_MS / costPer)));
-  const pick = due.length <= n ? due : due.sort((a, b) => (b.urgent - a.urgent) || (a.last - b.last)).slice(0, n);
+  const pick = due.length <= n ? due : due.sort((a, b) => (b.urgent - a.urgent) || ((b.prio || 0) - (a.prio || 0)) || (a.last - b.last)).slice(0, n);
   let w = 0, h = 0;
   for (const s of pick) { w += s.fr.w * 2; h = Math.max(h, s.fr.h); }
   // grown with headroom: resizing reallocates the drawing buffer, so it happens once or twice, not every time the batch grows
@@ -835,8 +836,8 @@ class Live extends Stage {
     this.yaw += d * Math.min(1, dt * (this.shot ? 18 : 10));
     // shown at one of a few fixed angles, like sprite turns; it moves to the next one only once the turn is well past
     // the midpoint, so a facing near a boundary never flickers between two
-    const turn = 2 * Math.PI / RETRO.turns;
-    if (!RETRO.turns) this.pivot.rotation.y = this.yaw;
+    const turns = this.turns ?? RETRO.turns, turn = 2 * Math.PI / turns;
+    if (!turns) this.pivot.rotation.y = this.yaw;
     else {
       if (this.snap == null || Math.abs(Math.atan2(Math.sin(this.yaw - this.snap * turn), Math.cos(this.yaw - this.snap * turn))) > turn * 0.7) this.snap = Math.round(this.yaw / turn);
       this.pivot.rotation.y = this.snap * turn;

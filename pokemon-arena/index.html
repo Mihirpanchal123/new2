@@ -714,27 +714,50 @@
   .ah-opts { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 6); }
   .ah-opts .ah-btn { margin: 0; font-size: calc(var(--u) * 15); }
   .ah-opts kbd { margin-right: calc(var(--u) * 4); }
-  /* touch: a stick on the left, DASH and E on the right, the menus above them */
+  /* touch: a floating stick (left part of the screen), the moves in an arc around E (right), RUN, the menus on top */
   .ah-touch { position: absolute; inset: 0; pointer-events: none; display: none; }
   body.touchUI .ah-touch { display: block; }
-  body.touchUI .ah-keys { display: none; }
-  body.adventure #retro { touch-action: none; }
-  .ah-stick { position: absolute; left: calc(var(--u) * 30); bottom: calc(var(--u) * 28); width: calc(var(--u) * 200); height: calc(var(--u) * 200); border-radius: 50%; background: rgba(22,16,36,.35); border: calc(var(--u) * 4) solid rgba(255,255,255,.35); pointer-events: auto; touch-action: none; }
-  .ah-stick i { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 86); height: calc(var(--u) * 86); margin: calc(var(--u) * -43) 0 0 calc(var(--u) * -43); border-radius: 50%; background: rgba(255,255,255,.8); border: calc(var(--u) * 4) solid #1b1530; pointer-events: none; }
-  .ah-acts { position: absolute; right: calc(var(--u) * 28); bottom: calc(var(--u) * 34); display: flex; gap: calc(var(--u) * 16); align-items: flex-end; pointer-events: auto; }
-  .ah-acts button, .ah-tmenu button { font-family: Tiny5, monospace; color: #1b1530; border: calc(var(--u) * 4) solid #1b1530; box-shadow: 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); touch-action: none; cursor: pointer; }
-  .ah-acts button { width: calc(var(--u) * 112); height: calc(var(--u) * 112); border-radius: 50%; font-size: calc(var(--u) * 22); padding: 0; }
-  .ah-acts .dash { background: #60a5fa; margin-bottom: calc(var(--u) * 40); } .ah-acts .dash.on { background: #fde047; }
-  .ah-acts .use { background: #facc15; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .ah-acts .use b { font-weight: 400; font-size: calc(var(--u) * 40); line-height: 1; } .ah-acts .use small { font-size: calc(var(--u) * 13); }
-  .ah-tmenu { position: absolute; right: calc(var(--u) * 28); bottom: calc(var(--u) * 196); display: flex; gap: calc(var(--u) * 8); pointer-events: auto; }
-  .ah-tmenu button { font-size: calc(var(--u) * 14); padding: calc(var(--u) * 6) calc(var(--u) * 10); border-radius: calc(var(--u) * 10); background: #f8fafc; }
-  body.touchUI .ah-mv { width: calc(var(--u) * 118); }
+  body.touchUI .ah-keys, body.touchUI .ah-moves { display: none; }
+  body.adventure #retro { touch-action: none; -webkit-user-select: none; user-select: none; }
+  .ah-zone { position: absolute; left: 0; top: 30%; bottom: 0; width: 44%; pointer-events: auto; touch-action: none; }
+  .ah-stick { position: absolute; left: calc(var(--u) * 46); bottom: calc(var(--u) * 40); width: calc(var(--u) * 270); height: calc(var(--u) * 270); border-radius: 50%; background: radial-gradient(circle, rgba(22,16,36,.18), rgba(22,16,36,.42)); border: calc(var(--u) * 5) solid rgba(255,255,255,.5); box-shadow: 0 0 0 calc(var(--u) * 3) rgba(27,21,48,.5); pointer-events: none; transition: opacity .2s; }
+  .ah-stick.idle { opacity: .55; }
+  .ah-stick i { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 118); height: calc(var(--u) * 118); margin: calc(var(--u) * -59) 0 0 calc(var(--u) * -59); border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffffff, #dfe7f5); border: calc(var(--u) * 5) solid #1b1530; box-shadow: 0 calc(var(--u) * 5) 0 rgba(0,0,0,.3); }
+  .ah-run { position: absolute; right: calc(var(--u) * 392); bottom: calc(var(--u) * 26); width: calc(var(--u) * 96); height: calc(var(--u) * 96); border-radius: 50%; font-family: Tiny5, monospace; font-size: calc(var(--u) * 22); color: #1b1530; background: #93c5fd; border: calc(var(--u) * 4) solid #1b1530; box-shadow: 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); pointer-events: auto; touch-action: none; }
+  .ah-run.on { background: #fde047; box-shadow: 0 0 0 calc(var(--u) * 5) rgba(253,224,71,.45), 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); }
+  .ah-tmenu { position: absolute; left: 50%; top: max(calc(var(--u) * 64), 42px); transform: translateX(-50%); display: flex; gap: calc(var(--u) * 8); pointer-events: auto; }
+  .ah-tmenu button { font-family: Tiny5, monospace; font-size: calc(var(--u) * 17); padding: calc(var(--u) * 9) calc(var(--u) * 14); border-radius: calc(var(--u) * 12); background: #f8fafc; color: #1b1530; border: calc(var(--u) * 3) solid #1b1530; box-shadow: 0 calc(var(--u) * 4) 0 rgba(0,0,0,.35); touch-action: manipulation; }
+  .ah-cluster { position: absolute; right: 0; bottom: 0; width: calc(var(--u) * 480); height: calc(var(--u) * 430); pointer-events: none; }
+  .ah-use { position: absolute; right: calc(var(--u) * 82); bottom: calc(var(--u) * 62); width: calc(var(--u) * 136); height: calc(var(--u) * 136); border-radius: 50%; background: #facc15; color: #1b1530; border: calc(var(--u) * 5) solid #1b1530; box-shadow: 0 calc(var(--u) * 6) 0 rgba(0,0,0,.35); font-family: Tiny5, monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; touch-action: none; }
+  .ah-use b { font-weight: 400; font-size: calc(var(--u) * 46); line-height: 1; } .ah-use small { font-size: calc(var(--u) * 14); }
+  /* four moves on an arc around E: left, upper-left, up, upper-right (centre of E: 150u from the right, 130u from the bottom) */
+  .ah-tm { position: absolute; width: calc(var(--u) * 114); height: calc(var(--u) * 114); margin: calc(var(--u) * -57); border-radius: 50%; background: var(--c); color: #fff; border: calc(var(--u) * 4) solid #1b1530; box-shadow: inset 0 calc(var(--u) * -8) 0 rgba(0,0,0,.22), 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); font-family: Tiny5, monospace; padding: 0 calc(var(--u) * 6); overflow: hidden; pointer-events: auto; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ah-tm span { font-size: calc(var(--u) * 15); line-height: 1.05; text-align: center; -webkit-text-stroke: calc(var(--u) * 4) #1b1530; paint-order: stroke fill; position: relative; z-index: 1; }
+  .ah-tm small { font-size: calc(var(--u) * 13); color: #fde047; -webkit-text-stroke: calc(var(--u) * 3.5) #1b1530; paint-order: stroke fill; position: relative; z-index: 1; }
+  .ah-tm .cd { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; }
+  .ah-tm.q { box-shadow: 0 0 0 calc(var(--u) * 5) #facc15, inset 0 calc(var(--u) * -8) 0 rgba(0,0,0,.22); }
+  .ah-tm.poor span { opacity: .5; } .ah-tm.poor small { color: #f87171; }
+  .ah-tm:active, .ah-use:active, .ah-run:active { transform: scale(.94); }
+  .ah-tm.t0 { right: calc(var(--u) * 318); bottom: calc(var(--u) * 116); }
+  .ah-tm.t1 { right: calc(var(--u) * 276); bottom: calc(var(--u) * 236); }
+  .ah-tm.t2 { right: calc(var(--u) * 172); bottom: calc(var(--u) * 302); }
+  .ah-tm.t3 { right: calc(var(--u) * 58); bottom: calc(var(--u) * 268); }
   body.touchUI .ah-feed { top: calc(var(--u) * 140); }
-  body.touchUI #retro.port .ah-moves { width: calc(var(--u) * 226); } body.touchUI #retro.port .ah-mv { width: calc(var(--u) * 106); }
-  body.touchUI #retro.port .ah-stick { left: calc(var(--u) * 12); width: calc(var(--u) * 160); height: calc(var(--u) * 160); }
-  body.touchUI #retro.port .ah-acts { right: calc(var(--u) * 10); gap: calc(var(--u) * 10); } body.touchUI #retro.port .ah-acts button { width: calc(var(--u) * 92); height: calc(var(--u) * 92); }
-  body.touchUI #retro.port .ah-tmenu { right: calc(var(--u) * 10); bottom: calc(var(--u) * 176); }
+  body.touchUI .ah-bar { bottom: calc(var(--u) * 10); }
+  /* hit: the screen edges flash red */
+  .ah-hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 calc(var(--u) * 110) calc(var(--u) * 10) rgba(255,30,30,.6); }
+  .ah-hurt.on { animation: ahHurt .45s ease-out; }
+  @keyframes ahHurt { 0% { opacity: 1; } 100% { opacity: 0; } }
+  /* landscape on a phone held upright: the whole game frame is turned 90° (it measures itself as landscape) */
+  body.rotLand #frame { position: fixed; inset: auto; top: 0; left: 100vw; width: 100vh; height: 100vw; transform: rotate(90deg); transform-origin: top left; }
+  body.rotLand.shorts #frame { left: 100vw; width: 100vh; transform: rotate(90deg); }
+  /* portrait (the landscape toggle off): a smaller cluster */
+  body.touchUI #retro.port .ah-stick { width: calc(var(--u) * 220); height: calc(var(--u) * 220); left: calc(var(--u) * 20); }
+  body.touchUI #retro.port .ah-run { right: calc(var(--u) * 330); bottom: calc(var(--u) * 260); }
+  body.touchUI #retro.port .ah-cluster { transform: scale(.82); transform-origin: right bottom; }
+  body.touchUI #retro.port .ah-tmenu { left: auto; right: calc(var(--u) * 14); top: calc(var(--u) * 300); transform: none; flex-direction: column; align-items: stretch; }
+  body.adventure.touchUI #retro.port ~ #battleCtl { top: 84px; left: 10px; transform: none; }
+  body.adventure.touchUI #retro.port ~ #recBtn { display: none; }
 </style>
 </head>
 <body>
