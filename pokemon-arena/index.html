@@ -748,10 +748,7 @@
   .ah-hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 calc(var(--u) * 110) calc(var(--u) * 10) rgba(255,30,30,.6); }
   .ah-hurt.on { animation: ahHurt .45s ease-out; }
   @keyframes ahHurt { 0% { opacity: 1; } 100% { opacity: 0; } }
-  /* landscape on a phone held upright: the whole game frame is turned 90° (it measures itself as landscape) */
-  body.rotLand #frame { position: fixed; inset: auto; top: 0; left: 100vw; width: 100vh; height: 100vw; transform: rotate(90deg); transform-origin: top left; }
-  body.rotLand.shorts #frame { left: 100vw; width: 100vh; transform: rotate(90deg); }
-  /* portrait (the landscape toggle off): a smaller cluster */
+  /* portrait (a phone held upright): the same controls, sized for a narrow screen */
   body.touchUI #retro.port .ah-stick { width: calc(var(--u) * 220); height: calc(var(--u) * 220); left: calc(var(--u) * 20); }
   body.touchUI #retro.port .ah-run { right: calc(var(--u) * 330); bottom: calc(var(--u) * 260); }
   body.touchUI #retro.port .ah-cluster { transform: scale(.82); transform-origin: right bottom; }

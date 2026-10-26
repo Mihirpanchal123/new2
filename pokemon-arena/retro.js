@@ -6174,7 +6174,7 @@ const Retro = (() => {
     if (t && t.state === 'idle' && F[t.p] === t && t !== f && wmDist(t, f) < range * (T - (f.pickT || -99) < 8 ? 1.8 : 1.25) && WM.lit(t)) return t;
     let best = null, bs = Infinity;
     for (const o of F) {
-      if (!o || o === f || o.state !== 'idle' || !WM.lit(o)) continue;
+      if (!o || o === f || o.state !== 'idle' || !WM.lit(o) || !onScreen(o)) continue;   // only what the player can see (portrait screens are narrow)
       const d = wmDist(o, f);
       if (d > range) continue;
       const s = d * (Math.sign(o.x - f.x) === f.face ? 0.8 : 1.15) * (o.aggro ? 0.8 : 1);
@@ -6262,8 +6262,8 @@ const Retro = (() => {
   function wmCamera(dt) {
     if (dt <= 0) return;
     dt = Math.min(dt, 0.05);
-    const pl = F[0], C = WM.cam;
-    let x = camX, y = camY, z = WM.zoom;
+    const pl = F[0], C = WM.cam, z0 = WM.zoom * (portrait ? 0.85 : 1);   // a phone held upright sees a little more of the narrow width
+    let x = camX, y = camY, z = z0;
     if (pl) {
       // look ahead of the walk; the lead itself eases in and out, so starting, stopping and turning never jerk the view
       const k = 1 - Math.exp(-dt * 2.2);
@@ -6275,8 +6275,8 @@ const Retro = (() => {
       const kl = 1 - Math.exp(-dt * 1.8);
       C.lean += ((fo ? 1 : 0) - C.lean) * kl;
       if (fo) { C.fx += (fo.x - pl.x - C.fx) * kl; C.fy += (fo.cy - pl.cy - C.fy) * kl; }
-      const fz = clamp(Math.min(VW / (Math.abs(C.fx) + 520), VH / (Math.abs(C.fy) + 420)), WM.zoom * 0.72, WM.zoom);
-      x += C.fx * 0.35 * C.lean; y += C.fy * 0.35 * C.lean; z = lerp(WM.zoom, fz, C.lean);
+      const fz = clamp(Math.min(VW / (Math.abs(C.fx) + 520), VH / (Math.abs(C.fy) + 420)), z0 * 0.72, z0);
+      x += C.fx * 0.35 * C.lean; y += C.fy * 0.35 * C.lean; z = lerp(z0, fz, C.lean);
     }
     let top = null, ease = 0.24;
     for (const s of camShots) if (s.kind !== 'focus' && (!top || s.prio > top.prio || (s.prio === top.prio && s.t0 >= top.t0))) top = s;
@@ -6465,7 +6465,7 @@ const Retro = (() => {
     // the next wild Pokémon in range (nearest first), after the current target
     cycleTarget() {
       const f = F[0]; if (!f || f.state !== 'idle') return null;
-      const list = F.filter(o => o && o.p && o.state === 'idle' && WM.lit(o) && wmDist(o, f) < WM.host.cfg.range * 1.3).sort((a, b) => wmDist(a, f) - wmDist(b, f));
+      const list = F.filter(o => o && o.p && o.state === 'idle' && WM.lit(o) && onScreen(o) && wmDist(o, f) < WM.host.cfg.range * 1.3).sort((a, b) => wmDist(a, f) - wmDist(b, f));
       if (!list.length) return null;
       const next = list[(list.indexOf(f.target) + 1) % list.length];
       this.setTarget(next);

@@ -792,14 +792,13 @@ const Adventure = (() => {
   }
   // ---- touch: a floating stick (it appears where the left thumb lands), the four moves in an arc around E (right),
   // RUN (a toggle), the menus. Pointer events, so a mouse can use them too. They show on touch screens, or as soon
-  // as the screen is touched. On a phone held upright the game turns to landscape (see orient) ----
+  // as the screen is touched. The layout follows the screen: portrait when the phone is upright, landscape sideways ----
   const touch = { x: 0, y: 0, mag: 0, run: false, id: null, upT: 0 };
   const isTouch = () => matchMedia('(pointer: coarse)').matches;
-  const onTouchStart = () => { if (!document.body.classList.contains('touchUI')) { document.body.classList.add('touchUI'); orient(); } };
+  const onTouchStart = () => document.body.classList.add('touchUI');
   const buzz = ms => { try { if (document.body.classList.contains('touchUI') && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
-  // a pointer position on the game frame (CSS px from its top-left), also when the frame is turned to landscape
+  // a pointer position on the game frame (CSS px from its top-left)
   function frameXY(e) {
-    if (document.body.classList.contains('rotLand')) return { x: e.clientY, y: innerWidth - e.clientX };
     const r = document.getElementById('frame').getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
@@ -834,7 +833,7 @@ const Adventure = (() => {
     const run = el.querySelector('[data-t="run"]');
     run.addEventListener('pointerdown', e => { e.preventDefault(); touch.run = !touch.run; touch.upT = performance.now(); buzz(10); });   // (it stays on until you stand still a moment)
     el.querySelector('[data-t="use"]').addEventListener('pointerdown', e => { e.preventDefault(); buzz(10); if (panel === 'talk') closePanel(); else interact(); });
-    el.querySelectorAll('.ah-tmenu [data-t]').forEach(b => b.onclick = () => { buzz(8); if (b.dataset.t === 'rotate') { prefs.advLandscape = prefs.advLandscape === false; savePrefs(); orient(); toast(prefs.advLandscape === false ? 'Landscape off: the game follows your phone.' : 'Landscape on.', 1800); } else togglePanel(b.dataset.t); });
+    el.querySelectorAll('.ah-tmenu [data-t]').forEach(b => b.onclick = () => { buzz(8); togglePanel(b.dataset.t); });
     hud.tmoves.addEventListener('pointerdown', e => { const b = e.target.closest('[data-i]'); if (!b) return; e.preventDefault(); buzz(12); useMove(+b.dataset.i); });
     hud.use = el.querySelector('[data-t="use"] small'); hud.run = run;
     if (isTouch()) document.body.classList.add('touchUI');
@@ -844,22 +843,6 @@ const Adventure = (() => {
     if (!active || panel || !wm) return;
     const p = frameXY(e), w = wm.toWorld(p.x, p.y), o = wm.wildAt(w.x, w.y);
     if (o && wm.setTarget(o)) buzz(10);
-  }
-  // landscape on phones: real fullscreen + orientation lock where the browser allows it, else the game frame is
-  // turned 90° while the phone is held upright (Settings: the ⟳ button; remembered)
-  function orient() {
-    const want = active && document.body.classList.contains('touchUI') && prefs.advLandscape !== false && innerHeight > innerWidth;
-    if (document.body.classList.contains('rotLand') === want) return;
-    document.body.classList.toggle('rotLand', want);
-    dispatchEvent(new Event('resize'));
-  }
-  function goLandscape() {
-    if (!isTouch() || prefs.advLandscape === false) return;
-    try {
-      const el = document.documentElement;
-      const fs = !document.fullscreenElement && el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve();
-      fs.then(() => screen.orientation && screen.orientation.lock ? screen.orientation.lock('landscape') : null).catch(() => {}).finally(orient);
-    } catch (e) {}
   }
   function input(f, dt) {
     let x = 0, y = 0;
@@ -926,7 +909,7 @@ const Adventure = (() => {
       <div class="ah-hurt"></div>
       <div class="ah-touch"><div class="ah-zone"></div><div class="ah-stick idle"><i></i></div>
         <button class="ah-run" data-t="run">RUN</button>
-        <div class="ah-tmenu"><button data-t="bag">BAG</button><button data-t="moves">MOVES</button><button data-t="quests">QUESTS</button><button data-t="rotate" title="Landscape on/off">⟳</button></div>
+        <div class="ah-tmenu"><button data-t="bag">BAG</button><button data-t="moves">MOVES</button><button data-t="quests">QUESTS</button></div>
         <div class="ah-cluster"><div class="ah-tmoves"></div><button class="ah-use" data-t="use"><b>E</b><small></small></button></div></div>
       <div class="ah-panel hidden"></div>`;
     const $q = s => el.querySelector(s);
@@ -1222,8 +1205,7 @@ const Adventure = (() => {
       for (const a of P.quests.active) a.told = questReady(a);
       updateRecButtons();
       addEventListener('keydown', onKeyDown); addEventListener('keyup', onKeyUp); addEventListener('blur', onBlur); addEventListener('touchstart', onTouchStart, { passive: true });
-      document.getElementById('rcv').addEventListener('pointerdown', onPick); addEventListener('resize', orient);
-      orient();
+      document.getElementById('rcv').addEventListener('pointerdown', onPick);
       S.lastBiome = null; S.saveT = 0; S.encT = 2; S.respawnAt = 0; S.combatT = -99;
       if (!P.biomes.length) { P.biomes.push('grass'); S.lastBiome = 'grass'; }
       explore(wm.player);
@@ -1243,9 +1225,7 @@ const Adventure = (() => {
     removeEventListener('keydown', onKeyDown); removeEventListener('keyup', onKeyUp); removeEventListener('blur', onBlur); removeEventListener('touchstart', onTouchStart);
     Object.assign(touch, { mag: 0, run: false, id: null });
     document.getElementById('rcv').removeEventListener('pointerdown', onPick);
-    removeEventListener('resize', orient);
-    document.body.classList.remove('rotLand');
-    if (document.fullscreenElement) { try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {} document.exitFullscreen().catch(() => {}); }
+
     keys.clear();
     document.body.classList.remove('adventure');
     $('pmExit').textContent = '✕ Exit to team builder';
@@ -1270,19 +1250,17 @@ const Adventure = (() => {
       ${sv ? `<div class="adv-cont"><img src="${DEX.species[sv.species].sprite}" alt=""><div><b>${esc(DEX.species[sv.species].display)}</b> · Lv ${sv.level}<br><small>${sv.discovered.length} places found · ${sv.quests.done.length} quests done · seed ${sv.seed}</small></div><button class="btn" id="advContinue">▶ Continue</button></div>` : ''}
       <h3>${sv ? 'Or start a new adventure' : 'Choose your partner'}</h3>
       <div class="adv-grid">${list.map(n => { const s = DEX.species[n]; return `<button class="adv-st" data-sp="${n}" title="${esc(s.display)}"><img loading="lazy" src="${s.sprite}" alt=""><span>${esc(s.display)}</span><small>${s.types.join(' / ')}</small></button>`; }).join('')}</div>
-      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><label title="On a phone held upright the game turns to landscape"><input type="checkbox" id="advLand" ${prefs.advLandscape === false ? '' : 'checked'}> 📱 Landscape on phones</label><button class="btn alt" id="advBack">Back</button></div>
+      <div class="adv-row"><label>World seed <input id="advSeed" type="text" placeholder="random" maxlength="10"></label><button class="btn alt" id="advBack">Back</button></div>
       ${sv ? '<p class="adv-warn">Starting a new adventure replaces your saved one.</p>' : ''}
     </div>`;
     menu.classList.remove('hidden');
     $('builder').classList.add('hidden');
-    menu.querySelector('#advLand').onchange = e => { prefs.advLandscape = e.target.checked; savePrefs(); };
     menu.querySelector('#advBack').onclick = () => { menu.classList.add('hidden'); $('builder').classList.remove('hidden'); };
-    if (sv) menu.querySelector('#advContinue').onclick = () => { goLandscape(); start(sv); };
+    if (sv) menu.querySelector('#advContinue').onclick = () => start(sv);
     menu.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {
       if (sv && !confirm('Start over? Your saved adventure will be replaced.')) return;
       const typed = menu.querySelector('#advSeed').value.trim();
       const seed = typed ? (/^\d+$/.test(typed) ? +typed : [...typed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261)) % 4294967295 || 1 : 1 + Math.floor(Math.random() * 2147483646);
-      goLandscape();
       start(newRun(b.dataset.sp, seed));
     });
   }
