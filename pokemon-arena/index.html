@@ -703,6 +703,38 @@
   #retro.port .ah-map { width: calc(var(--u) * 170); } #retro.port .ah-quests { top: calc(var(--u) * 168); width: calc(var(--u) * 170); }
   #retro.port .ah-bar { flex-direction: column; align-items: center; } #retro.port .ah-mv { width: calc(var(--u) * 160); } #retro.port .ah-moves { flex-wrap: wrap; justify-content: center; width: calc(var(--u) * 340); }
   #retro.port .ah-keys { display: none; } #retro.port .ah-cols { grid-template-columns: 1fr; }
+  .ah-quests div.rdy { border-left-color: #86efac; } .ah-quests div.rdy b { color: #86efac; }
+  .ah-quest em { font-style: normal; color: #86efac; }
+  /* dialogue with the people of the world: a box above the move bar (the world holds still meanwhile) */
+  .ah-panel.ah-talk { top: auto; bottom: calc(var(--u) * 84); transform: translateX(-50%); width: min(calc(var(--u) * 900), 96%); display: flex; gap: calc(var(--u) * 16); align-items: flex-start; padding: calc(var(--u) * 14) calc(var(--u) * 18); }
+  .ah-talk > img { width: calc(var(--u) * 96); height: calc(var(--u) * 86); flex: none; image-rendering: pixelated; border-radius: calc(var(--u) * 10); border: calc(var(--u) * 3) solid #facc15; box-shadow: 0 0 0 calc(var(--u) * 2) #1b1530; }
+  .ah-talk > div { flex: 1; }
+  .ah-talk b { font-weight: 400; font-size: calc(var(--u) * 20); color: #fde68a; }
+  .ah-talk p { font-size: calc(var(--u) * 17); line-height: 1.35; margin: calc(var(--u) * 4) 0 calc(var(--u) * 8); }
+  .ah-opts { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 6); }
+  .ah-opts .ah-btn { margin: 0; font-size: calc(var(--u) * 15); }
+  .ah-opts kbd { margin-right: calc(var(--u) * 4); }
+  /* touch: a stick on the left, DASH and E on the right, the menus above them */
+  .ah-touch { position: absolute; inset: 0; pointer-events: none; display: none; }
+  body.touchUI .ah-touch { display: block; }
+  body.touchUI .ah-keys { display: none; }
+  body.adventure #retro { touch-action: none; }
+  .ah-stick { position: absolute; left: calc(var(--u) * 30); bottom: calc(var(--u) * 28); width: calc(var(--u) * 200); height: calc(var(--u) * 200); border-radius: 50%; background: rgba(22,16,36,.35); border: calc(var(--u) * 4) solid rgba(255,255,255,.35); pointer-events: auto; touch-action: none; }
+  .ah-stick i { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 86); height: calc(var(--u) * 86); margin: calc(var(--u) * -43) 0 0 calc(var(--u) * -43); border-radius: 50%; background: rgba(255,255,255,.8); border: calc(var(--u) * 4) solid #1b1530; pointer-events: none; }
+  .ah-acts { position: absolute; right: calc(var(--u) * 28); bottom: calc(var(--u) * 34); display: flex; gap: calc(var(--u) * 16); align-items: flex-end; pointer-events: auto; }
+  .ah-acts button, .ah-tmenu button { font-family: Tiny5, monospace; color: #1b1530; border: calc(var(--u) * 4) solid #1b1530; box-shadow: 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); touch-action: none; cursor: pointer; }
+  .ah-acts button { width: calc(var(--u) * 112); height: calc(var(--u) * 112); border-radius: 50%; font-size: calc(var(--u) * 22); padding: 0; }
+  .ah-acts .dash { background: #60a5fa; margin-bottom: calc(var(--u) * 40); } .ah-acts .dash.on { background: #fde047; }
+  .ah-acts .use { background: #facc15; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ah-acts .use b { font-weight: 400; font-size: calc(var(--u) * 40); line-height: 1; } .ah-acts .use small { font-size: calc(var(--u) * 13); }
+  .ah-tmenu { position: absolute; right: calc(var(--u) * 28); bottom: calc(var(--u) * 196); display: flex; gap: calc(var(--u) * 8); pointer-events: auto; }
+  .ah-tmenu button { font-size: calc(var(--u) * 14); padding: calc(var(--u) * 6) calc(var(--u) * 10); border-radius: calc(var(--u) * 10); background: #f8fafc; }
+  body.touchUI .ah-mv { width: calc(var(--u) * 118); }
+  body.touchUI .ah-feed { top: calc(var(--u) * 140); }
+  body.touchUI #retro.port .ah-moves { width: calc(var(--u) * 226); } body.touchUI #retro.port .ah-mv { width: calc(var(--u) * 106); }
+  body.touchUI #retro.port .ah-stick { left: calc(var(--u) * 12); width: calc(var(--u) * 160); height: calc(var(--u) * 160); }
+  body.touchUI #retro.port .ah-acts { right: calc(var(--u) * 10); gap: calc(var(--u) * 10); } body.touchUI #retro.port .ah-acts button { width: calc(var(--u) * 92); height: calc(var(--u) * 92); }
+  body.touchUI #retro.port .ah-tmenu { right: calc(var(--u) * 10); bottom: calc(var(--u) * 176); }
 </style>
 </head>
 <body>

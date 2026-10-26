@@ -381,6 +381,7 @@ const Overworld = (() => {
       if (o === O.TALLGRASS) for (let k = 0; k < 7; k++) { const x = x0 + hash(wx, wy, k) * 14 + 1, y = y0 + hash(wx, wy, k + 9) * 12 + 3; P_(g, '#2f6e2a', x, y, 1, 3); P_(g, '#4b9a3a', x + 1, y - 1, 1, 4); P_(g, '#7cc860', x + 2, y, 1, 2); }
       if (o === O.REED) for (let k = 0; k < 4; k++) { const x = x0 + 3 + k * 3, y = y0 + 4 + hash(wx, wy, k) * 4; P_(g, '#4f7a2e', x, y, 1, 8); P_(g, '#7a4a26', x, y - 2, 1, 3); }
       if (gk === G.GRASS && o === O.NONE && hash(wx, wy, 13) < 0.08) for (let k = 0; k < 3; k++) P_(g, ['#ffffff', '#ffe066', '#ff8ac4', '#9ad0ff'][Math.floor(hash(wx, wy, k + 20) * 4)], x0 + hash(wx, wy, k + 30) * 14, y0 + hash(wx, wy, k + 40) * 14, 1, 1);
+      if (gk === G.HIGH && o === O.NONE && hash(wx, wy, 17) < 0.3) for (let k = 0; k < 3; k++) { const x = x0 + hash(wx, wy, k + 50) * 13, y = y0 + 3 + hash(wx, wy, k + 60) * 11; P_(g, '#6f7f56', x, y, 3, 2); P_(g, '#8c9c6a', x + 1, y - 1, 1, 2); if (hash(wx, wy, k + 70) < 0.25) P_(g, hash(wx, wy, k + 80) < 0.5 ? '#c8a8e8' : '#ffffff', x + 1, y - 2, 1, 1); }
       if ((gk === G.HIGH || gk === G.CAVE) && hash(wx, wy, 14) < 0.12) { const x = x0 + hash(wx, wy, 15) * 12, y = y0 + hash(wx, wy, 16) * 12; P_(g, 'rgba(0,0,0,.25)', x, y + 1, 3, 1); P_(g, gk === G.CAVE ? '#a8907e' : '#b8bfae', x, y, 3, 1); }
       if (gk === G.WATER) {
         // a darker rim where water meets land
@@ -469,7 +470,6 @@ const Overworld = (() => {
       [O.ROCK]: { any: [rock(1, '#d8d8d0', '#a0a098', '#6e6e68'), rock(0.9, '#d0ccc0', '#9a968a', '#666258')] },
       [O.BOULDER]: { any: [rock(1.5, '#d8d8d0', '#a0a098', '#6e6e68'), rock(1.35, '#ccc6b8', '#968e80', '#625a50')] },
       [O.WALL]: { front: [block('#2a2026', '#3e3238', '#5e4a46', '#40322f')], top: [topOnly('#2a2026', '#382b31')] },
-      [O.CLIFF]: { front: [block('#8a9a6e', '#a4b488', '#7a7464', '#5e584c')], top: [topOnly('#8a9a6e', '#9aaa7e')], snow: [block('#e8f0f8', '#ffffff', '#7a7464', '#5e584c')], snowTop: [topOnly('#e8f0f8', '#ffffff')] },
       [O.RUINWALL]: { front: [bricks()], top: [topOnly('#a89c84', '#bcb096')] },
       [O.PILLAR]: { any: [pillar(false), pillar(true), pillar(false)] },
       [O.DEADTREE]: { any: [dead(), dead()] }
@@ -515,6 +515,46 @@ const Overworld = (() => {
       campfire: sprite(20, 16, g => { P_(g, 'rgba(0,0,0,.25)', 2, 13, 16, 3); for (const [x, y] of [[3, 12], [9, 13], [13, 12]]) P_(g, '#6e4a2a', x, y, 5, 2); pixCircle(g, '#ff7a1a', 10, 8, 4, 5); pixCircle(g, '#ffd23f', 10, 10, 2, 3); for (let a = 0; a < 6.28; a += 0.8) P_(g, '#8e8a80', 10 + Math.cos(a) * 7, 13 + Math.sin(a) * 2, 2, 2); })
     };
   }
+  // Highland cliffs: each tile is drawn knowing its neighbours, so a group of cliff tiles reads as one rock formation:
+  // a lit plateau (grass or snow) on top, a layered rock face with cracks where the ground drops away to the south
+  // (with its shadow on the ground), and a dark outline wherever the formation ends. Built on first use, then cached.
+  const CLIFFS = new Map();
+  function cliffSprite(snow, south, openL, openR, openN, v) {
+    const key = [snow, south, openL, openR, openN, v].map(Number).join('');
+    if (CLIFFS.has(key)) return CLIFFS.get(key);
+    const PLAT = 16, FACE = 14, H = south ? PLAT : PLAT + FACE + 2;
+    const c = newCanvas(16, H), g = c.getContext('2d');
+    const r = mulberry32(1 + parseInt(key, 3) * 7919), R = (a, b) => a + r() * (b - a);
+    const top = snow ? ['#f5f9fe', '#ffffff', '#d6e2f1', '#ffffff'] : ['#a2b67c', '#b6c88c', '#8c9e68', '#c6d49c'];   // a shade lighter than the ground below
+    // plateau: mottled turf or snow, a few stones poking through
+    P_(g, top[0], 0, 0, 16, PLAT);
+    for (let k = 0; k < 14; k++) P_(g, k % 3 ? top[1] : top[2], R(0, 15), R(0, PLAT - 1), R(1, 3), 1);
+    for (let k = 0; k < 2; k++) { const x = R(2, 12), y = R(2, PLAT - 4); P_(g, '#8e8676', x, y, 3, 2); P_(g, '#b0a690', x, y, 2, 1); }
+    if (!snow && v === 1) for (let k = 0; k < 3; k++) P_(g, ['#c8a8e8', '#ffffff'][k % 2], R(2, 13), R(2, PLAT - 3), 1, 1);   // heather
+    if (!south) {
+      // the rock face: lit at the top, darker toward the foot, layered, cracked
+      const y0 = PLAT;
+      for (let y = 0; y < FACE; y++) P_(g, y < 3 ? '#b4a890' : y < 8 ? '#988e7a' : '#7a7262', 0, y0 + y, 16, 1);
+      for (const sy of [4, 8, 11]) { let x = 0; while (x < 16) { const len = Math.round(R(3, 7)); P_(g, '#625a4c', x, y0 + sy + (r() < 0.3 ? 1 : 0), len, 1); x += len + Math.round(R(1, 3)); } }
+      for (let k = 0; k < 2 + v; k++) { let x = Math.round(R(2, 13)); for (let y = Math.round(R(1, 5)); y < FACE - 1; y++) { if (r() < 0.25) x += r() < 0.5 ? -1 : 1; P_(g, '#4e473c', x, y0 + y); } }
+      for (let k = 0; k < 4; k++) P_(g, '#c8bca2', R(1, 14), y0 + R(1, FACE - 2), 1, 1);
+      if (!snow) for (let k = 0; k < 3; k++) P_(g, '#6f8a4a', R(0, 15), y0 + R(0, 4), R(1, 3), 1);   // moss hanging over the lip
+      P_(g, snow ? '#ffffff' : '#c2d090', 0, y0 - 1, 16, 1);                                       // the lit lip
+      if (snow) for (let k = 0; k < 5; k++) P_(g, '#f2f6fb', R(0, 15), y0, 1, Math.round(R(1, 3)));   // snow drips over the edge
+      P_(g, '#4a443a', 0, y0 + FACE - 1, 16, 1);
+      P_(g, 'rgba(20,16,30,.32)', 0, y0 + FACE, 16, 2);                                           // its shadow on the ground
+      if (openR) for (let y = 0; y < FACE; y++) P_(g, 'rgba(30,24,20,.28)', 13, y0 + y, 3, 1);    // the shaded side
+    }
+    // outlines where the formation ends (the plateau's edge, and the face's sides)
+    const ink = '#2e2a26', rows = south ? PLAT : PLAT + FACE;
+    if (openN) P_(g, ink, 0, 0, 16, 1);
+    if (openL) P_(g, ink, 0, 0, 1, rows);
+    if (openR) P_(g, ink, 15, 0, 1, rows);
+    if (openN && openL) { g.clearRect(0, 0, 1, 1); P_(g, ink, 1, 1); }
+    if (openN && openR) { g.clearRect(15, 0, 1, 1); P_(g, ink, 14, 1); }
+    CLIFFS.set(key, c);
+    return c;
+  }
   // the standing props of one chunk (built once): { x, y (feet, world units), img, w, h }
   function chunkProps(cx, cy) {
     const key = cx + ',' + cy;
@@ -527,10 +567,16 @@ const Overworld = (() => {
       if (!SOLID.has(o)) continue;
       const b = ORDER[W.biomeAt[i]], set = SPR[o], hv = hash(tx, ty, 77);
       let img;
-      if (o === O.WALL || o === O.CLIFF || o === O.RUINWALL) {
+      if (o === O.CLIFF) {
+        const same = (x, y) => inside(x, y) && W.obj[idx(x, y)] === O.CLIFF;
+        const south = same(tx, ty + 1);
+        img = cliffSprite(W.ground[i] === G.SNOW, south, !same(tx - 1, ty), !same(tx + 1, ty), !same(tx, ty - 1), Math.floor(hv * 3));
+        list.push({ x: tx * TW + TW / 2, y: ty * TW + TW + (south ? 0 : 2 * PX), img, top: !south });
+        continue;
+      }
+      if (o === O.WALL || o === O.RUINWALL) {
         const south = inside(tx, ty + 1) && W.obj[idx(tx, ty + 1)] === o;
-        const snow = o === O.CLIFF && W.ground[i] === G.SNOW;
-        img = (south ? (snow ? set.snowTop : set.top) : (snow ? set.snow : set.front))[0];
+        img = (south ? set.top : set.front)[0];
         list.push({ x: tx * TW + TW / 2, y: ty * TW + TW, img, top: !south });
         continue;
       }

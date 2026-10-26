@@ -20,7 +20,7 @@ const Adventure = (() => {
     light: 520,                                        // radius of the light around the player in the caves
     maxWild: 6, maxAttackers: 2,                       // wild Pokémon on the map / attacking at the same time
     gap: { player: [1.6, 0.55], wild: [2.6, 0.95] },   // seconds between attacks, slowest..fastest (from base Speed)
-    xp: { mult: 1.5, elite: 1.8, boss: 4, biome: 40, discover: [0, 80, 150, 260, 420, 700], cache: 30 },
+    xp: { mult: 1.25, elite: 1.8, boss: 4, biome: 40, discover: [0, 80, 150, 260, 420, 700], cache: 30 },
     levelUpHeal: 0.2,                                  // share of max HP restored on a level-up
     stamina: { base: 100, perLevel: 1.5, regen: 16, dash: 26, tired: 1.2 },
     hunger: { drain: 100 / 600, cold: 1.5, dash: 1.6, warn: 30, critical: 10, starveFloor: 0.25, starveRate: 0.01 },
@@ -116,6 +116,26 @@ const Adventure = (() => {
     { id: 'altar', title: 'The Ancient Altar', desc: 'Find the altar at the heart of the ruins.', goal: { type: 'discover', id: 'altar', n: 1 }, reward: { xp: 1200, items: { elixir: 2 } } },
     { id: 'legend', title: 'Legend of the Ruins', desc: 'Defeat the Ancient Guardian.', goal: { type: 'defeat', boss: 'altar', n: 1 }, reward: { xp: 3000, items: { elixir: 3 } } }
   ];
+  // the people of the world (drawn with the pixel-trainer art; outfits as in OUTFITS). where: at the camp, or on the
+  // path of the first region of a biome. The Trader keeps a campfire (a second rest-and-save spot)
+  const NPCS = {
+    ranger: { name: 'Ranger Ivy', where: 'camp', role: 'quests',
+      outfit: { hat: 'cap', hatColor: 0x2e7d32, hatFront: 0xffffff, hair: 0x6b3d1f, hairStyle: 'long', top: 0x3f8a52, sleeves: 'long', inner: 0xe9d8a6, legs: 0x6b5a45, legStyle: 'pants', shoes: 0x4e342e, bag: 0xe9b949 } },
+    hiker: { name: 'Hiker Bram', where: 'forest', role: 'tips', gift: { leppa: 2, tonic: 1 },
+      outfit: { hat: 'beanie', hatColor: 0xc0392b, hatFront: 0xffffff, hair: 0x7a4a26, hairStyle: 'short', top: 0x795548, sleeves: 'long', inner: 0x795548, legs: 0x4e5b31, legStyle: 'pants', shoes: 0x3e2723, bag: 0x46b04a },
+      tips: ['Wild Pokémon with a big red glow are Alphas. Tough, but they always drop something good.',
+        'The Echo Caves are pitch dark past your own light. Bring berries before you go in.',
+        'Up in the Highlands the cold makes you hungry fast. Pack food!',
+        'Out of a fight and well fed, your Pokémon slowly gets its strength back.',
+        'Five Sticks and three Stones make a Campfire Kit: a place to rest anywhere.',
+        'Every landmark has a guardian. Beat it and it stays beaten.'] },
+    trader: { name: 'Trader Milo', where: 'river', role: 'trade', camp: true,
+      outfit: { hat: 'bandana', hatColor: 0x8e44ad, hair: 0x2b1d14, hairStyle: 'short', top: 0xe67e22, sleeves: 'short', inner: 0xf5f0e6, legs: 0x2f3e5f, legStyle: 'pants', shoes: 0x333333, bag: 0x8a5a2a, scarf: 0xf1c40f },
+      trades: [{ give: { stone: 3 }, get: { oran: 2 } }, { give: { stick: 4 }, get: { apple: 2 } }, { give: { mushroom: 3 }, get: { leppa: 1 } }, { give: { ore: 2 }, get: { sitrus: 1 } }, { give: { crystal: 1 }, get: { elixir: 1 } }] },
+    scholar: { name: 'Scholar Wren', where: 'high', role: 'study',
+      outfit: { hat: 'sunhat', hatColor: 0xe8dcc0, hatBand: 0x5a3a20, hair: 0xd9d9d9, hairStyle: 'long', top: 0x34495e, sleeves: 'long', inner: 0xecf0f1, legs: 0x34495e, legStyle: 'skirt', shoes: 0x5d4037, necklace: 0xf1c40f },
+      study: [{ give: 'relic', xp: 600, get: { elixir: 1 } }, { give: 'crystal', xp: 150, get: {} }] }
+  };
   // the Pokémon one can start with: base forms of every generation's starters, plus a few favourites
   const STARTER_LIST = ['bulbasaur', 'charmander', 'squirtle', 'chikorita', 'cyndaquil', 'totodile', 'treecko', 'torchic', 'mudkip', 'turtwig', 'chimchar', 'piplup', 'snivy', 'tepig', 'oshawott', 'froakie', 'fennekin', 'chespin', 'rowlet', 'litten', 'popplio', 'grookey', 'scorbunny', 'sobble', 'sprigatito', 'fuecoco', 'quaxly', 'eevee', 'riolu', 'pichu', 'dratini', 'larvitar'];
 
@@ -328,7 +348,7 @@ const Adventure = (() => {
     gainXp(ADV.xp.cache * (1 + OW.ORDER.indexOf(c.biome)) + lv.lv[0], 'Found a hidden cache');
   }
   const campPos = () => { const c = OW.world.landmarks.find(l => l.kind === 'camp'); return { x: c.tx * OW.TW + OW.TW / 2, y: c.ty * OW.TW + OW.TW }; };
-  const restSpots = () => [campPos(), ...P.camps];
+  const restSpots = () => [campPos(), ...P.camps, ...people.filter(p => p.camp).map(p => p.camp)];
   const safeAt = (x, y) => restSpots().some(c => Math.hypot(c.x - x, c.y - y) < ADV.spawn.safe);
   function rest(at) {
     const f = wm.player, m = P.mon;
@@ -365,19 +385,20 @@ const Adventure = (() => {
     }
     for (const c of W.caches) { const x = c.tx * TW + TW / 2, y = c.ty * TW + TW - 8; if (inV(x, y)) list.push({ x, y, img: P.caches.includes(c.id) ? spr.mark.cacheOpen : spr.mark.cache }); }
     for (const l of W.landmarks) { const x = l.tx * TW + TW / 2, y = l.ty * TW + TW; if (inV(x, y)) list.push({ x, y, img: spr.mark[l.kind] }); }
-    for (const c of P.camps) if (inV(c.x, c.y)) list.push({ x: c.x, y: c.y, img: spr.mark.campfire });
+    for (const c of [...P.camps, ...people.filter(p => p.camp).map(p => p.camp)]) if (inV(c.x, c.y)) list.push({ x: c.x, y: c.y, img: spr.mark.campfire });
     return list;
   }
   // what E would act on: the nearest node, cache or rest spot within reach of the player's feet
   function findNear(f) {
     const W = OW.world, TW = OW.TW, reach = 80;
     let best = null, bd = reach;
-    const consider = (x, y, o) => { const d = Math.hypot(x - f.x, (y - f.y) / 0.8); if (d < bd) { bd = d; best = { ...o, x, y }; } };
+    const consider = (x, y, o) => { const d = Math.hypot(x - f.x, (y - f.y) / 0.8) * (o.kind === 'npc' ? 0.7 : 1); if (d < bd) { bd = d; best = { ...o, x, y }; } };   // people come first
     for (const n of W.nodes) if (nodeReady(n) && Math.abs(n.tx * TW - f.x) < 140 && Math.abs(n.ty * TW - f.y) < 140) consider(n.tx * TW + TW / 2, n.ty * TW + TW - 8, { kind: 'node', n, label: NODE_PLAY[n.kind].verb });
     for (const c of W.caches) if (!P.caches.includes(c.id)) consider(c.tx * TW + TW / 2, c.ty * TW + TW - 8, { kind: 'cache', c, label: 'Open the cache' });
     const cp = campPos();
     consider(cp.x, cp.y, { kind: 'rest', label: 'Rest & save', at: cp });
     for (const c of P.camps) consider(c.x, c.y, { kind: 'rest', label: 'Rest & save', at: c });
+    for (const p of people) { consider(p.t.x, p.t.y, { kind: 'npc', p, label: 'Talk to ' + p.def.name }); if (p.camp) consider(p.camp.x, p.camp.y, { kind: 'rest', label: 'Rest & save', at: p.camp }); }
     return best;
   }
   function interact() {
@@ -386,6 +407,7 @@ const Adventure = (() => {
     if (near.kind === 'node') gather(near.n);
     else if (near.kind === 'cache') openCache(near.c);
     else if (near.kind === 'rest') rest(near.at);
+    else if (near.kind === 'npc') talk(near.p);
   }
 
   // ---------------------------------------------------------------------
@@ -474,7 +496,10 @@ const Adventure = (() => {
     const pl = wm.player;
     if (!f.hitT && by !== pl) return;                 // knocked out by something else: no reward
     const sp = DEX.species[f.mon.species], bst = sp.base.reduce((a, b) => a + b, 0);
-    const xp = bst * 0.21 * f.mon.level / 7 * ADV.xp.mult * (f.boss ? ADV.xp.boss : f.elite ? ADV.xp.elite : 1);
+    // the Gen 5 scaled formula: a foe above your level is worth more, one far below it much less (farming weak
+    // Pokémon slows down, so the next biome becomes the better place to grow)
+    const L = f.mon.level, scale = clamp(((2 * L + 10) / (L + P.level + 10)) ** 2.5, 0.15, 3);
+    const xp = bst * 0.21 * L / 7 * scale * ADV.xp.mult * (f.boss ? ADV.xp.boss : f.elite ? ADV.xp.elite : 1);
     P.stats.kos++;
     gainXp(xp, `${f.tag ? f.tag + ' ' : ''}${f.mon.name} defeated`);
     // loot: the biome's table (Alphas and bosses roll more and always give something good)
@@ -530,19 +555,30 @@ const Adventure = (() => {
   // ---------------------------------------------------------------------
   //  Quests
   // ---------------------------------------------------------------------
+  // The Ranger at camp hands out quests (three at a time, in order) and pays the rewards when you report back
   const questDef = id => QUESTS.find(q => q.id === id);
-  function fillQuests() {
-    while (P.quests.active.length < 3) {
-      const next = QUESTS.find(q => !P.quests.done.includes(q.id) && !P.quests.active.some(a => a.id === q.id));
-      if (!next) break;
-      const a = { id: next.id, n: 0 };
-      P.quests.active.push(a);
-      // already true (a level reached, a place found before the quest came up)
-      if (next.goal.type === 'level') a.n = P.level;
-      if (next.goal.type === 'discover' && P.discovered.includes(next.goal.id)) a.n = 1;
-      if (next.goal.type === 'defeat' && next.goal.boss && P.bosses.includes(next.goal.boss)) a.n = 1;
-    }
-    checkQuests();
+  const questReady = a => a.n >= questDef(a.id).goal.n;
+  const nextQuest = () => P.quests.active.length < 3 ? QUESTS.find(q => !P.quests.done.includes(q.id) && !P.quests.active.some(a => a.id === q.id)) : null;
+  function acceptQuest(q) {
+    const a = { id: q.id, n: 0 };
+    P.quests.active.push(a);
+    // already true (a level reached, a place found before the quest was taken)
+    if (q.goal.type === 'level') a.n = P.level;
+    if (q.goal.type === 'discover' && P.discovered.includes(q.goal.id)) a.n = 1;
+    if (q.goal.type === 'defeat' && q.goal.boss && P.bosses.includes(q.goal.boss)) a.n = 1;
+    a.told = questReady(a);
+    note(`<b class="aq">NEW QUEST</b> ${esc(q.title)}: ${esc(q.desc)}`);
+    S.hudQuest = '';
+  }
+  function turnIn(a) {
+    const q = questDef(a.id);
+    P.quests.active.splice(P.quests.active.indexOf(a), 1);
+    P.quests.done.push(q.id);
+    note(`<b class="aq">QUEST COMPLETE</b> ${esc(q.title)}`);
+    wm.big('QUEST COMPLETE!', 'small', 1600);
+    Object.entries(q.reward.items || {}).forEach(([id, n]) => { P.inv[id] = count(id) + n; });
+    if (q.reward.xp) gainXp(q.reward.xp, q.title);
+    S.hudQuest = S.hudQuick = '';
   }
   function quest(type, d) {
     if (!P) return;
@@ -558,18 +594,92 @@ const Adventure = (() => {
     checkQuests();
     S.hudQuest = '';
   }
+  // a quest whose goal is met waits for the report at camp
   function checkQuests() {
-    for (const a of P.quests.active.slice()) {
-      const q = questDef(a.id);
-      if (a.n < q.goal.n) continue;
-      P.quests.active.splice(P.quests.active.indexOf(a), 1);
-      P.quests.done.push(q.id);
-      note(`<b class="aq">QUEST COMPLETE</b> ${esc(q.title)}`);
-      if (wm) wm.big('QUEST COMPLETE!', 'small', 1600);
-      Object.entries(q.reward.items || {}).forEach(([id, n]) => { P.inv[id] = count(id) + n; });
-      if (q.reward.xp) gainXp(q.reward.xp, q.title);
-      fillQuests();
-      return;
+    for (const a of P.quests.active) if (!a.told && questReady(a)) {
+      a.told = true;
+      note(`<b class="aq">QUEST DONE</b> ${esc(questDef(a.id).title)}: report to ${esc(NPCS.ranger.name)} at camp.`);
+      AudioFX.SFX.buff();
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  //  People: where they stand, and what they say. Talking pauses the world
+  // ---------------------------------------------------------------------
+  let people = [];                                    // { id, def, t (retro.js npc), camp? }
+  // the camp for the Ranger; otherwise the end of the path in the safest region of the biome that has no landmark
+  // in it (the landmarks have their guardians), so each one stands on open, reachable ground
+  function npcSpot(def) {
+    const W = OW.world, TW = OW.TW;
+    if (def.where === 'camp') { const c = campPos(); return { x: c.x - TW * 3, y: c.y + TW }; }
+    const marks = new Set(W.landmarks.map(l => W.region[l.ty * OW.COLS + l.tx]));
+    const rs = W.regs.filter(r => r.biome === def.where).sort((a, b) => a.band - b.band);
+    const r = rs.find(r2 => !marks.has(r2.i)) || rs[0];
+    return { x: r.px * TW + TW / 2 + (marks.has(r.i) ? -TW * 6 : 0), y: r.py * TW + TW };
+  }
+  function placePeople() {
+    people = [];
+    for (const [id, def] of Object.entries(NPCS)) {
+      let at = npcSpot(def);
+      at = OW.nearestFree(at.x, at.y, 14);
+      const p = { id, def, t: wm.npc(def.outfit, at.x, at.y) };
+      if (def.camp) { const c = OW.nearestFree(at.x + 150, at.y + 20, 14); p.camp = { x: c.x, y: c.y }; }
+      people.push(p);
+    }
+  }
+  const met = id => P.npc.met.includes(id);
+  // dialogue box: a portrait, a line, and numbered answers (keys 1-6 or a tap); E / Esc closes it
+  let talkOpts = [];
+  function say(p, text, opts) {
+    talkOpts = [...opts, { label: 'Bye', fn: closePanel }];
+    if (panel !== 'talk') { panel = 'talk'; keys.clear(); PAUSED = true; }
+    hud.panel.className = 'ah-panel ah-talk';
+    hud.panel.innerHTML = `<img src="${p.t.portrait}" alt=""><div><b>${esc(p.def.name)}</b><p>${esc(text)}</p><div class="ah-opts">${talkOpts.map((o, i) => `<button class="ah-btn ${o.label === 'Bye' ? 'alt' : ''}" data-o="${i}" ${o.off ? 'disabled' : ''}><kbd>${i + 1}</kbd> ${esc(o.label)}</button>`).join('')}</div></div>`;
+    hud.panel.querySelectorAll('[data-o]').forEach(b => b.onclick = () => pickOpt(+b.dataset.o));
+  }
+  function pickOpt(i) { const o = talkOpts[i]; if (o && !o.off) o.fn(); }
+  const itemsText = o => Object.entries(o).map(([id, n]) => `${n} ${ITEMS[id].name}`).join(' + ');
+  function talk(p) {
+    const first = !met(p.id);
+    if (first) P.npc.met.push(p.id);
+    wm.pose(p.t, 'cheer', 0.8);
+    const def = p.def;
+    if (def.role === 'quests') {
+      const ready = P.quests.active.filter(questReady), offer = nextQuest();
+      const opts = [];
+      if (ready.length) opts.push({ label: `Report: ${ready.map(a => questDef(a.id).title).join(', ')}`, fn: () => { ready.forEach(turnIn); talk(p); } });
+      if (offer) opts.push({ label: `Accept: ${offer.title}`, fn: () => { acceptQuest(offer); talk(p); } });
+      const text = first ? `Welcome to Base Camp! I'm ${def.name}. Rest by the fire to heal and save. I'll have jobs for you, too.`
+        : ready.length ? 'Back already? Let\'s see what you did out there.'
+        : offer ? `I need a hand: ${offer.desc}`
+        : P.quests.active.length ? 'Good luck out there. Come back when you are done.' : 'You have done everything I asked. The whole region owes you!';
+      return say(p, text, opts);
+    }
+    if (def.role === 'tips') {
+      if (!P.npc.gift) {
+        return say(p, `Heading into the forest? Take these, from one explorer to another: ${itemsText(def.gift)}.`, [{ label: 'Thank you!', fn: () => { P.npc.gift = true; Object.entries(def.gift).forEach(([id, n]) => addItem(id, n, p.t)); talk(p); } }]);
+      }
+      const tip = def.tips[P.npc.tip % def.tips.length];
+      return say(p, tip, [{ label: 'Any other tips?', fn: () => { P.npc.tip++; talk(p); } }]);
+    }
+    if (def.role === 'trade') {
+      const opts = def.trades.map(tr => ({ label: `${itemsText(tr.give)} → ${itemsText(tr.get)}`, off: !Object.entries(tr.give).every(([id, n]) => count(id) >= n),
+        fn: () => { for (const [id, n] of Object.entries(tr.give)) takeItem(id, n); for (const [id, n] of Object.entries(tr.get)) addItem(id, n, p.t); AudioFX.SFX.pop(); talk(p); } }));
+      return say(p, first ? `Name's ${def.name}. Swap your finds for supplies, and sit by my fire if you need a rest.` : 'What will it be?', opts);
+    }
+    if (def.role === 'study') {
+      const opts = def.study.map(s => ({ label: `Give 1 ${ITEMS[s.give].name} (+${s.xp} XP${Object.keys(s.get).length ? ', ' + itemsText(s.get) : ''})`, off: !count(s.give),
+        fn: () => { takeItem(s.give); gainXp(s.xp, `${def.name} studied the ${ITEMS[s.give].name}`); for (const [id, n] of Object.entries(s.get)) addItem(id, n, p.t); talk(p); } }));
+      return say(p, first ? `Ah, a traveller! I study the ancient ruins to the east. Bring me Old Relics or Glow Crystals and I'll share what I learn.` : 'Found anything old?', opts);
+    }
+  }
+  // people turn to face the player nearby, and wave when it first comes close
+  function peopleStep(f) {
+    for (const p of people) {
+      const d = Math.hypot(p.t.x - f.x, p.t.y - f.y);
+      if (d < 500) p.t.p = f.x < p.t.x ? 1 : 0;
+      if (d < 260 && !p.waved) { p.waved = true; wm.pose(p.t, 'cheer', 1.2); }
+      if (d > 600) p.waved = false;
     }
   }
 
@@ -593,7 +703,7 @@ const Adventure = (() => {
       v: 1, gen: OW.GEN_VERSION, seed: P.seed, time: Math.round(P.time), savedAt: Date.now(),
       player: { species: P.species, level: P.level, xp: P.xp, hp, status: down ? null : m.status, stamina: Math.round(P.stamina), hunger: Math.round(P.hunger * 10) / 10, unlocked: P.unlocked, equipped: P.equipped, x: P.x, y: P.y },
       inv: P.inv, quick: P.quick, nodes: P.nodes, caches: P.caches, discovered: P.discovered, biomes: P.biomes, bosses: P.bosses, camps: P.camps, rest: P.rest,
-      quests: P.quests, stats: P.stats, explored: exploredB64()
+      quests: { active: P.quests.active.map(a => ({ id: a.id, n: a.n })), done: P.quests.done }, npc: P.npc, stats: P.stats, explored: exploredB64()
     };
   }
   function save() {
@@ -632,13 +742,14 @@ const Adventure = (() => {
       inv, quick: Array.isArray(s.quick) ? s.quick.slice(0, 3).map(id => ITEMS[id] && ITEMS[id].use ? id : null) : null,
       nodes, caches: ids(s.caches, x => /^cache\d+$/.test(x)), discovered: ids(s.discovered, x => x in LANDMARK_NAMES), biomes: ids(s.biomes, x => OW.ORDER.includes(x)),
       bosses: ids(s.bosses, x => x in BOSSES), camps: Array.isArray(s.camps) ? s.camps.map(pt).filter(Boolean).slice(0, 20) : [], rest: pt(s.rest),
-      quests: { active: qActive, done: ids(q.done, x => !!questDef(x)) }, stats: { kos: Math.floor(num(s.stats && s.stats.kos, 0, 1e7, 0)) }, explored: s.explored
+      quests: { active: qActive, done: ids(q.done, x => !!questDef(x)) },
+      npc: { met: ids(s.npc && s.npc.met, x => x in NPCS), gift: !!(s.npc && s.npc.gift), tip: Math.floor(num(s.npc && s.npc.tip, 0, 1e6, 0)) }, stats: { kos: Math.floor(num(s.stats && s.stats.kos, 0, 1e7, 0)) }, explored: s.explored
     };
   }
   function newRun(species, seed) {
     const sp = DEX.species[species], level = Math.max(ADV.startLevel, sp.minLevel), unlocked = levelMoves(species, level);
     return { seed, sameGen: true, time: 0, species, level, xp: xpFor(level), hp: null, status: null, stamina: 100, hunger: 100, unlocked, equipped: bestFour(unlocked), x: null, y: null,
-      inv: { oran: 3, apple: 2 }, quick: ['oran', 'apple', 'herb'], nodes: {}, caches: [], discovered: ['camp'], biomes: [], bosses: [], camps: [], rest: null, quests: { active: [], done: [] }, stats: { kos: 0 }, explored: '' };
+      inv: { oran: 3, apple: 2 }, quick: ['oran', 'apple', 'herb'], nodes: {}, caches: [], discovered: ['camp'], biomes: [], bosses: [], camps: [], rest: null, quests: { active: [], done: [] }, npc: { met: [], gift: false, tip: 0 }, stats: { kos: 0 }, explored: '' };
   }
 
   // ---------------------------------------------------------------------
@@ -651,6 +762,11 @@ const Adventure = (() => {
     if (MOVE_KEYS[e.code] || e.code === 'Space') e.preventDefault();
     if (e.code === 'Escape' && panel) { closePanel(); return; }
     if (pauseOpen) return;
+    if (panel === 'talk') {
+      const d = /^(Digit|Numpad)(\d)$/.exec(e.code);
+      if (d) pickOpt(+d[2] - 1); else if (e.code === 'KeyE' && !e.repeat) closePanel();
+      return;
+    }
     if (e.code === 'KeyI' || e.code === 'KeyB' || e.code === 'KeyC') { togglePanel('bag'); return; }
     if (e.code === 'KeyM') { togglePanel('moves'); return; }
     if (e.code === 'KeyJ') { togglePanel('quests'); return; }
@@ -669,14 +785,44 @@ const Adventure = (() => {
     if (r === 'ok') S.hudMoves = '';
     return r;
   }
+  // ---- touch: a virtual stick (left), DASH and E (right), the menus. Pointer events, so a mouse can use them too.
+  // They show on touch screens (or as soon as the screen is touched) ----
+  const touch = { x: 0, y: 0, mag: 0, dash: false, id: null };
+  const isTouch = () => matchMedia('(pointer: coarse)').matches;
+  const onTouchStart = () => document.body.classList.add('touchUI');
+  function bindTouch(el) {
+    const stick = el.querySelector('.ah-stick'), knob = stick.querySelector('i');
+    const aim = e => {
+      const r = stick.getBoundingClientRect(), R = r.width / 2;
+      let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R;
+      const m = Math.hypot(dx, dy);
+      if (m > 1) { dx /= m; dy /= m; }
+      const mag = Math.min(1, m);
+      knob.style.transform = `translate(${(dx * 45).toFixed(1)}%, ${(dy * 45).toFixed(1)}%)`;
+      if (mag < 0.18) { touch.mag = 0; return; }                         // dead zone
+      touch.x = dx / (mag || 1); touch.y = dy / (mag || 1); touch.mag = (mag - 0.18) / 0.82;
+    };
+    const release = () => { touch.id = null; touch.mag = 0; knob.style.transform = ''; };
+    stick.addEventListener('pointerdown', e => { e.preventDefault(); touch.id = e.pointerId; stick.setPointerCapture(e.pointerId); aim(e); });
+    stick.addEventListener('pointermove', e => { if (e.pointerId === touch.id) aim(e); });
+    stick.addEventListener('pointerup', release); stick.addEventListener('pointercancel', release);
+    const dash = el.querySelector('[data-t="dash"]');
+    dash.addEventListener('pointerdown', e => { e.preventDefault(); touch.dash = true; dash.classList.add('on'); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) dash.addEventListener(ev, () => { touch.dash = false; dash.classList.remove('on'); });
+    el.querySelector('[data-t="use"]').addEventListener('pointerdown', e => { e.preventDefault(); if (panel === 'talk') closePanel(); else interact(); });
+    el.querySelectorAll('.ah-tmenu [data-t]').forEach(b => b.onclick = () => togglePanel(b.dataset.t));
+    hud.use = el.querySelector('[data-t="use"] small');
+    if (isTouch()) document.body.classList.add('touchUI');
+  }
   function input(f, dt) {
     let x = 0, y = 0;
     for (const k of keys) { const d = MOVE_KEYS[k]; if (d === 'u') y -= 1; else if (d === 'd') y += 1; else if (d === 'l') x -= 1; else if (d === 'r') x += 1; }
     x = clamp(x, -1, 1); y = clamp(y, -1, 1);
-    const L = Math.hypot(x, y);
+    let L = Math.hypot(x, y);
     if (L) { x /= L; y /= L; }
+    else if (touch.mag > 0) { x = touch.x; y = touch.y; L = touch.mag; }
     let dash = false;
-    if (L && (keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('Space')) && S.tired <= 0 && P.stamina > 0) {
+    if (L && (keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('Space') || touch.dash) && S.tired <= 0 && P.stamina > 0) {
       dash = true;
       P.stamina -= ADV.stamina.dash * dt;
       if (P.stamina <= 0) { P.stamina = 0; S.tired = ADV.stamina.tired; wm.text(f, 'OUT OF BREATH', 'info'); }
@@ -729,6 +875,9 @@ const Adventure = (() => {
       <div class="ah-bar"><div class="ah-moves"></div><div class="ah-quick"></div></div>
       <div class="ah-keys"><kbd>WASD</kbd> move <kbd>Shift</kbd> dash <kbd>1-4</kbd> attack <kbd>E</kbd> interact <kbd>5-7</kbd> items <kbd>I</kbd> bag <kbd>M</kbd> moves <kbd>J</kbd> quests <kbd>Esc</kbd> pause</div>
       <div class="rfeed ah-feed" id="rFeed"></div>
+      <div class="ah-touch"><div class="ah-stick"><i></i></div>
+        <div class="ah-tmenu"><button data-t="bag" title="Bag">BAG</button><button data-t="moves" title="Moves">MOVES</button><button data-t="quests" title="Quests">QUESTS</button></div>
+        <div class="ah-acts"><button class="dash" data-t="dash">DASH</button><button class="use" data-t="use"><b>E</b><small></small></button></div></div>
       <div class="ah-panel hidden"></div>`;
     const $q = s => el.querySelector(s);
     hud = { card: $q('.ah-card'), por: $q('.por img'), nm: $q('.nm span'), lv: $q('.nm small'), chips: $q('.chips'),
@@ -740,6 +889,7 @@ const Adventure = (() => {
     hud.moves.onclick = e => { const b = e.target.closest('[data-i]'); if (b) useMove(+b.dataset.i); };
     hud.quick.onclick = e => { const b = e.target.closest('[data-q]'); if (b && P.quick[+b.dataset.q]) useItem(P.quick[+b.dataset.q]); };
     hud.map.onclick = () => togglePanel('quests');
+    bindTouch(el);
     S.hudMoves = S.hudQuick = S.hudQuest = ''; S.hudXp = -1; S.fogDirty = true;
     for (const k in S) if (k.startsWith('last')) S[k] = null;
   }
@@ -784,8 +934,10 @@ const Adventure = (() => {
       S.hudQuick = qsig;
       hud.quick.innerHTML = P.quick.map((id, i) => `<button class="ah-qs ${id && count(id) ? '' : 'empty'}" data-q="${i}" title="${id ? esc(ITEMS[id].name + ': ' + ITEMS[id].desc) : 'Empty: set a quick item in the bag (I)'}"><b>${i + 5}</b>${id ? `<img src="${icon(id)}" alt=""><small>${count(id)}</small>` : ''}</button>`).join('');
     }
+    if (hud.use) setT(hud.use, near ? near.label.split(' ')[0].toUpperCase() : '');
     // quest tracker
-    const qs = P.quests.active.map(a => { const q = questDef(a.id); return `<div><b>${esc(q.title)}</b><span>${esc(q.desc)}</span>${q.goal.n > 1 ? `<i>${Math.min(a.n, q.goal.n)}/${q.goal.n}</i>` : ''}</div>`; }).join('');
+    const qs = P.quests.active.map(a => { const q = questDef(a.id); return questReady(a) ? `<div class="rdy"><b>✔ ${esc(q.title)}</b><span>Report to ${esc(NPCS.ranger.name)} at camp</span></div>` : `<div><b>${esc(q.title)}</b><span>${esc(q.desc)}</span>${q.goal.n > 1 ? `<i>${Math.min(a.n, q.goal.n)}/${q.goal.n}</i>` : ''}</div>`; }).join('')
+      + (nextQuest() && P.quests.active.length < 3 ? `<div class="rdy"><b>${P.quests.active.length ? 'More work' : 'Find work'}</b><span>Talk to ${esc(NPCS.ranger.name)} at camp</span></div>` : '');
     if (qs !== S.hudQuest) { S.hudQuest = qs; hud.quests.innerHTML = qs; }
   }
   // minimap: the whole world, unexplored parts dark; landmarks found, campsites, the player
@@ -801,6 +953,7 @@ const Adventure = (() => {
     g.drawImage(hud.fog, 0, 0);
     const TW = OW.TW;
     for (const l of OW.world.landmarks) if (P.discovered.includes(l.id) || l.kind === 'camp') { g.fillStyle = l.kind === 'camp' ? '#ff5a5a' : BOSSES[l.kind] && !P.bosses.includes(l.kind) ? '#b46aff' : '#ffe066'; g.fillRect(l.tx - 2, l.ty - 2, 5, 5); g.fillStyle = '#1b1530'; g.fillRect(l.tx - 1, l.ty - 1, 3, 3); g.fillStyle = l.kind === 'camp' ? '#ff5a5a' : '#ffe066'; g.fillRect(l.tx, l.ty, 1, 1); }
+    for (const p of people) if (p.id === 'ranger' || met(p.id)) { const tx = Math.floor(p.t.x / TW), ty = Math.floor(p.t.y / TW); g.fillStyle = '#1b1530'; g.fillRect(tx - 2, ty - 2, 4, 4); g.fillStyle = '#5ae0ff'; g.fillRect(tx - 1, ty - 1, 2, 2); }
     for (const c of P.camps) { g.fillStyle = '#ff9a3a'; g.fillRect(Math.floor(c.x / TW) - 1, Math.floor(c.y / TW) - 1, 3, 3); }
     if (f) {
       const tx = Math.floor(f.x / TW), ty = Math.floor(f.y / TW);
@@ -840,15 +993,15 @@ const Adventure = (() => {
     panel = name; keys.clear();
     PAUSED = true;
     renderPanel();
-    hud.panel.classList.remove('hidden');
   }
   function closePanel() {
     panel = null; S.sel = null;
-    hud.panel.classList.add('hidden');
+    hud.panel.className = 'ah-panel hidden';
     if (document.getElementById('pauseMenu').classList.contains('hidden')) PAUSED = false;
   }
   function renderPanel() {
-    if (!panel || !hud) return;
+    if (!panel || !hud || panel === 'talk') return;
+    hud.panel.className = 'ah-panel';
     const tabs = `<div class="ah-tabs">${[['bag', 'Bag (I)'], ['moves', 'Moves (M)'], ['quests', 'Quests (J)']].map(([k, l]) => `<button data-tab="${k}" class="${panel === k ? 'on' : ''}">${l}</button>`).join('')}<button class="x" data-close>✕</button></div>`;
     let body = '';
     if (panel === 'bag') {
@@ -866,9 +1019,10 @@ const Adventure = (() => {
         <div><h3>Unlocked moves</h3>${P.unlocked.map(id => { const mv = MOVES[id]; return `<button class="ah-mvrow ${P.equipped.includes(id) ? 'eq' : ''}" data-mv="${id}" style="--c:${TYPE_COLORS[mv.type]}"><span>${esc(mv.name)}</span><small>${esc(moveLine(mv))}</small></button>`; }).join('')}
         ${upcoming.length ? `<h3>Coming up</h3>${upcoming.map(([lv, id]) => `<div class="ah-next">Lv ${lv} · ${esc(MOVES[id].name)} <small>${esc(MOVES[id].type)}</small></div>`).join('')}` : ''}</div></div>`;
     } else {
-      body = `<div class="ah-cols"><div><h3>Active quests</h3>${P.quests.active.map(a => { const q = questDef(a.id); return `<div class="ah-quest"><b>${esc(q.title)}</b><p>${esc(q.desc)}</p><span>${Math.min(a.n, q.goal.n)}/${q.goal.n} · Reward: ${q.reward.xp} XP${Object.entries(q.reward.items || {}).map(([id, n]) => `, ${n}× ${esc(ITEMS[id].name)}`).join('')}</span></div>`; }).join('') || '<p class="muted">All quests complete!</p>'}
+      body = `<div class="ah-cols"><div><h3>Active quests</h3>${P.quests.active.map(a => { const q = questDef(a.id); return `<div class="ah-quest"><b>${questReady(a) ? '✔ ' : ''}${esc(q.title)}</b><p>${esc(q.desc)}${questReady(a) ? ` <em>Report to ${esc(NPCS.ranger.name)}.</em>` : ''}</p><span>${Math.min(a.n, q.goal.n)}/${q.goal.n} · Reward: ${q.reward.xp} XP${Object.entries(q.reward.items || {}).map(([id, n]) => `, ${n}× ${esc(ITEMS[id].name)}`).join('')}</span></div>`; }).join('') || (nextQuest() ? `<p class="muted">${esc(NPCS.ranger.name)} at camp has work for you.</p>` : '<p class="muted">All quests complete!</p>')}
         <h3>Completed</h3><p class="muted">${P.quests.done.map(id => esc(questDef(id).title)).join(' · ') || 'None yet.'}</p></div>
         <div><h3>Places</h3>${OW.world.landmarks.map(l => `<div class="ah-next">${P.discovered.includes(l.id) || l.kind === 'camp' ? `<b>${esc(LANDMARK_NAMES[l.kind])}</b> <small>${esc(OW.BIOMES[l.biome].name)}${BOSSES[l.kind] ? (P.bosses.includes(l.kind) ? ' · guardian defeated' : ' · guarded!') : ''}</small>` : `<span class="muted">??? <small>${esc(OW.BIOMES[l.biome].name)}</small></span>`}</div>`).join('')}
+        <h3>People</h3>${people.map(p => `<div class="ah-next">${met(p.id) ? `<b>${esc(p.def.name)}</b> <small>${esc({ quests: 'quests', tips: 'tips', trade: 'trades supplies, campfire', study: 'studies relics' }[p.def.role])}</small>` : '<span class="muted">???</span>'}</div>`).join('')}
         <h3>Biomes</h3>${OW.ORDER.map(b => `<div class="ah-next">${P.biomes.includes(b) ? `<b>${esc(OW.BIOMES[b].name)}</b>` : '<span class="muted">???</span>'} <small>Lv ${BIOME_PLAY[b].lv[0]}-${BIOME_PLAY[b].lv[1]}</small></div>`).join('')}
         <p class="muted">World seed ${P.seed}</p></div></div>`;
     }
@@ -941,6 +1095,7 @@ const Adventure = (() => {
         else note(`${esc(OW.BIOMES[b].name)} · Lv ${BIOME_PLAY[b].lv[0]}-${BIOME_PLAY[b].lv[1]}`);
       }
       explore(f);
+      peopleStep(f);
       near = f.busy ? null : findNear(f);
       if ((S.saveT += dt) > ADV.save.every && !wm.engaged) save();
     },
@@ -955,7 +1110,7 @@ const Adventure = (() => {
       if (!wm) return;
       const f = wm.player;
       if (!near || !f || f.state !== 'idle' || panel) return;
-      const PXU = 3, y = near.y - (near.kind === 'rest' ? 150 : near.n && near.n.kind === 'apple' ? 130 : 70);
+      const PXU = 3, y = near.y - (near.kind === 'rest' ? 150 : near.kind === 'npc' ? 118 : near.n && near.n.kind === 'apple' ? 130 : 70);
       ctx.font = `${6 * PXU}px Tiny5, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const label = near.label.toUpperCase(), w = ctx.measureText(label).width + 13 * PXU, x0 = Math.round(near.x - w / 2);
       ctx.fillStyle = 'rgba(27,21,48,.88)'; ctx.fillRect(x0, y - 6 * PXU, w, 12 * PXU);
@@ -976,7 +1131,7 @@ const Adventure = (() => {
     try {
       exitMenus();
       const W = OW.generate(run.seed);
-      P = { ...run, inv: { ...run.inv }, explored: exploredFrom(run.explored) };
+      P = { ...run, inv: { ...run.inv }, explored: exploredFrom(run.explored), npc: run.npc || { met: [], gift: false, tip: 0 } };
       P.quick = (P.quick || ['oran', 'apple', 'herb']).concat([null, null, null]).slice(0, 3);
       P.mon = playerMon();
       // where to stand: the saved spot if it is still good ground in this world, else the last rest spot, else camp
@@ -995,14 +1150,15 @@ const Adventure = (() => {
       wm = await Retro.world({ host, player: P.mon, x: at.x, y: at.y, zoom: ADV.zoom });
       active = true;
       buildHud();
-      fillQuests();
+      placePeople();
+      for (const a of P.quests.active) a.told = questReady(a);
       updateRecButtons();
-      addEventListener('keydown', onKeyDown); addEventListener('keyup', onKeyUp); addEventListener('blur', onBlur);
+      addEventListener('keydown', onKeyDown); addEventListener('keyup', onKeyUp); addEventListener('blur', onBlur); addEventListener('touchstart', onTouchStart, { passive: true });
       S.lastBiome = null; S.saveT = 0; S.encT = 2; S.respawnAt = 0; S.combatT = -99;
       if (!P.biomes.length) { P.biomes.push('grass'); S.lastBiome = 'grass'; }
       explore(wm.player);
       wm.big(P.time > 0 ? 'WELCOME BACK!' : 'ADVENTURE START!', 'small', 2000);
-      if (P.time === 0) note('Explore, fight wild Pokémon, gather food and rest at camp to save. <kbd>E</kbd> interacts.');
+      if (P.time === 0) note(`Talk to ${NPCS.ranger.name} at camp (<kbd>E</kbd>). Explore, fight wild Pokémon, gather food, rest by the fire to save.`);
       save();
     } catch (e) {
       if (!(e instanceof BattleAbort)) { console.error(e); toast('Could not start the adventure: ' + e.message, 5000); }
@@ -1014,7 +1170,8 @@ const Adventure = (() => {
   function leave(doSave = true) {
     if (active && doSave) save();
     active = false; panel = null; hud = null; near = null;
-    removeEventListener('keydown', onKeyDown); removeEventListener('keyup', onKeyUp); removeEventListener('blur', onBlur);
+    removeEventListener('keydown', onKeyDown); removeEventListener('keyup', onKeyUp); removeEventListener('blur', onBlur); removeEventListener('touchstart', onTouchStart);
+    Object.assign(touch, { mag: 0, dash: false, id: null });
     keys.clear();
     document.body.classList.remove('adventure');
     $('pmExit').textContent = '✕ Exit to team builder';
@@ -1060,6 +1217,6 @@ const Adventure = (() => {
     get cfg() { return ADV; },
     // test hooks
     _state: () => P && { species: P.species, level: P.level, xp: P.xp, hp: P.mon.hp, maxhp: P.mon.maxhp, stamina: P.stamina, hunger: P.hunger, inv: { ...P.inv }, equipped: P.equipped.slice(), unlocked: P.unlocked.slice(), quests: JSON.parse(JSON.stringify(P.quests)), discovered: P.discovered.slice(), time: P.time, seed: P.seed, near: near && near.label },
-    _P: () => P, _wm: () => wm, _validate: validate, _snapshot: () => snapshot(), _gainXp: (n) => gainXp(n, 'test'), _spawn: (b, x, y, o) => spawnWild(b, x, y, o), _use: useItem, _interact: interact, _keys: keys, _craft: i => craft(RECIPES[i]), _equip: equip
+    _touch: () => touch, _P: () => P, _wm: () => wm, _people: () => people.map(p => ({ id: p.id, x: Math.round(p.t.x), y: Math.round(p.t.y), biome: OW.biomeAt(p.t.x, p.t.y), reach: OW.reachable(p.t.x, p.t.y) })), _talk: id => talk(people.find(p => p.id === id)), _opt: i => pickOpt(i), _talkText: () => panel === 'talk' ? hud.panel.textContent : null, _validate: validate, _snapshot: () => snapshot(), _gainXp: (n) => gainXp(n, 'test'), _spawn: (b, x, y, o) => spawnWild(b, x, y, o), _use: useItem, _interact: interact, _keys: keys, _craft: i => craft(RECIPES[i]), _equip: equip
   };
 })();

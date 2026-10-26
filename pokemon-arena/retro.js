@@ -2060,6 +2060,7 @@ const Retro = (() => {
     for (const t of TR) if (t) objs.push({ y: t.y, d: () => drawTrainer(t) });
     // open world: trees, rocks, walls, resource nodes and landmarks stand in the same depth order as the Pokémon
     if (WM) for (const p of WM.host.props(v, Overworld.visibleProps(v, []))) objs.push({ y: p.y, d: () => Overworld.drawProp(ctx, p) });
+    if (WM) for (const t of WM.npcs) if (t.x > v.x0 - 60 && t.x < v.x1 + 60 && t.y > v.y0 && t.y < v.y1 + 100) objs.push({ y: t.y, d: () => drawTrainer(t) });
     for (const f of F) if (f && f.state !== 'gone') objs.push({ y: f.y, d: () => drawFighter(f) });
     objs.sort((a, b) => a.y - b.y).forEach(o => o.d());
     // scene dims for big moves so the effect carries the light
@@ -6352,6 +6353,16 @@ const Retro = (() => {
     },
     // remove a wild Pokémon at once (far away, nobody sees it go)
     despawn(f) { if (!f || F[f.p] !== f) return; f.state = 'gone'; F[f.p] = null; },
+    // a person standing in the world (Adventure's NPCs): the pixel trainer art, drawn depth-sorted like a trainer.
+    // t.p = 1 faces left; pose(t, 'cheer', sec) waves
+    npc(outfit, x, y) {
+      const frames = { idle: trainerArt(outfit, 'idle'), cheer: trainerArt(outfit, 'cheer') };
+      const pc = newCanvas(18, 16); pc.getContext('2d').fillStyle = '#d8f0c8'; pc.getContext('2d').fillRect(0, 0, 18, 16); pc.getContext('2d').drawImage(frames.idle, 0, 1, 18, 16, 0, 0, 18, 16);
+      const t = { p: 0, x, y, frames, pose: 'idle', poseUntil: 0, portrait: pc.toDataURL(), jump: 0 };
+      WM.npcs.push(t);
+      return t;
+    },
+    pose(t, pose, sec = 1.2) { t.pose = pose; t.poseUntil = T + sec; },
     respawnPlayer(mon, x, y) { if (F[0]) { F[0].state = 'gone'; F[0] = null; } return wmPlace(0, mon, x, y, { face: 1 }); },
     // the player asks for move i: it needs a target in range and the stamina; then it plays when its cooldown is up
     queueMove(i) {
@@ -6400,7 +6411,7 @@ const Retro = (() => {
     resize();
     const sz = Overworld.size, m = Overworld.TW * 3;
     WW = sz.w; WH = sz.h;
-    WM = { host: opts.host, bounds: { x0: m, y0: m, x1: WW - m, y1: WH - m }, zoom: opts.zoom || 1, dark: 0, biome: null, engaged: false, hudDirty: true, claimed: new Set() };
+    WM = { host: opts.host, bounds: { x0: m, y0: m, x1: WW - m, y1: WH - m }, zoom: opts.zoom || 1, dark: 0, biome: null, engaged: false, hudDirty: true, claimed: new Set(), npcs: [] };
     // the darkness of a cave hides what is beyond the light
     WM.lit = f => WM.dark < 0.5 || !F[0] || wmDist(f, F[0]) < WM.host.cfg.light * 0.9;
     field = { ...WM.bounds };
