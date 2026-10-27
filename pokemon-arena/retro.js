@@ -18,6 +18,7 @@ const Retro = (() => {
   const topEl = document.createElement('div'); topEl.id = 'rTop'; root.append(topEl);
   const PX = 3;                        // one art pixel in virtual units
   const SPR = 1.7;                     // sprite scale on the field
+  const PMD_SPR = 4.5;                 // pixel sprites (PixelMons) in a battle: virtual units per sprite pixel
   let VW = 1280, VH = 720, portrait = false, SC = 1;
   // ---------------------------------------------------------------------
   //  World vs view. The view (VW x VH virtual units, 720 on the short side) is
@@ -284,31 +285,13 @@ const Retro = (() => {
     return pr;
   }
   // ---------------------------------------------------------------------
-  //  Live 3D Pokémon (retro3d.js): the real animated model, lit and rendered
-  //  as pixel art every frame and drawn like any sprite, when the species has
-  //  a model in models3d/; three.js only loads when such a Pokémon is in the
-  //  battle. Any failure (no WebGL, model missing) falls back to the pixel sprite.
+  //  Animated pixel sprites (pixelmon.js): the Mystery Dungeon sprite of the
+  //  species, walking in 8 directions and acting out the battle's events, when
+  //  it has one; else (Mega forms, a few others) its animated sprite above.
   // ---------------------------------------------------------------------
-  let L3 = null, L3m = null, MAN3 = null;
-  const lives = new Set();                             // fighters showing a live model (released when they leave the field)
-  const live3D = () => L3 || (L3 = import('./retro3d.js').then(m => (L3m = m)).catch(e => { console.warn('live 3D unavailable', e); return null; }));
-  function hasLive(species) {
-    if (prefs.live3d === false || !species) return Promise.resolve(false);
-    if (!MAN3) MAN3 = fetch('models3d/manifest.json').then(r => r.ok ? r.json() : {}).catch(() => ({}));
-    return MAN3.then(m => !!m[species]);
-  }
-  const preloadLive = species => hasLive(species).then(ok => ok && live3D().then(L => L && L.preload(species))).catch(() => null);
-  const getLive = species => hasLive(species).then(ok => ok ? live3D().then(L => L && L.create(species)) : null).catch(e => { console.warn('live 3D model unavailable for', species, e); return null; });
+  const lives = new Set();                             // fighters showing a pixel sprite (released when they leave the field)
   function dropLive(f) { if (f.live) { f.live.dispose(); f.live = null; } lives.delete(f); }
-  // Voxel 3D (prototype): Pokémon without a model get their animated sprite inflated into a voxel volume.
-  // Species listed here only (Mega forms of a listed species included); every Pokémon now has a real model
-  const VOXEL3D = new Set([]);
-  const getVoxel = (mon, anim) => prefs.live3d !== false && VOXEL3D.has(mon.species) && anim.frames.length
-    ? live3D().then(L => L && L.voxel(anim)).catch(e => { console.warn('voxel 3D unavailable for', mon.species, e); return null; })
-    : Promise.resolve(null);
-  // during the intro: build the voxel models of every voxel Pokémon in the teams (and its Mega form), unless it has a real model
-  const prepVoxel = m => prefs.live3d === false || !VOXEL3D.has(m.species) ? null : hasLive(m.species).then(real => real ? null : live3D().then(L => L &&
-    Promise.all([m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])].map(src => getAnim(src).then(a => a.frames.length && L.prepareVoxel(a)))))).catch(() => null);
+  const getPixel = species => PixelMons.has(species).then(ok => ok ? PixelMons.create(species) : null).catch(() => null);
   function frameAt(a, t) {
     if (a.frames.length === 1) return a.frames[0].img;
     let k = t % a.total;
@@ -318,7 +301,7 @@ const Retro = (() => {
   const scratch = document.createElement('canvas');
   const sctx = scratch.getContext('2d');
   // a tinted or filtered copy of a sprite frame, made once and reused: afterimages draw the same frame several times a
-  // frame, and a canvas filter (frozen, poisoned) is costly to run on every draw. A live 3D frame is redone when its
+  // frame, and a canvas filter (frozen, poisoned) is costly to run on every draw. A pixel sprite's frame is redone when its
   // canvas has changed (a.ver)
   const TINT = new WeakMap();
   function tinted(img, a, key, paint, filter) {
@@ -342,7 +325,7 @@ const Retro = (() => {
   function drawSprite(a, t, x, y, s, flip, o = {}) {
     const img = frameAt(a, t), b = a.box;
     const w = a.w * s, h = a.h * s;
-    // anchor: the feet (live 3D models know exactly where they are), else the bottom centre of the opaque area
+    // anchor: the feet (pixel sprites know exactly where they are), else the bottom centre of the opaque area
     const ox = (a.foot ? a.foot[0] : (b.x0 + b.x1 + 1) / 2) * s, oy = (a.foot ? a.foot[1] : b.y1 + 1) * s;
     ctx.save();
     ctx.globalAlpha = o.alpha ?? 1;
@@ -358,7 +341,7 @@ const Retro = (() => {
     if (src === img && o.white > 0) {
       if (scratch.width !== a.w || scratch.height !== a.h) { scratch.width = a.w; scratch.height = a.h; }
       sctx.globalCompositeOperation = 'source-over';
-      sctx.clearRect(0, 0, a.w, a.h); sctx.drawImage(img, 0, 0, a.w, a.h);   // (a live 3D frame's canvas can be finer than a.w x a.h)
+      sctx.clearRect(0, 0, a.w, a.h); sctx.drawImage(img, 0, 0, a.w, a.h);
       sctx.globalCompositeOperation = 'source-atop';
       sctx.fillStyle = o.whiteCol || '#fff'; sctx.globalAlpha = o.white; sctx.fillRect(0, 0, a.w, a.h); sctx.globalAlpha = 1;
       ctx.drawImage(scratch, -ox, -oy, w, h);
@@ -802,7 +785,12 @@ const Retro = (() => {
     fit() {
       const h = Math.max(this.anim.bh, this.anim.bw * 0.8), th = h <= 85 ? h : 85 + (h - 85) * 0.4;
       this.scale = th / h * SPR * (multi ? multi.spr : 1) * (this.size || 1);   // size: open-world elites and bosses stand taller
-      if (this.anim.pmd) this.scale = this.anim.px * (this.size || 1);         // pixel sprites (Adventure): one sprite pixel = one art pixel of the world
+      if (this.anim.pmd) {
+        // pixel sprites: in the open world one sprite pixel = one art pixel of the world; in a battle they stand at a duel's
+        // size (PMD_SPR virtual units per sprite pixel), the biggest ones a little smaller, like the sprites above
+        const ph = Math.max(this.anim.bh, this.anim.bw * 0.8), pt = ph <= 28 ? ph : 28 + (ph - 28) * 0.5;
+        this.scale = (WM ? this.anim.px : pt / ph * PMD_SPR * (multi ? multi.spr : 1)) * (this.size || 1);
+      }
       this.h = this.anim.bh * this.scale; this.w = this.anim.bw * this.scale;
       this.r = Math.max(20, this.w * 0.34);
     }
@@ -935,7 +923,7 @@ const Retro = (() => {
     f.sq = clamp(f.sq + f.sqv * dt, -0.45, 0.45);
     f.crouch += (f.crouchT - f.crouch) * Math.min(1, dt * 14);
     f.faceVis += (f.face - f.faceVis) * Math.min(1, dt * 15);
-    // the model faces where it runs only on a real run; stepping about, it keeps its eyes on the foe
+    // it faces where it runs only on a real run; stepping about, it keeps its eyes on the foe
     f.runFace = (f.goalPace ?? 1) >= 1 && f.speed > (f.runFace ? 110 : 170);
     if (f.live) f.live.drive(dt, { face: f.faceVis, vx: f.vx, vy: f.vy, run: f.dashing || f.runFace, moving: f.state === 'idle' && (f.dashing || f.speed > 60), sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
     f.shiver = Math.max(0, f.shiver - dt);
@@ -1994,7 +1982,7 @@ const Retro = (() => {
     const s = f.scale * (0.2 + 0.8 * f.pop);
     // afterimages
     const fa = f.alpha * (f.fadeA ?? 1);
-    // a live 3D model turns in 3D (its yaw follows faceVis), so it is never mirrored
+    // a pixel sprite turns by its own 8 directions (rows of its sheet), so it is never mirrored
     for (const g of f.trail) drawSprite(f.anim, g.t + f.p * 0.37, g.x, g.y, s, false, { sx: (f.live ? 1 : -g.sx) * sxm, sy, rot: g.rot || 0, alpha: Math.max(0, g.a) * 0.55 * fa, white: 1, whiteCol: f.afterCol });
     if (f.aura && FT < f.auraT) { glow(f.cx, f.cy, Math.max(f.w, f.h) * 0.9, f.aura, 0.55 + Math.sin(T * 14) * 0.15); }
     drawSprite(f.anim, t + f.p * 0.37, f.x + jit, f.y - f.z, s, false,
@@ -2034,16 +2022,9 @@ const Retro = (() => {
       pixRing(r.x, r.y, rr, r.flat, r.col, r.w);
     }
     ctx.globalAlpha = 1;
-    // live 3D models render their frame (and cast shadow) for this frame first, all in one batch; one far off screen waits
-    if (lives.size && L3m) {
-      const v = viewRect(), m = 160;
-      L3m.renderAll(F.filter(f => f && f.live && !f.live.pmd && f.state !== 'gone' && f.x > v.x0 - m && f.x < v.x1 + m && f.y > v.y0 - m && f.y < v.y1 + m * 2).map(f => f.live));
-    }
     // shadows (Pokémon, and anything flying through the air)
     for (const f of F) if (f && f.state !== 'gone') {
       const lift = clamp(f.z / 120, 0, 0.5);
-      // a live model casts its own shadow (a hard pixel mask), drawn with the same tone as the blob shadows
-      if (f.live && f.live.shadow) { drawSprite(f.live.shadow, 0, f.x, f.y, f.scale * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6), false, { sx: 1, alpha: 0.32 * f.alpha * (1 - lift) }); continue; }
       ctx.fillStyle = `rgba(0,0,0,${0.32 * f.alpha * (1 - lift)})`;
       const rx = f.w * 0.36 * (f.hover ? 0.75 : 1) * (0.2 + 0.8 * f.pop) * (1 - lift * 0.6);
       ctx.beginPath(); ctx.ellipse(f.x, f.y, rx, rx * 0.32, 0, 0, 6.28); ctx.fill();
@@ -2324,7 +2305,7 @@ const Retro = (() => {
   const LOOKUP = {};
   for (const [style, ids] of Object.entries(GROUP)) for (const id of ids) LOOKUP[id] = style;
   const RECHARGE = new Set(['hyper-beam', 'giga-impact', 'blast-burn', 'hydro-cannon', 'frenzy-plant', 'roar-of-time', 'rock-wrecker', 'prismatic-laser', 'eternabeam']);
-  // the body action a live 3D Pokémon performs for a move: the contact style of a physical move (CT), else its effect style
+  // the body action for a move (passed to the pixel sprite): the contact style of a physical move (CT), else its effect style
   const CONTACT = { fist: 'fist', kick: 'kick', jaws: 'fang', claws: 'claw', tail: 'tail', charge: 'charge' };
   function bodyStyle(mv) {
     const c = CT[mv.id], k = classify(mv);
@@ -5591,10 +5572,10 @@ const Retro = (() => {
     for (let i = 0; i < 70; i++) { const an = R(0, 6.28), r0 = R(160, 260); spawn({ kind: 'streak', c: [RB[i % 7]], x: 0, y: 0, life: 0.5, delay: i * 0.015, len: 26, ang: an + Math.PI, path: k => ({ x: f.cx + Math.cos(an) * r0 * (1 - easeIn(k)), y: f.cy + Math.sin(an) * r0 * 0.7 * (1 - easeIn(k)) }) }); }
     await tw(1.15, k => { f.white = 0.6 + k * 0.4; f.shiver = k > 0.5 ? 0.08 : 0; if (k > 0.6) shake = Math.max(shake, (k - 0.6) * 8); }); chk(tk);
     const anim = await getAnim(fm.sprite); chk(tk);
-    const vox = (await getLive(fm.name)) || await getVoxel(u, anim);
+    const vox = await getPixel(fm.name);
     if (vox && (tk !== token || !on)) vox.dispose();
     chk(tk);
-    dropLive(f);                                       // the live model of the Mega form takes over (if it has one; f.anim is replaced below)
+    dropLive(f);                                       // the Mega form's pixel sprite takes over (if it has one; f.anim is replaced below)
     // 4. the sphere shatters: flash, shockwave, rainbow shards - the new form stands revealed
     orb.age = orb.life;
     shapes.push({ kind: 'megaorb', f, phase: 'burst', life: 0.45, age: 0 });
@@ -5716,10 +5697,7 @@ const Retro = (() => {
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
     mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
-    const key3 = mon.isMega ? mon.modelKey : mon.species;
-    const [anim, model] = await Promise.all([getAnim(mon.sprite), getLive(key3)]);
-    // a real model first, then the voxel sprite
-    const live = model || await getVoxel(mon, anim);
+    const [anim, live] = await Promise.all([getAnim(mon.sprite), getPixel(mon.isMega ? mon.modelKey : mon.species)]);
     if (live && (tk !== token || !on)) live.dispose();
     chk(tk);
     const tr = trOf(p);
@@ -5753,7 +5731,7 @@ const Retro = (() => {
     F[p] = f;
     focusOn(f.x, f.y - 30, 0.9);
     playCry(mon);
-    if (f.live) f.live.play('roar');                   // the model roars with its cry
+    if (f.live) f.live.play('roar');                   // it powers up with its cry
     await tw(0.32, k => { f.pop = easeOut(k); f.white = 1 - k * 0.6; }); chk(tk);
     f.pop = 1; f.bump(-7);
     dust(f.x, f.y, 1.5);
@@ -6395,12 +6373,11 @@ const Retro = (() => {
     if (engaged !== WM.engaged) { WM.engaged = engaged; AudioFX.Music.setLevel(engaged ? 1 : 0); }
     WM.host.step(dt);
   }
-  // put a Pokémon on the map in slot p (0 = the player): its sprite / live model, popping in with a rustle of leaves
+  // put a Pokémon on the map in slot p (0 = the player): its pixel sprite, popping in with a rustle of leaves
   async function wmPlace(p, mon, x, y, o = {}) {
     const tk = token;
-    // the look: the animated pixel sprite (PixelMons, Adventure's default) where there is one, else the live 3D model / sprite
-    const pix = WM.host.pixel && await PixelMons.has(mon.species);
-    const [anim, model] = await Promise.all([getAnim(mon.sprite), pix ? PixelMons.create(mon.species) : getLive(mon.isMega ? mon.modelKey : mon.species)]);
+    // the look: the animated pixel sprite where there is one, else its animated sprite
+    const [anim, model] = await Promise.all([getAnim(mon.sprite), getPixel(mon.isMega ? mon.modelKey : mon.species)]);
     if (tk !== token || !on || !WM) { if (model) model.dispose(); return null; }
     const f = new Fighter(p, mon, model ? model.anim : anim);
     if (model) { f.live = model; lives.add(f); }
@@ -6411,7 +6388,6 @@ const Retro = (() => {
     f.face = f.faceVis = o.face || (Math.random() < 0.5 ? -1 : 1);
     f.pop = 0; f.white = 1; f.whiteCol = '#ffffff'; f.enterT = T;
     if (!p) f.cd = R(0.2, 0.4);                        // the player is ready to fight at once (the arena's opening pause is for a duel)
-    if (f.live) Object.assign(f.live, p ? { fps: 16 } : { fps: 30, turns: 32, prio: 1 });   // the one you steer animates smoothest
     state.players[p] = { team: [mon], active: 0, usedMega: true };
     multi.side[p] = p ? 1 : 0; multi.names[p] = mon.name;
     F[p] = f;
@@ -6628,11 +6604,10 @@ const Retro = (() => {
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
-    // models of this battle (Mega forms included); older ones beyond a few are freed
+    // the pixel sprites of this battle (Mega forms included)
     const keys = new Set(state.players.flatMap(pl => pl.team.flatMap(m => [m.species, ...(m.megaForm ? [m.megaForm.name] : [])])));
-    if (L3m) L3m.trim(keys);
     warmDiscs();
-    const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(preloadLive), ...state.players.flatMap(pl => pl.team.map(prepVoxel))]);
+    const loading = Promise.all([...srcs.map(getAnim), ...[...keys].map(PixelMons.preload)]);
     const result = new Promise((res, rej) => { resolveBattle = res; rejectBattle = rej; });
     (async () => {
       await intro(opts, tk);

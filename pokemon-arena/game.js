@@ -743,8 +743,6 @@ $('setReplays').checked = prefs.replays !== false;
 $('setFlashes').checked = prefs.flashes !== false;
 $('setCutins').checked = prefs.cutins !== false;
 $('setSudden').value = String(prefs.suddenDeath ?? 60);
-$('setLive3d').checked = prefs.live3d !== false;
-$('setLive3d').onchange = e => { prefs.live3d = e.target.checked; savePrefs(); };
 $('setShorts').checked = !!prefs.shorts; applyShorts(!!prefs.shorts);
 document.body.classList.add('retroMode');                   // Retro 2D is the battle view
 document.querySelectorAll('.fmtSeg button').forEach(b => b.onclick = () => { applyFormat(b.dataset.fmt); prefs.format = settings.format; savePrefs(); });

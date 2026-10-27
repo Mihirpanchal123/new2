@@ -1,5 +1,4 @@
-// Loads the game's classic scripts in order (listed in data-scripts). three.js (lib/, ES modules via the import
-// map) is only fetched by retro3d.js, when a battle has live 3D Pokémon in it.
+// Loads the game's classic scripts in order (listed in data-scripts).
 const loadScript = src => new Promise((resolve, reject) => {
   const s = document.createElement('script');
   s.src = src;

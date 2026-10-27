@@ -1,13 +1,13 @@
 'use strict';
 // =====================================================================
-//  PIXELMON — animated pixel sprites for Adventure mode, drawn in the
+//  PIXELMON — the Pokémon's animated pixel sprites (Adventure and the battles), drawn in the
 //  three-quarter view of the Mystery Dungeon games (PMD Sprite Collab,
 //  pmd/ - see pmd/CREDITS.md; built by tools/build-pmd.mjs). Each
 //  Pokémon walks in 8 directions and has its own idle, attack, ranged
 //  attack, power-up, hurt, sleep and faint animations.
-//  An actor stands in for a live 3D model (retro.js treats both the
-//  same: anim / play / drive / dispose), so the battle engine's moves,
-//  hit reactions and knockouts drive the sprite without knowing it.
+//  An actor (anim / play / drive / dispose) is the fighter's f.live in
+//  retro.js, so the battle engine's moves, hit reactions and knockouts
+//  drive the sprite.
 // =====================================================================
 const PixelMons = (() => {
   let INDEX = null;
@@ -22,7 +22,7 @@ const PixelMons = (() => {
   const ROW_OF_SECTOR = [2, 1, 0, 7, 6, 5, 4, 3];     // sector 0 = right, counting clockwise in 45° steps
   const ROW_X = [0, 1, 1, 1, 0, -1, -1, -1];          // which way a row looks sideways
   const MIRROR = [0, 7, 6, 5, 4, 3, 2, 1];
-  const ACTION = { attack: 'Attack', special: 'Shoot', roar: 'Charge', guard: 'Charge', win: 'Charge', hurt: 'Hurt', down: 'Faint' };
+  const ACTION = { attack: 'Attack', special: 'Shoot', roar: 'Charge', guard: 'Charge', win: 'Charge', hurt: 'Hurt', stun: 'Hurt', down: 'Faint' };
   const PX = 3;                                        // one sprite pixel = one art pixel of the world (3 world units)
 
   async function has(species) { const ix = await index(); return !!ix[species]; }
@@ -65,7 +65,7 @@ const PixelMons = (() => {
       if (ROW_X[this.dir] === 0 && this.face) this.dir = this.dir === 4 ? (this.face > 0 ? 3 : 5) : (this.face > 0 ? 1 : 7);
       return true;
     }
-    // every frame: s = { face, vx, vy, run, moving, sleep, frozen, slow, stagger } (as retro.js gives a live model)
+    // every frame: s = { face, vx, vy, run, moving, sleep, frozen, slow, stagger } (from retro.js)
     drive(dt, s) {
       this.face = Math.sign(s.face) || this.face || 1;
       const sp = Math.hypot(s.vx || 0, s.vy || 0);

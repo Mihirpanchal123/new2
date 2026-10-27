@@ -144,6 +144,45 @@
     #builder .footer .btn { font-size: 13px; padding: 9px 4px; border-radius: 10px; box-shadow: 0 3px 0 #64748b; }
     #builder .footer #startBtn { grid-column: span 2; font-size: 16px; box-shadow: 0 3px 0 #a16207; }
   }
+  /* phones held sideways (a short landscape screen): the Pokédex and the teams side by side, each scrolling on its own,
+     the settings behind ⚙ Settings and one slim row of buttons, so it all fits on the screen */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #builder { height: 100vh; height: 100dvh; overflow: hidden; padding: 6px 10px 0; gap: 6px; }
+    #builder.showSettings { overflow-y: auto; }
+    #builder.showSettings .main { flex: none; height: 82vh; height: 82dvh; }
+    h1.logo { font-size: 20px; text-shadow: 2px 2px 0 #1d4ed8; flex-basis: auto; }
+    .topbar { gap: 6px 10px; }
+    .topbar label { font-size: 12px; }
+    .topbar select, .topbar input[type=number] { padding: 3px 6px; }
+    #builder .seg button { padding: 4px 10px; }
+    #settingsToggle { display: inline-block; padding: 4px 10px; }
+    #settingsToggle[aria-expanded="true"] { background: #2563eb; }
+    #builder:not(.showSettings) .topbar > label:not(.keep), #builder:not(.showSettings) .broadcast-row { display: none; }
+    #builder .main { display: grid; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 46%); gap: 8px; }
+    #builder .pane { min-height: 0; padding: 8px; gap: 6px; border-radius: 10px; }
+    #builder .pane-title { font-size: 13px; }
+    #builder .pane-title .muted:not(#dexCount) { display: none; }
+    #builder .tools { gap: 6px; flex-wrap: nowrap; }
+    #builder #search { width: auto; flex: 1 1 100px; min-width: 0; padding: 4px 6px; }
+    #builder .tools select { padding: 4px; min-width: 0; }
+    #builder .chk { font-size: 11px; white-space: nowrap; }
+    #builder .gentabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    #builder .gentabs::-webkit-scrollbar { display: none; }
+    #builder .gentabs button { padding: 3px 9px; font-size: 11px; }
+    #builder #dex { flex: 1; max-height: none; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 5px; }
+    #builder .dexcard { padding: 3px; }
+    #builder .dexcard .spr { height: 40px; } #builder .dexcard .spr img { max-height: 40px; }
+    #builder .dexcard .nm { font-size: 10px; }
+    #builder .dexcard .type { font-size: 7px; padding: 0 3px; margin: 0 1px; }
+    #builder .dexcard .meta { display: none; }
+    #builder .tabs button { padding: 4px 12px; font-size: 12px; }
+    #builder .teams { flex: 1; min-height: 0; overflow-y: auto; }
+    #builder .teamhead { flex-wrap: wrap; gap: 6px; }
+    #builder .slots { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    #builder .footer { position: static; display: flex; flex-wrap: nowrap; gap: 6px; margin: 0 -10px; padding: 6px 10px 8px; background: rgba(15, 23, 42, .97); }
+    #builder .footer .btn { flex: 1 1 0; min-width: 0; font-size: 12px; line-height: 1.15; padding: 6px 4px; border-radius: 9px; box-shadow: 0 3px 0 #64748b; }
+    #builder .footer #startBtn { flex: 1.4 1 0; font-size: 14px; box-shadow: 0 3px 0 #a16207; }
+  }
   .dexcard { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; position: relative; }
   .dexcard:hover { border-color: #facc15; }
   .dexcard .spr { height: 64px; display: flex; align-items: flex-end; justify-content: center; }
@@ -817,7 +856,6 @@
     <label title="One-beat negative flash on the heaviest hits (turn off if flashing images bother you)"><input type="checkbox" id="setFlashes" checked> ⚡ Impact flashes</label>
     <label title="A cut-in banner before ultimate moves"><input type="checkbox" id="setCutins" checked> 🎬 Cut-ins</label>
     <label title="Retro 2D: after this time hits land 1.5× harder and come faster, so short videos always reach a climax">⏱ Sudden death <select id="setSudden"><option value="0">Off</option><option value="30">30 s</option><option value="45">45 s</option><option value="60">60 s</option><option value="90">90 s</option></select></label>
-    <label title="Retro 2D: Pokémon are rendered live from their 3D model as pixel art (loads the 3D library for that battle)"><input type="checkbox" id="setLive3d" checked> 🎲 Live 3D Pokémon</label>
     <label><input type="checkbox" id="setShorts"> 📱 Shorts mode (9:16)</label>
     <label>Channel <input id="setChannel" type="text" placeholder="your channel name" maxlength="28"></label>
   </div>
@@ -856,7 +894,6 @@
 
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
-<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
 <script type="module" src="boot.mjs" data-scripts="data.js,base.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js"></script>
 </body>
 </html>

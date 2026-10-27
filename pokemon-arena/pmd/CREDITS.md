@@ -1,4 +1,4 @@
-# Pokémon pixel sprites (Adventure mode)
+# Pokémon pixel sprites (Adventure and battles)
 
 From the PMD Sprite Collab: https://github.com/PMDCollab/SpriteCollab (https://sprites.pmdcollab.org).
 Licensed CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/): **non-commercial use only**, with credit to the
