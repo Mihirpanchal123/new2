@@ -795,6 +795,80 @@
   body.touchUI #retro.port .ah-tmenu { left: auto; right: calc(var(--u) * 14); top: calc(var(--u) * 300); transform: none; flex-direction: column; align-items: stretch; }
   body.adventure.touchUI #retro.port ~ #battleCtl { top: 84px; left: 10px; transform: none; }
   body.adventure.touchUI #retro.port ~ #recBtn { display: none; }
+  /* money on the card */
+  .ah-card .coins { position: absolute; left: calc(var(--u) * 336); top: calc(var(--u) * 84); font-size: calc(var(--u) * 15); color: #fde047; -webkit-text-stroke: calc(var(--u) * 4) #1b1530; paint-order: stroke fill; white-space: nowrap; }
+  .ah-card .coins span { margin-left: calc(var(--u) * 3); color: #fff; }
+  .ah-wallet { margin-left: auto; align-self: center; font-size: calc(var(--u) * 17); color: #fde047; } .ah-tabs .ah-wallet + .x { margin-left: calc(var(--u) * 10); }
+  /* the team waiting on the bench, under the card (click / tap to send one out) */
+  .ah-party { position: absolute; left: calc(var(--u) * 14); top: calc(var(--u) * 146); display: flex; gap: calc(var(--u) * 6); pointer-events: auto; }
+  .ah-party button { position: relative; width: calc(var(--u) * 58); height: calc(var(--u) * 58); padding: 0; border-radius: calc(var(--u) * 10); border: calc(var(--u) * 3) solid #1b1530; background: radial-gradient(circle at 50% 40%, #fff6d8, #f2c879 70%); cursor: pointer; overflow: hidden; box-shadow: 0 calc(var(--u) * 3) 0 rgba(0,0,0,.35); font-family: Tiny5, monospace; }
+  .ah-party img { position: absolute; left: 50%; bottom: 0; width: 120%; height: 120%; transform: translateX(-50%); object-fit: contain; object-position: center bottom; image-rendering: pixelated; }
+  .ah-party small { position: absolute; left: calc(var(--u) * 2); top: 0; font-size: calc(var(--u) * 11); color: #fff; -webkit-text-stroke: calc(var(--u) * 3) #1b1530; paint-order: stroke fill; }
+  .ah-party i { position: absolute; left: 0; bottom: 0; height: calc(var(--u) * 6); border-top: calc(var(--u) * 1.5) solid #1b1530; }
+  .ah-party button.down img { filter: grayscale(1) brightness(.6); } .ah-party button.wait { opacity: .6; }
+  body.adventure .ah-feed { top: calc(var(--u) * 214); }
+  /* the target card: who the next move goes to */
+  .ah-panel { z-index: 6; }
+  .ah-target { position: absolute; left: 50%; top: max(calc(var(--u) * 62), 50px); transform: translateX(-50%); width: calc(var(--u) * 300); height: calc(var(--u) * 74); padding-left: calc(var(--u) * 74); background: rgba(22,16,36,.82); border: calc(var(--u) * 3) solid #ffe066; border-radius: calc(var(--u) * 12); box-shadow: 0 0 0 calc(var(--u) * 2) #1b1530, 0 calc(var(--u) * 4) 0 rgba(0,0,0,.35); box-sizing: border-box; }
+  .ah-target.hostile { border-color: #ff4a4a; }
+  .ah-target.pop { animation: ahPop .28s ease-out; }
+  @keyframes ahPop { 0% { transform: translateX(-50%) scale(.86); opacity: .3; } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
+  .ah-target .por { position: absolute; left: calc(var(--u) * 4); top: calc(var(--u) * 4); width: calc(var(--u) * 62); height: calc(var(--u) * 60); border-radius: calc(var(--u) * 8); background: radial-gradient(circle at 50% 40%, #fff6d8, #f2c879 70%); overflow: hidden; }
+  .ah-target .por img { position: absolute; left: 50%; bottom: -10%; width: 140%; height: 140%; transform: translateX(-50%); object-fit: contain; object-position: center bottom; image-rendering: pixelated; }
+  .ah-target .tn { margin-top: calc(var(--u) * 2); white-space: nowrap; overflow: hidden; }
+  .ah-target .tn b { font-weight: 400; font-size: calc(var(--u) * 19); color: #fff; text-transform: uppercase; }
+  .ah-target .tn small { margin-left: calc(var(--u) * 6); font-size: calc(var(--u) * 15); }
+  .ah-target .chips { display: flex; gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 1); }
+  .ah-target .chip { font-size: calc(var(--u) * 10.5); line-height: 1.2; padding: 0 calc(var(--u) * 5); border-radius: calc(var(--u) * 5); border: calc(var(--u) * 1.5) solid rgba(255,255,255,.85); text-shadow: 0 calc(var(--u) * 1) 0 rgba(0,0,0,.45); }
+  .ah-target .tbar { position: absolute; left: calc(var(--u) * 74); right: calc(var(--u) * 8); bottom: calc(var(--u) * 7); height: calc(var(--u) * 9); background: #222849; border: calc(var(--u) * 2) solid #13152b; border-radius: calc(var(--u) * 5); overflow: hidden; }
+  .ah-target .tbar i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .25s ease-out; }
+  /* effectiveness on the move buttons */
+  .ah-mv .ef, .ah-tm .ef { position: absolute; font-style: normal; font-size: calc(var(--u) * 12); line-height: 1; padding: calc(var(--u) * 2) calc(var(--u) * 4); border-radius: calc(var(--u) * 5); border: calc(var(--u) * 1.5) solid #1b1530; z-index: 2; }
+  .ah-mv .ef { right: calc(var(--u) * 5); bottom: calc(var(--u) * 4); } .ah-tm .ef { left: 50%; bottom: calc(var(--u) * 6); transform: translateX(-50%); }
+  .ef.up { background: #22c55e; color: #fff; } .ef.down { background: #94a3b8; color: #1b1530; } .ef.no { background: #1b1530; color: #f87171; border-color: #f87171; }
+  /* tips for a new adventure, above the move bar */
+  .ah-tut { position: absolute; left: 50%; bottom: calc(var(--u) * 84); transform: translateX(-50%); width: min(calc(var(--u) * 640), 92%); padding: calc(var(--u) * 8) calc(var(--u) * 14); background: rgba(22,16,36,.9); border: calc(var(--u) * 3) solid #5ae0ff; border-radius: calc(var(--u) * 12); box-shadow: 0 0 0 calc(var(--u) * 2) #1b1530; display: flex; gap: calc(var(--u) * 10); align-items: center; pointer-events: auto; }
+  .ah-tut.pop { animation: ahPop .3s ease-out; }
+  .ah-tut p { flex: 1; margin: 0; font-size: calc(var(--u) * 15); line-height: 1.35; color: #f1f5f9; } .ah-tut p > b:first-child { color: #5ae0ff; font-weight: 400; margin-right: calc(var(--u) * 4); }
+  .ah-tut .ty { color: #ffe066; font-weight: 400; } .ah-tut .tc { color: #5ae0ff; font-weight: 400; }
+  .ah-tut button { font-family: Tiny5, monospace; font-size: calc(var(--u) * 12); padding: calc(var(--u) * 3) calc(var(--u) * 8); border-radius: calc(var(--u) * 6); border: none; background: rgba(255,255,255,.14); color: #cbd5e1; cursor: pointer; flex: none; }
+  body.touchUI .ah-tut { bottom: auto; top: calc(var(--u) * 150); }
+  /* dungeon line in the tracker */
+  .ah-quests div.dg { border-left-color: #b46aff; pointer-events: auto; } .ah-quests div.dg b { color: #d8b4fe; }
+  .ah-quests div.dg button { position: absolute; right: calc(var(--u) * 6); top: calc(var(--u) * 5); font-family: Tiny5, monospace; font-size: calc(var(--u) * 11); border: none; border-radius: calc(var(--u) * 5); background: #e2e8f0; color: #1b1530; cursor: pointer; padding: calc(var(--u) * 1) calc(var(--u) * 6); }
+  /* fade between dungeon floors */
+  .ah-fade { position: absolute; inset: 0; background: #08060f; opacity: 0; pointer-events: none; transition: opacity .35s; }
+  .ah-fade.on { opacity: 1; }
+  /* team, Pokédex panels */
+  .ah-mate { display: flex; gap: calc(var(--u) * 12); align-items: center; padding: calc(var(--u) * 8) calc(var(--u) * 10); border-radius: calc(var(--u) * 10); background: rgba(255,255,255,.06); margin-bottom: calc(var(--u) * 8); border: calc(var(--u) * 2) solid transparent; }
+  .ah-mate.out { border-color: #facc15; } .ah-mate.down > img { filter: grayscale(1) brightness(.6); }
+  .ah-mate > img { width: calc(var(--u) * 72); height: calc(var(--u) * 72); object-fit: contain; image-rendering: pixelated; background: radial-gradient(circle at 50% 40%, #fff6d8, #f2c879 70%); border-radius: calc(var(--u) * 10); flex: none; }
+  .ah-mate > div:not(.acts) { flex: 1; min-width: 0; } .ah-mate b { font-weight: 400; font-size: calc(var(--u) * 18); }
+  .ah-mate .chip { font-size: calc(var(--u) * 11); padding: 0 calc(var(--u) * 5); border-radius: calc(var(--u) * 5); margin-left: calc(var(--u) * 2); }
+  .ah-mate .hpb { position: relative; height: calc(var(--u) * 14); margin: calc(var(--u) * 4) 0; background: #222849; border: calc(var(--u) * 2) solid #13152b; border-radius: calc(var(--u) * 6); overflow: hidden; max-width: calc(var(--u) * 320); }
+  .ah-mate .hpb i { position: absolute; left: 0; top: 0; bottom: 0; } .ah-mate .hpb span { position: absolute; right: calc(var(--u) * 6); top: 50%; transform: translateY(-50%); font-size: calc(var(--u) * 11); }
+  .ah-mate .acts { display: flex; flex-direction: column; gap: calc(var(--u) * 4); align-items: stretch; } .ah-mate .acts em { font-style: normal; color: #facc15; text-align: center; }
+  .ah-dexb { margin-bottom: calc(var(--u) * 10); } .ah-dexb > b { font-weight: 400; color: #fde68a; font-size: calc(var(--u) * 17); } .ah-dexb > small { color: #94a3b8; }
+  .ah-dexg { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 5); margin-top: calc(var(--u) * 4); }
+  .ah-dexe { position: relative; width: calc(var(--u) * 76); padding: calc(var(--u) * 3); border-radius: calc(var(--u) * 8); background: rgba(255,255,255,.07); text-align: center; }
+  .ah-dexe img { width: calc(var(--u) * 52); height: calc(var(--u) * 52); object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto; }
+  .ah-dexe.unseen img { filter: brightness(0); opacity: .35; } .ah-dexe.won { background: rgba(134,239,172,.14); }
+  .ah-dexe small { display: block; font-size: calc(var(--u) * 10.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ah-dexe i { position: absolute; left: calc(var(--u) * 4); top: calc(var(--u) * 2); font-style: normal; color: #fde047; font-size: calc(var(--u) * 12); }
+  .ah-dexe em { position: absolute; right: calc(var(--u) * 4); top: calc(var(--u) * 2); font-style: normal; color: #86efac; font-size: calc(var(--u) * 13); }
+  .adv-cont img.mate { width: 40px; height: 40px; margin-left: -10px; }
+  /* touch: DODGE next to RUN, TARGET above it */
+  .ah-dodge, .ah-tgt { position: absolute; border-radius: 50%; font-family: Tiny5, monospace; color: #1b1530; border: calc(var(--u) * 4) solid #1b1530; box-shadow: 0 calc(var(--u) * 5) 0 rgba(0,0,0,.35); pointer-events: auto; touch-action: none; }
+  .ah-dodge { right: calc(var(--u) * 500); bottom: calc(var(--u) * 26); width: calc(var(--u) * 104); height: calc(var(--u) * 104); font-size: calc(var(--u) * 19); background: #c4b5fd; }
+  .ah-tgt { right: calc(var(--u) * 400); bottom: calc(var(--u) * 140); width: calc(var(--u) * 84); height: calc(var(--u) * 84); font-size: calc(var(--u) * 14); background: #ffe066; }
+  .ah-dodge:active, .ah-tgt:active { transform: scale(.94); }
+  body.touchUI #retro.port .ah-dodge { right: calc(var(--u) * 330); bottom: calc(var(--u) * 370); }
+  body.touchUI #retro.port .ah-tgt { right: calc(var(--u) * 230); bottom: calc(var(--u) * 400); }
+  body.touchUI .ah-target { top: calc(var(--u) * 124); }
+  body.touchUI .ah-tut { top: calc(var(--u) * 208); }
+  #retro.port .ah-target { top: auto; bottom: calc(var(--u) * 620); width: calc(var(--u) * 280); }
+  body.touchUI #retro.port .ah-tut { top: auto; bottom: calc(var(--u) * 712); }
+  body.touchUI #retro.port .ah-party { top: calc(var(--u) * 330); flex-direction: column; }
 </style>
 </head>
 <body>

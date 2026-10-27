@@ -113,6 +113,7 @@ const AudioFX = (() => {
     // a rising electric hum while a move powers up
     hum: (dur = 0.5) => { tone({ type: 'sawtooth', f: 70, f2: 240, dur, g: 0.07, a: dur * 0.8, vib: 30 }); crackle(dur, 10, 0.08); },
     // the bright ring of light catching metal
+    lock: () => { tone({ type: 'square', f: 1320, f2: 1760, dur: 0.05, g: 0.025 }); tone({ type: 'square', f: 1760, dur: 0.04, g: 0.02, at: 0.05 }); },
     glint: () => { tone({ f: 2600, f2: 3300, dur: 0.35, g: 0.05 }); tone({ type: 'triangle', f: 5200, dur: 0.25, g: 0.02, at: 0.02 }); },
     thunder: () => { noise({ dur: 1.4, g: 0.55, f: 1800, f2: 60, a: 0.01 }); thump(1.3); crackle(0.4, 24, 0.25); },
     slash: () => { noise({ dur: 0.16, g: 0.3, a: 0.02, type: 'highpass', f: 1800, f2: 6000 }); tone({ f: 2400, f2: 1800, dur: 0.15, g: 0.04 }); },
