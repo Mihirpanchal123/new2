@@ -65,6 +65,26 @@ const PixelMons = (() => {
       if (ROW_X[this.dir] === 0 && this.face) this.dir = this.dir === 4 ? (this.face > 0 ? 3 : 5) : (this.face > 0 ? 1 : 7);
       return true;
     }
+    // a wind-up: play the clip up to the frame before its strike and hold that pose until release()
+    hold(kind) {
+      this.play(kind);
+      const a = this.anims[this.act.name], h = a.hit ?? Math.floor(a.d.length / 2);
+      this.act.stop = a.d.slice(0, h).reduce((s, d) => s + d, 0);
+      return true;
+    }
+    // the blow lands: the strike frame shows now and the clip plays out
+    release() {
+      if (this.act && this.act.stop != null) { this.act.t = Math.max(this.act.t, this.act.stop); this.act.stop = null; }
+    }
+    // the move is over: a pose still held (or a power-up still looping) goes back to standing
+    settle() {
+      if (this.act && (this.act.stop != null || this.act.loop)) this.act = null;
+    }
+    // a power-up: the clip repeats until the next play / hold
+    loop(kind) {
+      this.play(kind);
+      this.act.loop = true;
+    }
     // every frame: s = { face, vx, vy, run, moving, sleep, frozen, slow, stagger } (from retro.js)
     drive(dt, s) {
       this.face = Math.sign(s.face) || this.face || 1;
@@ -82,7 +102,8 @@ const PixelMons = (() => {
       if (this.act) {
         const a = this.anims[this.act.name];
         this.act.t += dt * 60 * k;
-        if (this.act.t >= a.total) { if (this.act.hold) this.act.t = a.total - 0.01; else this.act = null; }
+        if (this.act.stop != null) this.act.t = Math.min(this.act.t, this.act.stop - 0.01);
+        else if (this.act.t >= a.total) { if (this.act.hold) this.act.t = a.total - 0.01; else if (this.act.loop) this.act.t %= a.total; else this.act = null; }
       }
       this.t += dt * 60 * this.rate * k;
       this.paint();

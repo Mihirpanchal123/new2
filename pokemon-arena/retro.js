@@ -2350,21 +2350,47 @@ const Retro = (() => {
   const PAL = m => tp(m.type || 'Normal');
   const side = () => (Math.random() < 0.5 ? -1 : 1);
   const AURA_C = ['#ffffff', '#bfe6ff', '#4aa8ff', '#1e5ad6', '#0c2a7a'];
+  // a move authored as a table of [frame (60 fps), step] rows: the steps run in frame order on the game clock, so a
+  // hit-stop or slow motion holds the sequence too, and it stops when the battle ends (false)
+  async function timeline(rows) {
+    const tk = token;
+    let at = 0;
+    for (const [fr, step] of rows.slice().sort((a, b) => a[0] - b[0])) {
+      if (fr > at) { await wait((fr - at) * 1000 / 60); at = fr; }
+      if (tk !== token || !on) return false;
+      step();
+    }
+    return true;
+  }
+  const every = (from, to, step, fn) => { const rows = []; for (let fr = from, i = 0; fr <= to; fr += step, i++) rows.push([fr, () => fn(i, fr)]); return rows; };
+  // the pixel sprite's strike frame, right now (a cast's release, a blow landing)
+  // one punctuation per blow: the negative impact frame when it fires (it is rate-limited), else a flash - never both,
+  // or the inverted flash turns the whole frame black
+  const punctuate = (x, y, frame, col, a) => { if (frame) impactFrame(x, y); if (!(impactUntil > FT)) flash(col, a); };
+  const strikePose = (f, kind) => { if (f.live && f.live.hold) { f.live.hold(kind); f.live.release(); } };
   // anticipation: crouch, an aura and energy gathering at the mouth, then a recoil on release
   async function charge(f, m, sec = 0.3, o = {}) {
     sec = Math.max(0.2, sec * 1.6 / tempo(f));
     const P = PAL(m), col = o.col || P.c[1];
-    // a big wind-up (it dims the scene, or takes a while) gets a gentle push-in on the attacker
-    if ((o.dim >= 0.25 || sec > 0.7) && !calm()) camShot('anticipate', { f, w: 0.3, z: 1.06, hold: sec + 0.2 });
+    // a big wind-up (it dims the scene, takes a while, or a strong move) gets a push-in on the attacker
+    const strong = (m.power || 0) >= 90;
+    if ((o.dim >= 0.25 || sec > 0.7 || strong) && !calm()) camShot('anticipate', { f, w: 0.3, z: strong ? 1.08 : 1.06, hold: sec + 0.2 });
     f.crouchT = 1; f.aura = col; f.auraT = FT + sec + 0.15;
+    if (f.live && f.live.loop) f.live.loop('roar');   // the pixel sprite powers up through the charge...
     if (o.dim) dimTo(o.dim, sec + (o.hold ?? 0.7));
     for (let i = 0; i < (o.motes || 18) * 1.6; i++) {
       const an = R(0, 6.28), r = R(30, 80);
       moteP(0, 0, o.moteCol || col, { life: sec * 0.7, delay: i * sec / 40, s: 1, path: k => { const mo = f.mouth(); return { x: mo.x + Math.cos(an) * r * (1 - k), y: mo.y + Math.sin(an) * r * (1 - k) }; } });
     }
     spawn({ kind: 'glow', c: [col], x: 0, y: 0, s0: 4, s1: o.size || 36, life: sec + 0.06, a: 0.9, must: true, path: () => f.mouth() });
-    await wait(sec * 1000);
+    // the held beat: the last few frames of the charge the body flashes and trembles, the instant before release
+    const beat = Math.min(0.1, sec * 0.3);
+    await wait((sec - beat) * 1000);
+    f.white = Math.max(f.white, strong ? 0.9 : 0.6); f.whiteCol = '#ffffff';
+    if (strong) shakeIt(2);
+    await wait(beat * 1000);
     f.crouchT = 0; f.bump(-5);
+    strikePose(f, 'special');                          // ...and casts on release
     f.kx -= f.face * (o.recoil ?? 90);
   }
   async function windup(f, d, sec = 0.14) {
@@ -2564,18 +2590,58 @@ const Retro = (() => {
     if (!o.miss && B.w >= 24) camPunch(d.cx, d.cy, 0.06, 0.5);
     await wait(Math.max(0, (b.life - b.age) * 1000));
   };
+  // Thunderbolt (and Thunder Shock, lighter), frame by frame at 60 fps: a charge that builds to a held beat, one bolt
+  // that lands all at once (lightning has no travel time) and re-strikes through the hit-stop while the target flashes,
+  // then stray arcs, falling sparks and a singed puff of smoke
   S.bolt = async (f, d, m, o, hit) => {
-    const pw = (m.power || 60) >= 80 ? 1 : 0.65;
-    await charge(f, m, 0.22, { col: '#fff59a', motes: 10, size: 26, recoil: 40 });
-    SFX.zap(); SFX.thunder && pw >= 1 && SFX.zap();
-    const off = o.miss ? 80 * side() : 0;
-    for (let i = 0; i < (pw >= 1 ? 6 : 3); i++) later(() => boltFx({ from: f, to: o.miss ? null : d, off, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx + off, by: d.cy + (o.miss ? 30 : 0), jag: 30 * pw, c: TP.Electric.c, life: 0.42, w: pw }), i * 120);
-    lightAt(d.x + off, d.y, 200 * pw, '#ffe94a', 0.6, 0.9);
-    flash('#fffbe0', 0.12 * pw);
-    await wait(90);
-    hit();
-    if (!o.miss) { const fz = d; for (let i = 0; i < 16; i++) later(() => { if (fz.state === 'idle') { fz.white = 0.8; fz.whiteCol = '#fff59a'; sparkP(fz.x + R(-fz.w / 2, fz.w / 2), fz.cy + R(-fz.h / 2, fz.h / 2), R(0, 6.28), R(60, 160), '#fff27a', 0.2); } }, i * 50); }
-    await wait(700);
+    const pw = (m.power || 60) >= 80 ? 1 : 0.6, big = pw >= 1, C = TP.Electric.c;
+    const A = Math.round(clamp((big ? 28 : 16) / tempo(f), big ? 20 : 12, big ? 36 : 20));   // the wind-up: a fast Pokémon charges quicker
+    const off = o.miss ? 80 * side() : 0, tx = () => d.cx + off, ty = () => d.cy + (o.miss ? 30 : 0);
+    const cheeks = () => { const mo = f.mouth(); return [{ x: mo.x - f.face * f.w * 0.12, y: mo.y + 3 }, { x: mo.x + f.face * f.w * 0.04, y: mo.y + 3 }]; };
+    const par0 = d.mon.status === 'par';
+    let landed = false;
+    await timeline([
+      // anticipation: a crouch, energy pulled in from all sides, sparks off the cheeks, arcs crawling over the body
+      [0, () => {
+        f.face = Math.sign(d.x - f.x) || f.face; f.crouchT = 1; f.aura = '#fff59a'; f.auraT = FT + A / 60 + 0.15;
+        if (f.live && f.live.loop) f.live.loop('roar');
+        if (big) { dimTo(0.35, (A + 40) / 60); if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.1, hold: (A + 12) / 60 }); }
+        SFX.hum(A / 60);
+        spawn({ kind: 'glow', c: ['#fff59a'], x: 0, y: 0, s0: 4, s1: big ? 34 : 22, life: A / 60, a: 0.9, must: true, path: () => f.mouth() });
+        for (let i = 0; i < (big ? 26 : 12); i++) { const an = R(0, 6.28), r = R(40, 90); moteP(0, 0, '#fff59a', { life: A / 60 * 0.6, delay: i * A / 60 / 30, s: 1, path: k => ({ x: f.cx + Math.cos(an) * r * (1 - k), y: f.cy + Math.sin(an) * r * 0.7 * (1 - k) }) }); }
+      }],
+      ...every(0, A - 4, 3, () => { for (const c of cheeks()) sparkP(c.x, c.y, R(0, 6.28), R(60, 140), '#fff27a', 0.16); }),
+      ...every(6, A - 6, big ? 4 : 6, () => { const x = f.x + R(-f.w * 0.4, f.w * 0.4), y = f.cy + R(-f.h * 0.4, f.h * 0.3); boltFx({ ax: x, ay: y, bx: x + R(-26, 26), by: y + R(-22, 22), jag: 8, c: C, life: 0.1, w: 0.45 }); }),
+      ...(big ? every(8, A - 6, 6, () => { if (!f.hover) sparkP(f.x + R(-f.w / 2, f.w / 2), f.y, R(3.6, 5.8), R(80, 180), '#fff27a', 0.22, { g2: 500 }); }) : []),
+      // the held beat: the body flashes white and trembles the instant before release
+      [A - 6, () => { f.white = 1; f.whiteCol = '#fffbe0'; if (big) shakeIt(2); }],
+      [A - 2, () => { f.crouchT = 0; if (f.live && f.live.hold) f.live.hold('special'); }],
+      // the strike: one full-length bolt plus forks, a flash, a hit-stop with an impact frame, and the camera punches in
+      [A, () => {
+        if (f.live && f.live.release) f.live.release();
+        f.bump(-6); f.kx -= f.face * 40;
+        SFX.zap(); if (big) SFX.thunder();
+        boltFx({ from: f, to: o.miss ? null : d, off, ax: f.mouth().x, ay: f.mouth().y, bx: tx(), by: ty(), jag: 26 * pw, c: C, life: big ? 0.5 : 0.3, w: 2.2 * pw });
+        for (let i = 0; i < (big ? 2 : 1); i++) boltFx({ ax: tx(), ay: ty(), bx: tx() + R(-70, 70), by: ty() + R(-60, 50), jag: 14, c: C, life: 0.22, w: 0.8 });
+        lightAt(tx(), d.y, 220 * pw, '#ffe94a', 0.7, 0.95);
+        if (o.miss) { flash('#fffbe0', 0.2); addDecal('scorch', d.x + off, d.y + 20, 0.8); for (let i = 0; i < 10; i++) sparkP(d.x + off, d.y + 20, R(3.4, 6), R(120, 300), '#fff27a', 0.35, { g2: 700 }); hit(); return; }
+        hitStop(big ? 100 : 50);
+        punctuate(d.cx, d.cy, big, '#fffbe0', 0.35 * pw);
+        const hp = d.mon.hp; hit(); landed = d.mon.hp < hp;
+        camPunch(d.cx, d.cy, 0.08 * pw, 0.35);
+      }],
+      [A + 1, () => { if (landed) shakeIt(6 * pw); }],
+      // re-strikes: the bolt snaps to a new shape every 4 frames while the target flashes in time (electrocution)
+      ...(o.miss ? [] : every(A + 4, A + (big ? 16 : 8), 4, i => { if (!landed || d.state !== 'idle') return; boltFx({ from: f, to: d, ax: f.mouth().x, ay: f.mouth().y, bx: d.cx, by: d.cy, jag: 22 * pw, c: C, life: 0.12, w: Math.max(0.6, 1.8 - i * 0.35) * pw }); if (i % 2 === 0) SFX.zap(); })),
+      ...(o.miss ? [] : every(A + 2, A + (big ? 20 : 10), 2, i => { if (landed && d.state === 'idle') { d.white = i % 2 ? 0 : 0.9; d.whiteCol = '#fff59a'; } })),
+      // the aftermath: stray arcs and falling sparks on the target, a singed puff of smoke, a scorch mark
+      ...(o.miss ? [] : every(A + 22, A + (big ? 46 : 30), 5, () => { if (!landed || d.state !== 'idle') return; const x = d.x + R(-d.w * 0.4, d.w * 0.4), y = d.cy + R(-d.h * 0.4, d.h * 0.3); boltFx({ ax: x, ay: y, bx: x + R(-22, 22), by: y + R(-18, 18), jag: 7, c: C, life: 0.08, w: 0.5 }); sparkP(x, y, R(3.6, 5.8), R(60, 140), '#fff27a', 0.3, { g2: 600 }); })),
+      [A + 26, () => { if (!landed || d.state !== 'idle') return; const sm = ['#b4aea8', '#8a8480', '#5e5a58']; smokeP(d.x - 8, d.top + 10, 3, 0.9, sm); smokeP(d.x + 10, d.top + 16, 2.5, 0.8, sm); if (big) addDecal('scorch', d.x, d.y, 0.7); }],
+      // paralysed: its own beat after the damage, a ring of light snapping shut
+      [A + 36, () => { if (landed && big && !par0 && d.state === 'idle' && d.mon.status === 'par') { ringP(d.x, d.cy, 80, 8, '#fff59a', 0.22, { flat: 1, w: 2 }); SFX.status('par'); } }],
+      ...every(A + 30, A + 44, 14, () => { for (const c of cheeks()) sparkP(c.x, c.y, R(0, 6.28), R(40, 100), '#fff27a', 0.14); }),
+      [A + (big ? 44 : 30), () => {}]                  // free to act again; the aftermath keeps playing on its own
+    ]);
   };
   S.sky = async (f, d, m, o, hit) => {
     await charge(f, m, 0.4, { col: '#fff59a', dim: 0.5, hold: 0.9, size: 30 });
@@ -3339,7 +3405,13 @@ const Retro = (() => {
     if (!on || f.state !== 'idle' || d.state !== 'idle') return;
     const big = (m.power || 60) >= 100 || (spec.size || 1) >= 1.3, c = spec.c, n = spec.n || 1;
     if (spec.aura || big) { f.aura = c[1]; f.auraT = FT + 0.8; dimTo(big ? 0.3 : 0.18, 0.9); for (let i = 0; i < 14; i++) moteP(f.cx + R(-f.w / 2, f.w / 2), f.cy + R(-f.h / 2, f.h / 2), c[1], { vy: -70, life: 0.5, delay: i * 0.015 }); }
-    if (!spec.fast) await windup2(f, d, spec, big);
+    if (f.live && f.live.hold) f.live.hold('attack');  // the pixel sprite holds its wind-up pose until the blow lands
+    if (!spec.fast) {
+      await windup2(f, d, spec, big);
+      // the held beat at the top of the wind-up (a big blow flashes its colour and trembles), then the launch
+      if (big) { f.white = 0.7; f.whiteCol = c[0]; shakeIt(2); }
+      await wait(big ? 85 : 35);
+    }
     const s = await lunge(f, d, spec, big);
     if (!on) return;
     const strike = STRIKE[spec.v] || STRIKE.charge;
@@ -3348,6 +3420,7 @@ const Retro = (() => {
       const landed = () => {
         if (landed.done) return;
         landed.done = true;
+        if (h === 0) { if (f.live && f.live.release) f.live.release(); } else strikePose(f, 'attack');
         if (h === 0) { const hp = d.mon.hp; hit(); f.whiff = !(d.mon.hp < hp); }
         else if (f.whiff) return;
         else { impactAt(spec.el || t, d.cx, d.cy, d.y, 0.5, { quiet: true }); d.white = 1; d.bump(3); SFX.impact(t, 0.6, 1); }
@@ -3390,6 +3463,82 @@ const Retro = (() => {
   };
   SIG['thunderbolt'] = S.bolt;
   SIG['thunder-shock'] = async (f, d, m, o, hit) => S.bolt(f, d, { ...m, power: 40 }, o, hit);
+  // Iron Tail, frame by frame at 60 fps: a counter-turn loads the tail, the tail turns to steel with a glint, a leap and
+  // a dive bring it down in one smeared swing; a heavy hit-stop, a shower of metal sparks, then a skidding landing.
+  // A miss slams the tail into the ground instead
+  SIG['iron-tail'] = async (f, d, m, o, hit) => {
+    const C = CT['iron-tail'].c, steel = [C[0], C[1], C[2], C[3]];
+    await runUp(f, d, 300);
+    if (!on || f.state !== 'idle' || d.state !== 'idle') return;
+    const dir = Math.sign(d.x - f.x) || f.face, start = { sx: f.x, sy: f.y };
+    const A = Math.round(clamp(26 / tempo(f), 18, 34)), turn = Math.max(4, A - 16);   // the wind-up: a fast Pokémon loads quicker
+    const tail = () => ({ x: f.x - dir * f.w * 0.38, y: f.cy + f.h * 0.12 });
+    let landed = false, hitX = d.x - dir * (f.r + d.r) * 0.85;
+    const ok = await timeline([
+      // anticipation: plant, a counter-turn and a step back to load the tail; the scene dims and the camera leans in
+      [0, () => {
+        f.face = dir; f.crouchT = 1;
+        if (f.live && f.live.hold) f.live.hold('attack');
+        dimTo(0.28, (A + 34) / 60);
+        if (!calm()) camShot('anticipate', { f, w: 0.3, z: 1.05, hold: (A + 20) / 60 });
+      }],
+      [2, () => { const x0 = f.x; f.face = -dir; tw(turn / 60, k => { const e = easeOut(k); f.x = x0 - dir * 26 * e; f.rotA = -dir * 0.2 * e; }); }],
+      // the tail turns to steel: silver motes wind round it, then a glint at the tip with a metallic ring
+      [4, () => { for (let i = 0; i < 14; i++) { const a0 = R(0, 6.28); moteP(0, 0, i % 2 ? '#ffffff' : '#c8d2e0', { life: 0.4, delay: i * 0.015, s: 1, path: k => { const t = tail(); return { x: t.x + Math.cos(a0 + k * 7) * 26 * (1 - k * 0.7), y: t.y + Math.sin(a0 + k * 7) * 14 * (1 - k * 0.7) }; } }); } }],
+      [A - 14, () => { const t = tail(); spawn({ bm: 'star', c: ['#ffffff', '#ffffff', '#cfd8e6'], x: t.x, y: t.y, s0: 4, s1: 1, life: 0.3, rot: 0, spin: 4, must: true }); glowP(t.x, t.y, 6, 50, '#ffffff', 0.24, 1); SFX.glint(); f.white = 0.22; f.whiteCol = '#e8eef8'; }],
+      // the leap: up and forward
+      [A - 12, () => { f.crouchT = 0; f.face = dir; SFX.whoosh(); const xa = f.x; tw(6 / 60, k => { f.jz = easeOut(k) * 40; f.x = xa + dir * 10 * k; f.rotA = -dir * 0.2 * (1 - k); }); }],
+      // the dive: a 6-frame lunge with silver afterimages and speed streaks
+      [A - 6, () => {
+        const xa = f.x, ya = f.y, ty = d.y + 2, tx = hitX = d.x - dir * (f.r + d.r) * 0.85;
+        f.dashing = true; f.after = 0.3; f.afterCol = '#dfe6f0';
+        tw(6 / 60, k => { const e = easeIn(k); f.x = xa + (tx - xa) * e; f.y = ya + (ty - ya) * e; f.jz = 40 - 16 * k; f.rotA = dir * 0.25 * k; });
+        for (let i = 0; i < 8; i++) spawn({ kind: 'streak', c: ['#ffffff'], x: f.cx + R(-30, 30), y: f.cy + R(-f.h / 2, f.h / 2), vx: dir * 900, vy: 0, life: 0.18, len: 70, ang: dir > 0 ? 0 : Math.PI });
+      }],
+      // the smear: the swing drawn as one wide arc over the top and down through the target, centred where the blow
+      // lands; its head reaches the target on the contact frame
+      [A - 5, () => {
+        SFX.slash();
+        const r = Math.abs(d.cx - hitX) * 1.1 + 24;
+        shapes.push({ kind: 'smear', x: hitX, y: d.cy, r, w: 42, a0: dir > 0 ? -2.3 : -0.84, a1: dir > 0 ? 0.55 : Math.PI - 0.55, c: C, life: 0.22, age: 0, flat: 0.85 });
+      }],
+      // contact: the strike frame, a heavy hit-stop, an impact frame, a flash and a burst; the screen recoils with the blow
+      [A, () => {
+        if (f.live && f.live.release) f.live.release();
+        if (!o.miss) hitStop(120);                     // a miss gets no hit-stop: nothing was hit
+        const hp = d.mon.hp; hit(); landed = d.mon.hp < hp;
+        if (landed) {
+          punctuate(d.cx, d.cy, true, '#ffffff', 0.3);
+          powAt(d.cx, d.cy, 44, steel);
+          shapes.push({ kind: 'lines', x: d.cx, y: d.cy, r0: 24, r1: 100, col: '#ffffff', n: 12, life: 0.2, age: 0, rot: R(0, 1) });
+          shakeIt(12); camKick(dir, 0.6, 12); camPunch(d.cx, d.cy, 0.1, 0.4);
+          SFX.impact('Steel', 1.4, 1); d.rotSV += dir * 10;
+        } else {
+          // the tail slams into the ground in front of the target
+          const gx = d.x - dir * 24;
+          crater(gx, d.y, 14); addDecal('crack', gx, d.y, 1); dust(gx, d.y, 1.6); shakeIt(5); SFX.impact('Rock', 0.7);
+          for (let i = 0; i < 10; i++) sparkP(gx, d.y - 6, R(3.6, 5.8), R(140, 320), '#fff3b0', 0.35, { g2: 900 });
+        }
+      }],
+      // the aftermath: metal sparks spray along the swing and bounce away, a shockwave on the ground, cracks, dust
+      [A + 1, () => {
+        if (!landed) return;
+        for (let i = 0; i < 22; i++) sparkP(d.cx, d.cy, (dir > 0 ? 0 : Math.PI) + dir * R(-1.1, 0.35), R(220, 520), pick(['#ffffff', '#fff3b0', '#ffd36a']), R(0.35, 0.6), { g2: 900, drag: 1.6 });
+        ringP(d.x, d.y, 10, 120, '#e8eef8', 0.35, { w: 2 });
+        addDecal('crack', d.x, d.y, 1); dust(d.x, d.y, 1.6);
+        d.kx += dir * 160;
+      }],
+      // the landing: it skids back with a squash and a trail of dust
+      [A + 2, () => {
+        const xa = f.x, z0 = f.jz, r0 = f.rotA;
+        tw(10 / 60, k => { const e = easeOut(k); f.jz = z0 * (1 - e); f.x = xa - dir * 22 * e; f.rotA = r0 * (1 - e); if (!f.hover && Math.random() < 0.6) dust(f.x, f.y, 0.5); })
+          .then(() => { f.jz = 0; f.rotA = 0; f.bump(8); f.dashing = false; });
+      }],
+      [A + 16, () => { f.face = dir; camRelease('anticipate'); }],
+      [A + 30, () => {}]
+    ]);
+    if (ok && on && f.state === 'idle') await recover(f, start, true);
+  };
   SIG['discharge'] = async (f, d, m, o, hit) => {
     await charge(f, m, 0.3, { col: '#fff59a', dim: 0.3 });
     SFX.zap(); SFX.zap();
@@ -4214,7 +4363,15 @@ const Retro = (() => {
   //  burning ground, craters, cracks, boulders, a soaked arena).
   // =====================================================================
   const inArena = (x, y) => ({ x: clamp(x, field.x0, field.x1), y: clamp(y, field.y0, field.y1) });
-  const liveAct = (f, kind, style) => { if (f.live) f.live.play(kind, style); };
+  // the pixel sprite acts out a beat of a move: a blow or a cast happening now jumps to the clip's strike frame (in a quick
+  // combo a fresh clip would still be winding up when the next blow comes), a charging dash holds the wind-up until hit()
+  // releases it, anything else plays its clip
+  const liveAct = (f, kind, style) => {
+    if (!f.live) return;
+    if (f.live.hold && kind === 'attack' && style === 'charge') f.live.hold('attack');
+    else if (f.live.hold && (kind === 'attack' || kind === 'special')) strikePose(f, kind);
+    else f.live.play(kind, style);
+  };
   // a sphere of gathered energy at the attacker's hands / mouth: s.at() is where, s.r its radius now
   SHAPE2.chargeorb = s => {
     const p = s.at(), r = s.r, c = s.c;
@@ -5038,8 +5195,12 @@ const Retro = (() => {
     if (eff < 1) shapes.push({ kind: 'dome', f: d, col: '#9fc4ff', life: 0.35, age: 0 });
     if (eff > 1 || crit) trainerPose(d.p, 'dismay', 0.9);
     SFX.impact(type, pw, eff);
-    if (pw > 1.15 || crit) { shakeIt(4 + pw * 4); hitStop(crit ? 110 : 70); }
-    if (crit || pw > 1.5) camPunch(at.x, at.y, crit ? 0.09 : 0.06, 0.3);
+    // every hit freezes for a beat sized by how hard it landed: a chip ~3 frames, a solid hit ~5, a heavy or
+    // super-effective one ~7, a critical ~8 (a move that already froze on its own impact keeps that one)
+    const heavy = frac >= 0.25 || eff > 1;
+    hitStop(crit ? 135 : heavy ? 115 : frac >= 0.08 ? 85 : 50);
+    if (pw > 1.15 || crit || heavy) shakeIt(4 + pw * 4);
+    if (crit || pw > 1.5 || heavy) camPunch(at.x, at.y, crit ? 0.09 : 0.06, 0.3);
     return pw;
   }
   function knock(d, from, pw) {
@@ -5514,7 +5675,9 @@ const Retro = (() => {
     if (u.status === 'par' && Math.random() < 0.25) { text(f, 'FULLY PARALYZED!', 'info'); SFX.status('par'); f.shiver = 0.5; burst(center(f), 'Electric', 0.7); await wait(500); return; }
     if (idx >= 0 && !WM) m.ppLeft--;                   // the open world spends stamina instead (adventure.js)
     f.lastMove = m;
-    if (f.live) f.live.play(m.ailment === 'protect' ? 'guard' : m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar', bodyStyle(m));
+    // a contact move holds its wind-up pose through the run-up (the blow plays when it lands); the rest act at once
+    if (f.live && f.live.hold && classify(m).startsWith('contact')) f.live.hold('attack');
+    else if (f.live) f.live.play(m.ailment === 'protect' ? 'guard' : m.cat === 'physical' ? 'attack' : m.cat === 'special' ? 'special' : 'roar', bodyStyle(m));
     focusOn(f.cx, f.cy, 0.7);
     pill(p, m.name, m.type);
     if (!multi || spot === f || WM) callout(f, m.name, m.type);
@@ -5527,13 +5690,15 @@ const Retro = (() => {
     const [style, variant] = classify(m).split(':');
     if (m.cat !== 'status') SFX.cast(m.type || 'Normal');
     let done = false;
-    const hit = (mult = 1) => { if (done || tk !== token) return; done = true; resolveHit(f, d, m, miss, mult); };
+    // the damage lands: a pixel sprite still holding its wind-up shows its strike frame now, whatever path the move took
+    const hit = (mult = 1) => { if (done || tk !== token) return; done = true; if (f.live && f.live.release) f.live.release(); resolveHit(f, d, m, miss, mult); };
     const fx = SIG[m.id] || S[style] || S.generic;
     await prelude(f, selfT ? f : d, m); chk(tk);
     let r;
     try { r = await fx(f, selfT ? f : d, m, { miss }, hit, style === 'orb' && !SIG[m.id] ? variant === 'big' : variant); }
     catch (e) { if (e instanceof BattleAbort) throw e; console.warn('retro fx', m.id, e); }
     chk(tk);
+    if (f.live && f.live.settle) f.live.settle();       // no sprite stays frozen in a wind-up pose
     f.dashing = false; f.crouchT = 0; f.jz = 0; f.whiff = false;
     if (f.state === 'idle') { f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; }
     if (r !== 'nohit') hit();
@@ -6621,7 +6786,9 @@ const Retro = (() => {
     })().catch(e => { if (!(e instanceof BattleAbort)) { console.error(e); const rj = rejectBattle; resolveBattle = rejectBattle = null; if (rj) rj(e); } });
     return result;
   }
-  return { battle, world, stop, get active() { return on; }, themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ } }),
+  return { battle, world, stop, get active() { return on; },
+    _styles: () => Object.keys(MOVES).map(id => ({ id, style: classify({ id, ...MOVES[id] }), sig: !!SIG[id] })),   // tests: each move's animation family
+    themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ }, dim: dimA }),
     // test hook: play one move's effect (no damage) with the battle paused
     _fxMap: () => Object.keys(MOVES).filter(moveSupported).map(id => { const m = { id, ...MOVES[id] }; const [st, v] = classify(m).split(':'); return [id, SIG[id] ? 'sig' : st === 'contact' ? 'ct:' + (CT[id] ? CT[id].v : 'default-' + (v || '')) : st, m.type, m.cat]; }),
     _place: () => { running = false; F.forEach((f, p) => { if (f) { f.x = (field.x0 + field.x1) / 2 + (p ? 130 : -130); f.y = (field.y0 + field.y1) / 2; f.kx = f.ky = f.vx = f.vy = 0; f.face = p ? -1 : 1; f.jz = 0; f.rotA = 0; f.dashing = false; f.busy = false; f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; } }); parts.length = 0; shapes.length = 0; },
