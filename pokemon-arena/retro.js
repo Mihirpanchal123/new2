@@ -925,7 +925,12 @@ const Retro = (() => {
     f.faceVis += (f.face - f.faceVis) * Math.min(1, dt * 15);
     // it faces where it runs only on a real run; stepping about, it keeps its eyes on the foe
     f.runFace = (f.goalPace ?? 1) >= 1 && f.speed > (f.runFace ? 110 : 170);
-    if (f.live) f.live.drive(dt, { face: f.faceVis, vx: f.vx, vy: f.vy, run: f.dashing || f.runFace, moving: f.state === 'idle' && (f.dashing || f.speed > 60), sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
+    if (f.live) {
+      // the pixel sprite walks the way it really moves: a tweened run-up, lunge or hop moves it without setting vx,
+      // and being knocked back isn't walking. During a move (busy) it keeps facing its foe
+      const wx = (f.mvx ?? f.vx) - f.kx, wy = (f.gvy ?? f.vy) - f.ky, ws = Math.hypot(wx, wy);
+      f.live.drive(dt, { face: f.faceVis, vx: wx, vy: wy, run: f.dashing || f.runFace, runup: !!f.runningUp, busy: !!f.busy, moving: f.state === 'idle' && ws > 60, sleep: m.status === 'slp', frozen: m.status === 'frz', slow: m.status === 'par', stagger: T < (f.stagger || 0) });
+    }
     f.shiver = Math.max(0, f.shiver - dt);
     f.rotSV += (-f.rotS * 200 - f.rotSV * 11) * dt; f.rotS = clamp(f.rotS + f.rotSV * dt, -0.45, 0.45);
     if (!f.busy && !f.dashing) f.rotA *= Math.exp(-dt * 8);
@@ -3334,7 +3339,7 @@ const Retro = (() => {
     if (Math.hypot(d.x - f.x, d.y - f.y) <= stop + 60) return;
     const P = motionOf(f), sp = maxSpeed(f) * (P.heavy ? 1.5 : 2.1), t0 = FT;
     let last = FT;
-    f.dashing = true; f.crouchT = 0;
+    f.dashing = true; f.crouchT = 0; f.runningUp = true;   // (a pixel sprite runs here, and takes its wind-up pose when it arrives)
     if (!calm()) camShot('track', { f, w: 0.3, z: 1, hold: 1.8 });
     while (on && f.state === 'idle' && d.state === 'idle' && FT - t0 < 1.8) {
       const dx = d.x - f.x, dy = d.y - f.y, L = Math.hypot(dx, dy) || 1;
@@ -3348,7 +3353,7 @@ const Retro = (() => {
       await wait(16);
     }
     camRelease('track');
-    f.dashing = false;
+    f.dashing = false; f.runningUp = false;
   }
   async function dashStrike(f, d, m, o, hit, spec) {
     await runUp(f, d, 380);
@@ -5374,8 +5379,8 @@ const Retro = (() => {
   }
   // a Pokémon's on-screen velocity this frame, whatever moved it (walking, tweens, knockback): smears, speed lines
   function trackMotion(f, dt) {
-    if (f.lx != null && dt > 0) { f.mvx = (f.x - f.lx) / dt; f.mvy = (f.y - f.jz - (f.ly ?? f.y)) / dt; }
-    f.lx = f.x; f.ly = f.y - f.jz;
+    if (f.lx != null && dt > 0) { f.mvx = (f.x - f.lx) / dt; f.mvy = (f.y - f.jz - (f.ly ?? f.y)) / dt; f.gvy = (f.y - (f.gy ?? f.y)) / dt; }
+    f.lx = f.x; f.ly = f.y - f.jz; f.gy = f.y;
   }
 
   // ---- flash step: it vanishes, an afterimage is left behind (and takes the hit), it reappears beside or behind ----
@@ -5709,7 +5714,7 @@ const Retro = (() => {
     catch (e) { if (e instanceof BattleAbort) throw e; console.warn('retro fx', m.id, e); }
     chk(tk);
     if (f.live && f.live.settle) f.live.settle();       // no sprite stays frozen in a wind-up pose
-    f.dashing = false; f.crouchT = 0; f.jz = 0; f.whiff = false;
+    f.dashing = false; f.runningUp = false; f.crouchT = 0; f.jz = 0; f.whiff = false;
     if (f.state === 'idle') { f.invuln = null; f.alpha = 1; f.sink = 0; f.pop = 1; }
     if (r !== 'nohit') hit();
     if (controllers[p] === 'human') humanRow(p);

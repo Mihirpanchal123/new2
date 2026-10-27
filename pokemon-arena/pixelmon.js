@@ -61,8 +61,8 @@ const PixelMons = (() => {
       let name = ACTION[kind] || 'Charge';
       if (!this.anims[name]) name = name === 'Shoot' ? 'Attack' : name === 'Faint' ? 'Hurt' : this.anims.Charge ? 'Charge' : 'Idle';
       this.act = { name, t: 0, hold: kind === 'down' };
-      // strikes and casts face the foe squarely: a straight up or down view turns to the diagonal on the foe's side
-      if (ROW_X[this.dir] === 0 && this.face) this.dir = this.dir === 4 ? (this.face > 0 ? 3 : 5) : (this.face > 0 ? 1 : 7);
+      // strikes and casts face the foe squarely (from the first frame on)
+      if (this.face && kind !== 'down') this.faceFoe();
       return true;
     }
     // a wind-up: play the clip up to the frame before its strike and hold that pose until release()
@@ -85,18 +85,27 @@ const PixelMons = (() => {
       this.play(kind);
       this.act.loop = true;
     }
-    // every frame: s = { face, vx, vy, run, moving, sleep, frozen, slow, stagger } (from retro.js)
+    // turn toward the foe's side: a view straight up or down turns to the diagonal on that side, one facing away mirrors
+    faceFoe() {
+      if (ROW_X[this.dir] === 0) this.dir = this.dir === 4 ? (this.face > 0 ? 3 : 5) : (this.face > 0 ? 1 : 7);
+      else if (ROW_X[this.dir] * this.face < 0) this.dir = MIRROR[this.dir];
+    }
+    // every frame: s = { face, vx, vy (how it really moves), run, runup, busy, moving, sleep, frozen, slow, stagger } (from retro.js)
     drive(dt, s) {
       this.face = Math.sign(s.face) || this.face || 1;
-      const sp = Math.hypot(s.vx || 0, s.vy || 0);
-      if (!this.act) {
-        if (s.moving && sp > 30) {
-          // the way it walks, in 8 directions (the ground is seen at a slant, so up/down count a bit more)
+      const sp = Math.hypot(s.vx || 0, s.vy || 0), moving = s.moving && sp > 30;
+      // running up to the foe with a wind-up held: it runs there, and takes the pose when it arrives
+      this.runOver = !!(this.act && this.act.stop != null && s.runup && moving);
+      if (!this.act || this.runOver) {
+        if (moving) {
+          // the way it walks, in 8 directions (the ground is seen at a slant, so up/down count a bit more); in the middle
+          // of a move (a hop back, a run-up) it keeps its eyes on the foe
           const a = Math.atan2((s.vy || 0) / 0.75, s.vx || 0), k = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
           this.dir = ROW_OF_SECTOR[k];
+          if (s.busy) this.faceFoe();
         } else if (ROW_X[this.dir] * this.face < 0) this.dir = MIRROR[this.dir];   // standing: it turns to look at its foe
-      }
-      this.base = s.sleep && this.anims.Sleep ? 'Sleep' : s.moving && sp > 30 ? 'Walk' : 'Idle';
+      } else if (this.act.name !== 'Faint') this.faceFoe();   // a strike, a cast, a power-up, a hit: always toward the foe
+      this.base = s.sleep && this.anims.Sleep ? 'Sleep' : moving ? 'Walk' : 'Idle';
       this.rate = this.base === 'Walk' ? Math.min(1.7, Math.max(0.6, sp / 140)) : 1;
       const k = s.frozen ? 0 : s.slow ? 0.5 : 1;
       if (this.act) {
@@ -110,8 +119,8 @@ const PixelMons = (() => {
     }
     // draw the current frame into the shared canvas (only when it changes)
     paint() {
-      const name = this.act ? this.act.name : this.base, a = this.anims[name] || this.anims.Idle || this.anims.Walk;
-      let t = this.act ? this.act.t : this.t % a.total, f = 0;
+      const acting = this.act && !this.runOver, name = acting ? this.act.name : this.base, a = this.anims[name] || this.anims.Idle || this.anims.Walk;
+      let t = acting ? this.act.t : this.t % a.total, f = 0;
       while (f < a.d.length - 1 && t >= a.d[f]) { t -= a.d[f]; f++; }
       const row = Math.min(this.dir, Math.floor(a.img.height / a.h) - 1), key = name + row + '/' + f;
       if (key === this.drawn) return;
