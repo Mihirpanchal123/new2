@@ -725,7 +725,7 @@ const Journey = (() => {
   //  Menus: start menu, party, bag, Pokédex, trainer card, shop, PC
   // =====================================================================
   function openMenu(kind, data) {
-    if (S.event && !data) return;
+    if (S.event && data === undefined) return;           // during a scene only a script opens a menu (with data: 0 counts)
     S.menu = kind; S.keys.clear();
     ui.panel.classList.remove('hidden');
     renderPanel(kind, data);
