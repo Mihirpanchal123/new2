@@ -289,12 +289,13 @@ function makeMon(spec, owner, hpMult = settings.hpMult) {
   const sp = DEX.species[spec.species];
   // official HP formula; the optional 'Battle length' setting multiplies it for longer battles (Adventure passes 1)
   const maxhp = (Math.floor((2 * sp.base[0] + 31) * spec.level / 100) + spec.level + 10) * hpMult;
+  // Journey carries HP, status and PP from battle to battle (spec.hp / status / pp); everyone else starts fresh
   return {
-    owner, species: sp.name, name: sp.display, level: spec.level, types: sp.types.slice(),
-    stats: calcStats(sp.base, spec.level), maxhp, hp: maxhp, sprite: sp.sprite, cry: sp.cry, modelKey: sp.name,
+    owner, species: sp.name, name: spec.nick || sp.display, level: spec.level, types: sp.types.slice(),
+    stats: calcStats(sp.base, spec.level), maxhp, hp: spec.hp != null ? Math.min(maxhp, spec.hp) : maxhp, sprite: sp.sprite, cry: sp.cry, modelKey: sp.name,
     megaForm: spec.mega ? sp.megas.find(m => m.name === spec.mega) : null, isMega: false,
-    status: null, sleepTurns: 0, vol: {}, stages: blankStages(), turnsOut: 0,
-    moves: spec.moves.map(id => ({ id, ...MOVES[id], ppLeft: MOVES[id].pp }))
+    status: spec.status || null, sleepTurns: spec.status === 'slp' ? 2 : 0, vol: {}, stages: blankStages(), turnsOut: 0,
+    moves: spec.moves.map((id, i) => ({ id, ...MOVES[id], ppLeft: spec.pp && spec.pp[i] != null ? Math.min(MOVES[id].pp, spec.pp[i]) : MOVES[id].pp }))
   };
 }
 
@@ -428,6 +429,8 @@ async function runRetroBattle() {
   state.started = true;
   const w = await Retro.battle({ subtitle: state.meta.subtitle, lines: state.meta.lines });
   guard();
+  // Journey: the result goes back to the world (no records, no end screen)
+  if (state.meta.journey) { battleActive = false; updateRecButtons(); state.meta.journey.onEnd(w); return; }
   // records / Hall of Fame track trainer battles; multi battles aren't recorded
   if (!state.multi) Stats.saveBattle({
     names: [PLAYER[0], PLAYER[1]], winner: w,
@@ -455,6 +458,7 @@ function abortBattle() {
 }
 function exitToBuilder() {
   if (Adventure.active) Adventure.leave();             // saves the adventure before the engine stops
+  if (Journey.active) Journey.leave();
   abortBattle();
   Tour.inMatch = false;
   Tour.restore();
@@ -511,6 +515,7 @@ $('thumbBtn').onclick = async () => {
 };
 $('tourneyBtn').onclick = () => openTourneySetup();
 $('advBtn').onclick = () => Adventure.open();
+$('journeyBtn').onclick = () => Journey.open();
 $('recordsBtn').onclick = () => openRecords();
 $('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))), { format: settings.format }); };
 $('builderBtn').onclick = exitToBuilder;

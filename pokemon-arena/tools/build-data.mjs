@@ -236,7 +236,9 @@ async function main() {
     const entry = {
       id: sp.id, name, display, types: typesOf(p), base: statsOf(p),
       minLevel: evo[name].min, evoFrom: evo[name].from, evoMethod: evo[name].text, evolvesTo: evo[name].to,
-      learnset: ls, sprite: null, cry: null, megas: []
+      learnset: ls, sprite: null, cry: null, megas: [],
+      // for catching and levelling (Journey): catch rate (3-255), growth curve, base XP yield, legendary / mythical
+      catchRate: sp.capture_rate, growth: sp.growth_rate.name, baseExp: p.base_experience || 60, legend: sp.is_legendary || sp.is_mythical
     };
     sprites.push([entry, p]);
     for (const v of sp.varieties) {

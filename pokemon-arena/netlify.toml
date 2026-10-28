@@ -1,0 +1,20 @@
+# Static site: no build step, serve this folder as is.
+[build]
+  publish = "."
+
+# Sprites, cries and portraits rarely change: let the browser keep them for a week
+# instead of re-checking every file with Netlify on each load (its default).
+[[headers]]
+  for = "/pmd/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/cries/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/faces/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"

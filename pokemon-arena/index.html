@@ -870,6 +870,101 @@
   #retro.port .ah-target { top: auto; bottom: calc(var(--u) * 620); width: calc(var(--u) * 280); }
   body.touchUI #retro.port .ah-tut { top: auto; bottom: calc(var(--u) * 712); }
   body.touchUI #retro.port .ah-party { top: calc(var(--u) * 330); flex-direction: column; }
+
+  /* ===== Journey (journey.js): the trainer's adventure ===== */
+  #journey { position: absolute; inset: 0; z-index: 5; background: #111; overflow: hidden; font-family: 'Tiny5', 'Segoe UI', sans-serif; color: #1b1530; touch-action: none; -webkit-user-select: none; user-select: none; }
+  #journey .jcv { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  body.journey #pmRestart, body.journey #ctlRestart { display: none; }
+  .jbanner { visibility: hidden; position: absolute; left: 14px; top: 14px; padding: 8px 18px; background: #fff8ea; border: 4px solid #1b1530; border-radius: 10px; font-size: 20px; box-shadow: 0 4px 0 rgba(0,0,0,.35); transform: translateY(-140%); pointer-events: none; z-index: 2; }
+  .jbanner.show { visibility: visible; animation: jban 2.8s ease forwards; }
+  @keyframes jban { 0% { transform: translateY(-140%); } 12%, 80% { transform: none; } 100% { transform: translateY(-140%); } }
+  .jchapter { position: absolute; left: 50%; top: 28%; transform: translate(-50%, -50%) scale(.6); text-align: center; color: #fff; text-shadow: 0 3px 0 #1b1530, 0 0 18px rgba(0,0,0,.6); opacity: 0; pointer-events: none; z-index: 8; width: 90%; }
+  .jchapter b { display: block; font-size: 38px; color: #ffd84a; } .jchapter small { display: block; font-size: 20px; margin-top: 6px; }
+  .jchapter.show { animation: jchap 3.4s ease forwards; }
+  @keyframes jchap { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } 12%, 82% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); } }
+  .jdialog { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(820px, calc(100% - 28px)); min-height: 96px; background: #fff8ea; border: 5px solid #1b1530; border-radius: 14px; box-shadow: inset 0 0 0 3px #e8d8b8, 0 6px 0 rgba(0,0,0,.35); padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 14px; z-index: 6; cursor: pointer; }
+  .jdialog.hidden { display: none; }
+  .jd-face { width: 64px; height: 56px; image-rendering: pixelated; background: #bfe3ff; border: 3px solid #1b1530; border-radius: 8px; object-fit: contain; }
+  .jd-face.hidden, .jd-name.hidden { display: none; }
+  .jd-name { position: absolute; top: -20px; left: 18px; background: #1b1530; color: #ffd84a; padding: 3px 12px; border-radius: 8px; font-size: 16px; }
+  .jd-text { flex: 1; min-width: 200px; font-size: 21px; line-height: 1.35; white-space: pre-line; }
+  .jd-opts { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .jd-opts:empty { display: none; }
+  .jd-opts button { font: inherit; font-size: 18px; padding: 6px 14px; border: 3px solid #1b1530; border-radius: 10px; background: #fff; cursor: pointer; color: #1b1530; }
+  .jd-opts button b { opacity: .5; margin-right: 4px; } .jd-opts button.on { background: #ffd84a; }
+  .jd-more { position: absolute; right: 16px; bottom: 6px; font-style: normal; font-size: 16px; opacity: 0; }
+  .jdialog.more .jd-more { opacity: 1; animation: jbob .7s infinite alternate; }
+  @keyframes jbob { to { transform: translateY(3px); } }
+  .jfade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 9; }
+  .jfade.on { opacity: 1; }
+  .jfade.flash { animation: jflash .7s steps(2); }
+  @keyframes jflash { 0%, 30%, 60% { opacity: 1; background: #fff; } 15%, 45%, 75% { opacity: 0; } 100% { opacity: 1; background: #000; } }
+  .jmenu-btn { position: absolute; right: 14px; top: 14px; width: 46px; height: 46px; font-size: 24px; border: 4px solid #1b1530; border-radius: 10px; background: #fff8ea; cursor: pointer; z-index: 3; }
+  .jpanel { position: absolute; inset: 0; z-index: 7; display: flex; align-items: flex-start; justify-content: flex-end; padding: 70px 14px 14px; background: rgba(10,8,20,.35); }
+  .jpanel.hidden { display: none; }
+  .jp { width: min(440px, 100%); max-height: 100%; overflow: auto; background: #fff8ea; border: 5px solid #1b1530; border-radius: 14px; padding: 12px; box-shadow: 0 6px 0 rgba(0,0,0,.35); font-size: 18px; }
+  .jp-wide { width: min(860px, 100%); }
+  .jp-menu { width: 220px; display: flex; flex-direction: column; gap: 6px; }
+  .jp-menu button, .jp .jrow button, .jtabs button, .jshop button { font: inherit; font-size: 20px; padding: 8px 12px; border: 3px solid #1b1530; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; color: #1b1530; }
+  .jp-menu button:hover, .jmon:hover, .jitem:hover { background: #ffd84a; }
+  .jp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 22px; }
+  .jp-head button { font: inherit; width: 36px; height: 36px; border: 3px solid #1b1530; border-radius: 8px; background: #fff; cursor: pointer; }
+  .jp-head button[data-a="none"] { visibility: hidden; }
+  .jmon { display: flex; gap: 10px; align-items: center; width: 100%; font: inherit; font-size: 17px; text-align: left; padding: 6px 8px; margin-bottom: 6px; border: 3px solid #1b1530; border-radius: 10px; background: #fff; cursor: pointer; color: #1b1530; }
+  .jmon img { width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; }
+  .jmon > div { flex: 1; } .jmon small { opacity: .7; } .jmon.down { background: #f3d6d6; } .jmon em { font-style: normal; font-size: 14px; padding: 2px 6px; border-radius: 6px; background: #ddd; } .jmon em.ok { background: #8be08b; }
+  .jhp { height: 8px; background: #3a3a48; border-radius: 4px; overflow: hidden; margin: 3px 0; } .jhp i { display: block; height: 100%; }
+  .jst { background: #a855f7; color: #fff; padding: 0 5px; border-radius: 4px; font-size: 13px; }
+  .jt { display: inline-block; color: #fff; font-size: 12px; padding: 1px 6px; border-radius: 6px; margin-left: 3px; text-shadow: 0 1px 0 rgba(0,0,0,.4); }
+  .jsum { display: flex; gap: 12px; align-items: center; } .jsum img { width: 96px; height: 96px; object-fit: contain; image-rendering: pixelated; background: #e8f4ff; border-radius: 10px; border: 3px solid #1b1530; } .jsum > div { flex: 1; } .jsum small { font-size: 14px; opacity: .8; }
+  .jstats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 10px 0; font-size: 13px; text-align: center; } .jstats span { background: #fff; border: 2px solid #1b1530; border-radius: 8px; padding: 4px 2px; } .jstats b { display: block; font-size: 18px; }
+  .jmoves div { border-left: 8px solid var(--c); background: #fff; border-radius: 6px; padding: 4px 8px; margin-bottom: 4px; } .jmoves small { display: block; font-size: 13px; opacity: .7; }
+  .jrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; } .jrow small { font-size: 14px; opacity: .7; }
+  .jtabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; } .jtabs button { font-size: 15px; padding: 4px 8px; } .jtabs button.on { background: #ffd84a; }
+  .jitem { display: grid; grid-template-columns: 1fr auto; width: 100%; font: inherit; text-align: left; padding: 6px 10px; margin-bottom: 5px; border: 3px solid #1b1530; border-radius: 10px; background: #fff; cursor: pointer; color: #1b1530; } .jitem small { grid-column: 1 / -1; font-size: 13px; opacity: .7; }
+  .jempty { padding: 16px; text-align: center; opacity: .6; }
+  .jdex { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; } .jdex div { position: relative; background: #fff; border: 2px solid #1b1530; border-radius: 8px; padding: 4px; text-align: center; font-size: 11px; }
+  .jdex img { width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto; } .jdex i { display: block; height: 48px; line-height: 48px; font-size: 24px; opacity: .3; font-style: normal; }
+  .jdex .s img { filter: brightness(0) opacity(.45); } .jdex .u { opacity: .5; } .jdex b { position: absolute; right: 4px; top: 2px; color: #e04848; } .jdex small { display: block; opacity: .5; } .jdex span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jcard { display: flex; gap: 14px; align-items: center; background: linear-gradient(135deg, #ffe8a8, #ffd0a0); border: 3px solid #1b1530; border-radius: 12px; padding: 12px; line-height: 1.5; } .jcard img { width: 80px; height: 70px; image-rendering: pixelated; background: #bfe3ff; border: 3px solid #1b1530; border-radius: 8px; }
+  .jbadges { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; text-align: center; font-size: 11px; } .jbadges i { display: block; width: 30px; height: 30px; margin: 4px auto 6px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #c8c8d0; border: 3px solid #1b1530; opacity: .35; } .jbadges .got i { background: var(--c); opacity: 1; box-shadow: inset 4px 4px 0 rgba(255,255,255,.5); }
+  .jshop { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 6px; align-items: center; background: #fff; border: 2px solid #1b1530; border-radius: 10px; padding: 6px 8px; margin-bottom: 5px; } .jshop small { display: block; font-size: 12px; opacity: .7; } .jshop button { font-size: 15px; padding: 4px 8px; } .jshop button:disabled { opacity: .35; }
+  .jpc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .jstart { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .jstart button { font: inherit; font-size: 18px; padding: 10px; border: 4px solid #1b1530; border-radius: 12px; background: #fff; cursor: pointer; color: #1b1530; } .jstart button:hover { background: #ffd84a; transform: translateY(-2px); } .jstart img { display: block; width: 100%; height: 110px; object-fit: contain; image-rendering: pixelated; }
+  .jevo { position: absolute; inset: 0; z-index: 8; background: radial-gradient(circle, #3a2a6a, #0a0618); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: #fff; }
+  .jevo.hidden { display: none; }
+  .je-stage { position: relative; width: 220px; height: 220px; } .je-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .je-b { opacity: 0; } .jevo.go .je-a { animation: jeA 4s ease-in forwards; } .jevo.go .je-b { animation: jeB 4s ease-in forwards; } .jevo.done .je-a { opacity: 0; } .jevo.done .je-b { opacity: 1; filter: none; animation: none; }
+  @keyframes jeA { 0% { filter: brightness(1); } 20% { filter: brightness(0) invert(1); } 100% { filter: brightness(0) invert(1); opacity: 1; } }
+  @keyframes jeB { 0%, 30% { opacity: 0; filter: brightness(0) invert(1); } 35%, 45%, 55%, 65%, 75%, 85%, 95% { opacity: 1; } 40%, 50%, 60%, 70%, 80%, 90% { opacity: 0; } 100% { opacity: 1; filter: brightness(0) invert(1); } }
+  .je-txt { font-size: 24px; text-align: center; padding: 0 16px; } .je-stop { font: inherit; font-size: 18px; padding: 6px 16px; border: 3px solid #fff; border-radius: 10px; background: transparent; color: #fff; cursor: pointer; } .jevo.done .je-stop { visibility: hidden; }
+  .jtouch { display: none; }
+  body.touchUI .jtouch { display: block; }
+  .jt-stick { position: absolute; left: 22px; bottom: 22px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.18); border: 3px solid rgba(255,255,255,.4); z-index: 3; touch-action: none; } .jt-stick i { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.7); pointer-events: none; }
+  .jt-a, .jt-b { position: absolute; width: 74px; height: 74px; border-radius: 50%; font: inherit; font-size: 28px; border: 4px solid #1b1530; z-index: 4; touch-action: none; }
+  .jt-a { right: 22px; bottom: 70px; background: #ff6a6a; color: #fff; } .jt-b { right: 108px; bottom: 30px; background: #ffd84a; }
+  .jt-menu { position: absolute; right: 14px; top: 14px; font: inherit; font-size: 16px; padding: 8px 12px; border: 4px solid #1b1530; border-radius: 10px; background: #fff8ea; z-index: 3; }
+  body.touchUI .jmenu-btn { display: none; }
+  body.touchUI .jdialog { bottom: 180px; }
+  .jbmenu { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(10,8,20,.45); font-family: 'Tiny5', sans-serif; }
+  .jbmenu.hidden { display: none; }
+  .jb-box { display: flex; flex-direction: column; gap: 6px; background: #fff8ea; border: 5px solid #1b1530; border-radius: 14px; padding: 14px; min-width: 260px; max-height: 90%; overflow: auto; font-size: 20px; color: #1b1530; }
+  .jb-box button { font: inherit; font-size: 18px; padding: 8px 12px; border: 3px solid #1b1530; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; color: #1b1530; } .jb-box button:hover { background: #ffd84a; } .jb-box button.x { background: #e8e0d0; }
+  .rcmd { grid-column: 1 / -1; display: flex; gap: calc(var(--u) * 5); }
+  .rcmd button { font: inherit; font-size: calc(var(--u) * 17); flex: 1; padding: calc(var(--u) * 5) calc(var(--u) * 12); border: calc(var(--u) * 3) solid #1b1530; border-radius: calc(var(--u) * 9); background: #fff8ea; color: #1b1530; cursor: pointer; box-shadow: inset 0 calc(var(--u) * -4) 0 rgba(0,0,0,.15); }
+  .rcmd button[data-c="ball"] { background: #ff8a8a; } .rcmd button[data-c="run"] { background: #c8d8f0; }
+  #retro.journey .rtimer { display: none; }
+  #retro.journey .rrow { opacity: 1; }
+  body.journey #battleCtl, body.journey #recBtn { top: auto; bottom: 10px; left: auto; right: 10px; transform: none; }
+  body.journey #recBtn { right: 96px; bottom: 16px; }
+  .jtitle { display: flex; align-items: center; justify-content: center; z-index: 40; background: radial-gradient(circle at 50% 30%, #2d5a3a, #0f1a14); overflow: auto; }
+  .jt-box { display: flex; flex-direction: column; gap: 12px; align-items: stretch; width: min(560px, calc(100% - 28px)); text-align: center; padding: 14px 0; }
+  .jt-box .logo { margin: 0; font-size: 46px; } .jt-sub { color: #ffd84a; font-size: 20px; margin-top: -8px; }
+  .jt-new { background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.2); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .jt-new input { font: inherit; font-size: 20px; padding: 8px 12px; border-radius: 10px; border: 2px solid #94a3b8; background: #0f172a; color: #fff; text-align: center; }
+  .jt-looks { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; } .jt-looks button { background: #1e293b; border: 3px solid transparent; border-radius: 10px; padding: 6px 2px; cursor: pointer; color: #fff; font: inherit; } .jt-looks button.on { border-color: #ffd84a; } .jt-looks img { width: 100%; max-width: 64px; image-rendering: pixelated; display: block; margin: 0 auto 2px; }
+  @media (max-width: 600px) { .jdialog { min-height: 76px; padding: 10px 12px; } .jd-text { font-size: 17px; } .jd-face { width: 48px; height: 42px; } .jp { font-size: 16px; } .jpc { grid-template-columns: 1fr; } .jstart img { height: 70px; } .jstats { grid-template-columns: repeat(3, 1fr); } .jbanner { font-size: 16px; } .jchapter b { font-size: 26px; } .jt-looks { grid-template-columns: repeat(3, 1fr); } }
+  @media (orientation: landscape) and (max-height: 500px) { body.touchUI .jdialog { bottom: 10px; width: calc(100% - 340px); min-width: 300px; } .jt-stick { width: 110px; height: 110px; } .jt-stick i { left: 30px; top: 30px; } .jt-a, .jt-b { width: 60px; height: 60px; font-size: 22px; } .jt-a { bottom: 56px; } .jt-b { right: 92px; } .jpanel { padding-top: 14px; } }
 </style>
 </head>
 <body>
@@ -957,6 +1052,7 @@
   <div class="footer">
     <button class="btn alt" id="recordsBtn">📊 Records</button>
     <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
+    <button class="btn alt" id="journeyBtn">⭐ Journey</button>
     <button class="btn alt" id="advBtn" title="Open-world survival adventure with one Pokémon">🌲 Adventure</button>
     <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
     <button class="btn alt" id="randomBoth">Random Both Teams</button>
@@ -969,6 +1065,6 @@
 
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
-<script type="module" src="boot.mjs" data-scripts="data.js,base.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js"></script>
+<script type="module" src="boot.mjs" data-scripts="data.js,base.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,journey.js"></script>
 </body>
 </html>

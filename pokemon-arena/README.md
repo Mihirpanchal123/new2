@@ -45,6 +45,13 @@ Real-time Pokémon battles in Retro 2D pixel art with 481 Pokémon from all nine
   - *Controls*: **WASD/arrows** move, **Shift/Space** run (a tap in a fight: dodge), **1–4** attack your target (**Q** or a click / tap on one picks another), **E** interact / talk, **5–7** quick items, **F** switch Pokémon, **I** bag & crafting, **M** moves & stats, **T** team, **X** Pokédex, **J** quests & places, **Esc** pause. *On a touch screen*: a floating stick that appears where your left thumb lands, the four moves as big round buttons in an arc around **E** (with cooldown sweeps), a **RUN** toggle, **DODGE** and **TARGET** buttons, BAG / MOVES / TEAM / QUESTS / DEX buttons, vibration on taps and hits, and the screen edges flash red when you are hit. The layout follows the phone: portrait when it is held upright (the camera pulls back a little so the narrow screen still shows enough around you), landscape when it is turned sideways, and turning it mid-game just switches layouts. You can only target what is on screen. The camera eases into its look-ahead and fight framing.
   - All balancing (speeds, ranges, XP, stamina, hunger, spawn rules, level formula, encounter tables, items, recipes, quests, people and their trades) is in the tables at the top of `adventure.js`.
 
+- **⭐ Journey: The Eclipse of Valoria (a trainer's adventure):** you are the trainer. Walk a hand-made region of towns, routes, forests and houses, catch wild Pokémon in the tall grass, battle trainers and gym leaders, collect badges and follow the story. Battles use the same animated engine as the arena.
+  - *The story so far (Chapter 1)*: wake up in **Willowbrook Town**, get the Running Shoes from Mom, choose a partner at **Professor Hazel**'s lab (any region's starter trio, Gen 1–9) and battle your rival **Sora**. On **Route 1** an old man teaches catching and the first trainers wait. **Verdant Town** has a Pokémon Center, a Poké Mart and the Grass gym, but its leader **Luna** has gone to **Whisperwood Forest**, where **Team Eclipse** is digging up a Meteor Shard. Beat them, then win the **Leaf Badge**, a TM and the **Ride Pager** (Scyther: Cut). The astronomer Orrin starts the 12-shard side quest. Chapter 2 (Port Coralis) is next.
+  - *Catching and battling*: in a battle you pick moves (**1–4**), switch, and use the command bar: **BAG** (medicine; the battle pauses while you choose), **BALL** (official Gen 3/4 catch formula: catch rate, HP, status, ball) and **RUN** (wild battles). HP, status and PP carry over between battles. XP uses each species' growth curve, shared by the Pokémon that fought; level-ups teach moves (forget one when four are known), and evolution happens by level, stone, friendship or the Link Stone (cancel it with **B / Esc**). Losing with no Pokémon left sends you to the last Pokémon Center with half your money.
+  - *The world*: trainers spot you and walk up for a battle; tall grass hides wild Pokémon (Repel keeps weak ones away); ledges can only be jumped down; items lie on the ground and hidden ones sparkle; doors, mats and stairs lead in and out. Party of 6, PC boxes at Pokémon Centers, a Bag with pockets, a 481-entry Pokédex (seen / caught), a trainer card with 7 badge slots.
+  - *Controls*: **WASD/arrows** walk, **Shift** (or **X**) run, **E / Space / Enter** talk, read and advance text, **Esc / M** menu (Pokémon, Pokédex, Bag, trainer card, save). On a phone: a stick, **A**, **B** (run) and **MENU**.
+  - The game saves when you change maps, after battles and from the menu (its own save slot). Files: `journey.js` (the engine and menus), `jmaps.js` (the maps), `jstory.js` (items, trainers, all dialog and events), `jart.js` (the pixel art), `progress.js` (growth curves, XP, evolution, catch odds).
+
 ## Run it
 Double-click **`start.bat`**. It starts a tiny local server and opens http://localhost:8080 in Chrome/Edge.
 The game must run through that server (it loads its scripts as modules and fetches the sprite sheets); opening `index.html` directly shows a reminder.
@@ -56,7 +63,8 @@ Retro 2D draws its canvas at CSS resolution at most (max 1920 px wide) and lets 
    Evolved forms can't go below their real evolution level (Charizard ≥ 36). Pick Human or CPU for each player.
 2. **Battle:** choose a move, or switch. If your Pokémon holds a Mega Stone, toggle **Mega Evolve** before picking a move (once per battle).
 3. **Auto-play:** tick "Auto-play next random battle" for endless CPU vs CPU battles.
-4. **Adventure:** click **🌲 Adventure** in the team builder, pick a partner (and optionally a world seed), or **Continue** your saved adventure.
+4. **Journey:** click **⭐ Journey** in the team builder, enter a name and pick a look, or **Continue**.
+5. **Adventure:** click **🌲 Adventure** in the team builder, pick a partner (and optionally a world seed), or **Continue** your saved adventure.
 
 ## Record for upload
 Click **⏺ Record** (or press **R**), then pick **this tab** and tick "share tab audio" for the cries.
@@ -73,6 +81,8 @@ Data and cries come from PokéAPI (https://pokeapi.co); the sprites and pictures
 
 ## Rebuild the pixel sprites
 `node tools/build-pmd.mjs` downloads the pixel sprites (Adventure and battles) into `pmd/` (about 54 MB, Mega forms included; Pokémon already downloaded are skipped) and writes `pmd/index.json` and `pmd/CREDITS.md`. It also makes `faces/`, the pixel picture of every Pokémon and Mega form that the menus and HUDs show: its sprite's first standing frame facing the viewer, at twice its size. A Mega or Pokémon with no sprite of its own uses the Gen 5-style sprite from [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/gen5/) (Smogon's sprite project), or else its species' picture.
+
+`node tools/test-journey.mjs` checks Journey's maps and story without a browser: every map is well-formed and linked both ways, nothing stands inside a wall, and playing the story's flags forward from a new game reaches every map, person and item and every chapter goal (so the story can't get stuck).
 
 `node tools/test-world.mjs [seeds]` checks the Adventure world generator over many random seeds (same seed = same world, a clear start, every biome present, every region, landmark and resource reachable).
 

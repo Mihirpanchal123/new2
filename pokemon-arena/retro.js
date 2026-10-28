@@ -76,6 +76,9 @@ const Retro = (() => {
   // Adventure (open world, see OPEN WORLD near the end): slot 0 is the player's Pokémon, the other slots are wild
   // Pokémon that come and go. WM holds that mode's state while it runs (null otherwise).
   let WM = null;
+  // Journey (journey.js): a trainer's battles out in the world - no crowd, broadcast cards, clock or sudden death;
+  // wild Pokémon (no trainer on that side) can be caught or run from. state.meta.journey = { wild, title, ... }
+  const JB = () => (state && state.meta && state.meta.journey) || null;
   const sideOf = p => multi ? multi.side[p] : p;
   const trOf = p => multi ? (multi.mode === 'brawl' ? TR[sideOf(p)] : null) : TR[p];
   const isCpu = p => WM ? p !== 0 : !!multi || controllers[p] === 'cpu';
@@ -636,11 +639,11 @@ const Retro = (() => {
     for (let y = bot + 9; y <= AH - 2; y += 12) rowsY.push(y);
     // the two rows nearest the field cheer (animated every frame); the rows behind them are painted into the
     // static foreground once (the larger world has thousands of spectators - drawing each every frame is too slow)
-    rowsY.forEach((ry, i) => { for (let x = R(0, 10); x < AW - 6; x += R(10, 19)) if (Math.random() < 0.8) {
+    if (!JB()) rowsY.forEach((ry, i) => { for (let x = R(0, 10); x < AW - 6; x += R(10, 19)) if (Math.random() < 0.8) {
       const p = { x, y: ry + R(-2, 2), c: personCanvas(), ph: R(0, 6.28), sp: R(7, 11) };
       if (i < 2) crowd.push(p); else fg.drawImage(p.c, Math.round(p.x), Math.round(p.y - 15), 9, 15);
     } });
-    if (TH.top === 'town') for (let i = 0; i < AW / 55; i++) { const x = R(8, AW - 8); if (Math.abs(x - AW / 2) > 36) crowd.push({ x, y: top - 6, c: personCanvas(), ph: R(0, 6.28), sp: R(6, 9) }); }
+    if (TH.top === 'town' && !JB()) for (let i = 0; i < AW / 55; i++) { const x = R(8, AW - 8); if (Math.abs(x - AW / 2) > 36) crowd.push({ x, y: top - 6, c: personCanvas(), ph: R(0, 6.28), sp: R(6, 9) }); }
     crowd.sort((a, b) => a.y - b.y);
     // string lights (wires baked, bulbs animated)
     lights = [];
@@ -742,7 +745,7 @@ const Retro = (() => {
     return c;
   }
   function makeTrainer(p, outfitKey) {
-    const o = OUTFITS[outfitKey] || OUTFITS.red;
+    const o = typeof outfitKey === 'object' && outfitKey ? outfitKey : OUTFITS[outfitKey] || OUTFITS.red;
     const frames = {};
     for (const pose of ['idle', 'throw', 'cheer', 'dismay']) frames[pose] = trainerArt(o, pose);
     // HUD portrait: head and shoulders on a sky tile
@@ -2151,7 +2154,7 @@ const Retro = (() => {
         <div class="nm"></div>
         <div class="chips"></div>
         <div class="hp"><div class="lag"></div><div class="fill"></div><span class="num"></span></div>
-        <div class="tr"><img alt="" src="${TR[p].portrait}"></div>
+        ${TR[p] ? `<div class="tr"><img alt="" src="${TR[p].portrait}"></div>` : ''}
         <div class="party"></div>
         <div class="pill"></div>
       </div>`).join('') + '<div class="rtimer" id="rTimer">0:00</div><div class="rctl" id="rCtl"></div>';
@@ -2172,6 +2175,11 @@ const Retro = (() => {
     row.innerHTML = m.moves.map((mv, i) => `<button class="rmv" data-i="${i}" style="--c:${TYPE_COLORS[mv.type] || '#888'}" ${mv.ppLeft <= 0 ? 'disabled' : ''}><b>${i + 1}</b> ${esc(mv.name)}<small>${mv.ppLeft}/${mv.pp}</small></button>`).join('');
     const pl = state.players[p];
     row.insertAdjacentHTML('beforeend', '<div class="rparty">' + pl.team.map((x, i) => i === pl.active ? '' : `<button class="rsw" data-s="${i}" ${x.hp <= 0 ? 'disabled' : ''} title="Switch to ${esc(x.name)}"><img src="${x.sprite}" alt=""></button>`).join('') + '</div>');
+    const J = JB();
+    if (J && p === 0) {
+      row.insertAdjacentHTML('beforeend', `<div class="rcmd"><button data-c="bag">BAG</button>${J.wild ? '<button data-c="ball">BALL</button><button data-c="run">RUN</button>' : ''}</div>`);
+      row.querySelectorAll('.rcmd button').forEach(b => b.onclick = () => { if (running && !ended && J.cmd) J.cmd(b.dataset.c); });
+    }
     row.querySelectorAll('.rmv').forEach(b => b.onclick = () => queueMove(p, +b.dataset.i));
     row.querySelectorAll('.rsw').forEach(b => b.onclick = () => { const f = F[p]; if (f && f.state === 'idle') { f.queuedSwitch = +b.dataset.s; b.classList.add('q'); } });
   }
@@ -2992,6 +3000,21 @@ const Retro = (() => {
     return p;
   }
   const SHAPE2 = {
+    // a Poké Ball (Journey: thrown at a wild Pokémon); open: it glows white
+    pball: s => {
+      const u = PX * 0.8;
+      if (s.open) glow(s.x, s.y, 60, '#ffffff', 0.7);
+      ctx.save(); ctx.translate(sn(s.x), sn(s.y)); ctx.rotate(s.rot || 0);
+      if (s.dim) ctx.globalAlpha = 0.85;
+      const disc = (r, c, a0 = 0, a1 = 6.283) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r, a0, a1); ctx.fill(); };
+      disc(6.4 * u, '#1a1a22');
+      disc(5.2 * u, s.col, Math.PI, 2 * Math.PI);
+      disc(5.2 * u, '#f4f4f4', 0, Math.PI);
+      ctx.fillStyle = s.band; ctx.fillRect(-5.4 * u, -0.7 * u, 10.8 * u, 1.4 * u);
+      disc(2.1 * u, '#1a1a22'); disc(1.3 * u, s.dim ? '#ffd84a' : '#ffffff');
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-3 * u, -4 * u, 1.6 * u, 1.2 * u);
+      ctx.restore(); ctx.globalAlpha = 1;
+    },
     // raking energy claws: talons sweep one after another, then the marks glow and fade
     claw: (s, k) => {
       const n = s.n || 3, size = 78 * (s.size || 1), dir = s.dir || 1;
@@ -5878,7 +5901,7 @@ const Retro = (() => {
   // ---------------------------------------------------------------------
   async function sendOut(p, tk, first) {
     const pl = state.players[p], mon = pl.team[pl.active];
-    mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0;
+    mon.stages = blankStages(); mon.vol = {}; mon.turnsOut = 0; mon.fought = true;   // fought: Journey shares the XP among those who fought
     const [anim, live] = await Promise.all([getAnim(mon.sprite), getPixel(mon.isMega ? mon.modelKey : mon.species)]);
     if (live && (tk !== token || !on)) live.dispose();
     chk(tk);
@@ -6066,7 +6089,7 @@ const Retro = (() => {
   function rpSlot() {
     const s = { chunks: [], t0: rpNow(), rec: null };
     try {
-      s.rec = new MediaRecorder(RP.stream, { mimeType: RP_MIME, videoBitsPerSecond: 6_000_000 });
+      s.rec = new MediaRecorder(RP.stream, { mimeType: RP_MIME, videoBitsPerSecond: 3_000_000 });
       s.rec.ondataavailable = e => e.data.size && s.chunks.push(e.data);
       s.rec.start();
     } catch (e) { return null; }
@@ -6089,10 +6112,12 @@ const Retro = (() => {
     const now = rpNow();
     if (!RP.stream) {
       RP.cv = RP.cv || document.createElement('canvas');
-      RP.cv.width = VW; RP.cv.height = VH;              // the virtual resolution keeps every art pixel
+      // 2/3 of the virtual resolution: an art pixel (3 units) is still 2 whole pixels, and the two encoders have less than
+      // half the pixels to work through (at full size they cost the battle dropped frames on laptop GPUs)
+      RP.cv.width = Math.round(VW * 2 / 3); RP.cv.height = Math.round(VH * 2 / 3);
       RP.g = RP.cv.getContext('2d');
       RP.g.imageSmoothingEnabled = false;
-      RP.g.drawImage(cv, 0, 0, VW, VH);
+      RP.g.drawImage(cv, 0, 0, RP.cv.width, RP.cv.height);
       try { RP.stream = RP.cv.captureStream(30); } catch (e) { return; }
       RP.slots = [rpSlot(), null];
       RP.offT = now + RP_SEG / 2;
@@ -6218,6 +6243,7 @@ const Retro = (() => {
       w = s.length === 1 ? s[0] : s.length ? s.reduce((a, b) => frac(b) > frac(a) ? b : a) : (elim.length ? elim[elim.length - 1] : 0);
       state.multi.winner = w; state.multi.winnerName = sideName(w);
     } else w = !alive(0) && !alive(1) ? 1 - Math.max(0, firstOut) : !alive(0) ? 1 : !alive(1) ? 0 : (hpLeft(0) >= hpLeft(1) ? 0 : 1);
+    if (JB()) return journeyEnd(w, tk);
     (async () => {
       if (timeUp) { big('TIME UP!', '', 1600); await waitN(1600); chk(tk); }
       await waitN(700); chk(tk);
@@ -6238,6 +6264,83 @@ const Retro = (() => {
       if (res) res(w);
     })().catch(swallow);
   }
+  // ---------------------------------------------------------------------
+  //  Journey battles (journey.js): a short opening, a short ending, and the
+  //  trainer's commands - a Poké Ball throw (wild Pokémon), running away
+  // ---------------------------------------------------------------------
+  async function journeyIntro(opts, tk) {
+    const J = JB();
+    AudioFX.Music.start(0);
+    if (J.title) big(J.title, '', 1500);
+    SFX.banner();
+    if (opts.lines && opts.lines[1]) later(() => speech(1, opts.lines[1], 2000), 300);
+    await waitN(J.wild ? 900 : 1600); chk(tk);
+    SFX.start();
+  }
+  function settle(res) { const r = resolveBattle; resolveBattle = rejectBattle = null; if (r) r(res); }
+  function journeyEnd(w, tk) {
+    const J = JB(), foe = state.players[1].team[0];
+    (async () => {
+      await waitN(600); chk(tk);
+      if (w === 0) { AudioFX.Music.victory(); sidePose(0, 'cheer', 3); sidePose(1, 'dismay', 3); }
+      else sidePose(0, 'dismay', 3);
+      for (const f of F) if (f && f.state === 'idle' && sideOf(f.p) === w && f.live) f.live.play('win');
+      const endL = state.meta.endLines;
+      if (endL && endL[1]) speech(1, w === 1 ? endL[1].win : endL[1].lose, 2600);
+      big(w === 0 ? (J.wild ? `WILD ${foe.name.toUpperCase()} FAINTED!` : 'YOU WIN!') : 'YOU LOST...', w === 0 ? 'win' : '', 2200);
+      await waitN(2400); chk(tk);
+      settle(w);
+    })().catch(swallow);
+  }
+  // end the battle now with a result of its own ({ ran: true }, { caught: true })
+  function finish(res) { if (!on || ended) return; ended = true; running = false; settle(res); }
+  // a Poké Ball at the wild Pokémon: o = { col, band, shakes (0-3), caught }; resolves true (caught, the battle ends) or false
+  async function throwBall(o) {
+    const tk = token, d = F[1], tr = TR[0];
+    if (!on || ended || !running || !d || d.state !== 'idle' || !tr) return null;
+    cinemaUntil = 1e9;
+    try {
+      for (let i = 0; i < 50 && (d.busy || (F[0] && F[0].busy)); i++) { await waitN(50); chk(tk); }
+      trainerPose(0, 'throw', 0.7); SFX.whoosh();
+      const b = { kind: 'pball', x: tr.x + 12, y: tr.y - 72, rot: 0, open: 0, col: o.col || '#e23b3b', band: o.band || '#1a1a22', life: 1e9, age: 0 };
+      shapes.push(b);
+      const x0 = b.x, y0 = b.y, x1 = d.x, y1 = d.cy - 12;
+      await tw(0.55, k => { b.x = x0 + (x1 - x0) * k; b.y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * 150; b.rot = k * 14; }); chk(tk);
+      // it opens and draws the Pokémon in as red light
+      b.open = 1; b.rot = 0; SFX.pop(); flash('#ffffff', 0.3); glowP(d.cx, d.cy, 10, 120, '#ff8a8a', 0.4, 0.8);
+      await tw(0.45, k => { d.white = k; d.whiteCol = '#ff6a6a'; d.pop = 1 - k * 0.9; d.alpha = 1 - k; }); chk(tk);
+      b.open = 0; d.alpha = 0;
+      const yG = d.y - 10;
+      await tw(0.35, k => { b.y = y1 + (yG - y1) * easeIn(k); }); chk(tk);
+      ringP(b.x, yG + 8, 4, 30, '#ffffff', 0.3);
+      for (let i = 0; i < o.shakes; i++) {
+        await waitN(380); chk(tk);
+        SFX.beep(false);
+        await tw(0.42, k => { b.rot = Math.sin(k * Math.PI * 2) * 0.45; }); chk(tk);
+      }
+      await waitN(420); chk(tk);
+      if (o.caught) {
+        SFX.beep(true); later(() => SFX.buff(), 120); b.dim = 1;
+        for (let i = 0; i < 3; i++) ringP(b.x, b.y, 4, 46 + i * 14, ['#fff35a', '#ffffff', '#ffb84a'][i], 0.5, { delay: i * 0.08 });
+        for (let i = 0; i < 10; i++) { const a = i / 10 * 6.28; spawn({ kind: 'streak', c: ['#fff35a'], x: b.x, y: b.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 200, life: 0.4, len: 20, ang: a, must: true }); }
+        big('GOTCHA!', 'win', 2000);
+        AudioFX.Music.victory();
+        await waitN(2000); chk(tk);
+        finish({ caught: true });
+        return true;
+      }
+      // it breaks free
+      b.open = 1; flash('#ffffff', 0.35); SFX.pop(); d.white = 1;
+      await tw(0.3, k => { d.alpha = k; d.pop = 0.1 + 0.9 * k; d.white = 1 - k; }); chk(tk);
+      d.alpha = 1; d.pop = 1; d.white = 0;
+      const i = shapes.indexOf(b); if (i >= 0) shapes.splice(i, 1);
+      text(d, ['OH NO! IT BROKE FREE!', 'AWW! ALMOST!', 'ARGH! SO CLOSE!', 'SHOOT! SO CLOSE!'][Math.min(3, o.shakes)], 'info');
+      return false;
+    } finally { if (cinemaUntil > T) cinemaUntil = T + 0.2; }
+  }
+  // a heal from the Bag (journey.js has already raised mon.hp / cleared its status)
+  function healFx(p) { const f = F[p]; if (!f || f.state !== 'idle') return; SFX.heal(); ringP(f.x, f.y, 8, f.r * 2.4, '#7dff9a', 0.5); glowP(f.cx, f.cy, 10, 90, '#9dffb4', 0.45, 0.7); hud(p); }
+
   // intro card of a multi battle: every entrant (Battle Royale) or the two line-ups (Team Brawl)
   function multiCard(opts) {
     const ps = state.players.map((_, p) => p);
@@ -6253,6 +6356,7 @@ const Retro = (() => {
       <div class="rc-ask">WHO WINS? <span>COMMENT 👇</span></div>`;
   }
   async function intro(opts, tk) {
+    if (JB()) return journeyIntro(opts, tk);
     AudioFX.Crowd.start(); AudioFX.Music.start(0);
     const team = p => state.players[p].team.map(m => `<img src="${m.sprite}" alt="">`).join('');
     const who = p => `<div class="rc-name">${esc(PLAYER[p])}</div><div class="rc-rec">${esc(Stats.recordText(PLAYER[p]))}</div><div class="rc-team">${team(p)}</div>`;
@@ -6747,6 +6851,7 @@ const Retro = (() => {
     partBudget();
     T += dt;
     if (WM) wmStep(dt);                                // open world: no battle clock, no sudden death
+    else if (running && !megaHold() && JB()) clockT += dt;
     else if (running && !megaHold()) { clockT += dt; if (clockT > 600) endBattle(true); else if (!sd && sdTime() && clockT >= sdTime() && !F.some(f => f && f.state !== 'idle') && (multi || F.every(Boolean))) suddenDeath(); }
     cheer = Math.max(0, cheer - dt * 0.3);
     if (running) heatStep(dt);
@@ -6791,7 +6896,7 @@ const Retro = (() => {
     multi = null; elim = [];
     if (WM) { WM = null; decal = null; }                // the open world's decal layer is world-sized: let it go
     acting = 0; spot = spotFoe = pendingSpot = null; loudUntil = 0; spotEndT = -99;
-    root.classList.remove('multi', 'wild');
+    root.classList.remove('multi', 'wild', 'journey');
     fxEl.innerHTML = ''; hudEl.innerHTML = ''; topEl.innerHTML = ''; fxEl.style.transform = ''; lastTz = 0;
     cameraReset(); dimA = dimTarget = 0;
     root.classList.add('hidden');
@@ -6825,7 +6930,8 @@ const Retro = (() => {
       root.classList.add('multi');
     }
     TR[0] = TR[1] = null;
-    if (!multi || multi.mode === 'brawl') { TR[0] = makeTrainer(0, settings.outfits[0]); TR[1] = makeTrainer(1, settings.outfits[1]); }
+    if (!multi || multi.mode === 'brawl') { TR[0] = makeTrainer(0, settings.outfits[0]); TR[1] = JB() && JB().wild ? null : makeTrainer(1, settings.outfits[1]); }
+    root.classList.toggle('journey', !!JB());
     buildHud();
     hudEl.classList.add('hidden');
     const srcs = state.players.flatMap(pl => pl.team.flatMap(m => [m.sprite, ...(m.megaForm ? [m.megaForm.sprite] : [])]));
@@ -6847,6 +6953,7 @@ const Retro = (() => {
     return result;
   }
   return { battle, world, stop, get active() { return on; },
+    journey: { throwBall, finish, healFx, refresh: p => hud(p), get running() { return on && running && !ended; }, foe: () => F[1], me: () => F[0] },
     _styles: () => Object.keys(MOVES).map(id => ({ id, style: classify({ id, ...MOVES[id] }), sig: !!SIG[id] })),   // tests: each move's animation family
     themeName: k => (THEMES[THEME_MAP[k]] || THEMES.plaza).name, _debug: () => ({ F, TR, parts, beams, T, clockT, running, megaHold: megaHold(), megaPending: megaPending && megaPending.p, VW, VH, WW, WH, field, view: viewRect(), insets: frameInsets(), zFloor: zFloor(), zBase: zHeld, shot: camShots.length ? camShots.map(s => s.kind).join(',') : '', SW, cam: { x: camX, y: camY, z: camZ }, dim: dimA }),
     // test hook: play one move's effect (no damage) with the battle paused

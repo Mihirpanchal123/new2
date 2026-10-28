@@ -53,7 +53,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ---------------------------------------------------------------------
 const updaters = [];
 const captureWaiters = [];
-// grab the next rendered frame as an image (for thumbnails)
+// grab the next rendered frame (for thumbnails) as a canvas copy: encoding a full-size frame to an image stalls the game
+// for a frame or more, right on a big hit, so that waits until the thumbnail is saved
 World.captureFrame = () => new Promise(res => captureWaiters.push(res));
 // slow motion for dramatic moments (real-time duration, independent of the game clock)
 World.slowmo = (scale, ms) => new Promise(res => { TIME_SCALE = scale; setTimeout(() => { TIME_SCALE = 1; res(); }, ms); });
@@ -79,7 +80,11 @@ function startLoop() {
     for (const u of updaters) u(dt, t);
     if (captureWaiters.length) {
       const src = World.captureSource;
-      if (src) { const url = src.toDataURL('image/jpeg', 0.92); captureWaiters.splice(0).forEach(fn => fn(url)); }
+      if (src) {
+        const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+        c.getContext('2d').drawImage(src, 0, 0);
+        captureWaiters.splice(0).forEach(fn => fn(c));
+      }
     }
   })();
 }

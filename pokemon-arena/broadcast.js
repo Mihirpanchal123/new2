@@ -10,14 +10,12 @@ const Broadcast = (() => {
   // keep the frame of the biggest moment so far
   async function captureThumb(score, headline) {
     if (thumb && thumb.score >= score) return;
-    const url = await World.captureFrame();
-    thumb = { score, url, headline };
+    const frame = await World.captureFrame();
+    thumb = { score, frame, headline };
   }
   async function thumbnailURL(names) {
     if (!thumb) return null;
-    const img = new Image();
-    img.src = thumb.url;
-    await img.decode();
+    const img = thumb.frame;
     const tall = img.height > img.width;
     const W = tall ? 720 : 1280, H = tall ? 1280 : 720;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
