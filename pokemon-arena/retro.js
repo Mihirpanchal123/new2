@@ -2168,26 +2168,78 @@ const Retro = (() => {
     lastTimer = '';
   }
   let lastTimer = '';
+  // the player's control panel: a status strip (charge bar, what happens next, the bench), four big move cards
+  // (type, power, PP, how well it hits the foe) and, in Journey, BAG / BALL / RUN. Built once per Pokémon and
+  // updated in place, so a tap is never lost to a rebuild mid-press.
+  const CAT_LBL = { physical: 'PHYS', special: 'SPEC', status: 'STATUS' };
+  const ctlMax = [0, 0];
+  function effTag(mv, foe) {
+    if (!foe || mv.cat === 'status' || !mv.type) return ['', ''];
+    const e = effectiveness(mv.type, foe.types);
+    return e === 0 ? ['no', 'NO EFFECT'] : e >= 2 ? ['se', 'SUPER!'] : e < 1 ? ['nv', 'WEAK'] : ['', ''];
+  }
   function humanRow(p) {
     const row = document.getElementById('rrow' + p);
     if (!row) return;
-    const m = active(p);
-    row.innerHTML = m.moves.map((mv, i) => `<button class="rmv" data-i="${i}" style="--c:${TYPE_COLORS[mv.type] || '#888'}" ${mv.ppLeft <= 0 ? 'disabled' : ''}><b>${i + 1}</b> ${esc(mv.name)}<small>${mv.ppLeft}/${mv.pp}</small></button>`).join('');
-    const pl = state.players[p];
-    row.insertAdjacentHTML('beforeend', '<div class="rparty">' + pl.team.map((x, i) => i === pl.active ? '' : `<button class="rsw" data-s="${i}" ${x.hp <= 0 ? 'disabled' : ''} title="Switch to ${esc(x.name)}"><img src="${x.sprite}" alt=""></button>`).join('') + '</div>');
-    const J = JB();
-    if (J && p === 0) {
-      row.insertAdjacentHTML('beforeend', `<div class="rcmd"><button data-c="bag">BAG</button>${J.wild ? '<button data-c="ball">BALL</button><button data-c="run">RUN</button>' : ''}</div>`);
+    const pl = state.players[p], m = active(p), foe = state.players[1 - p] && active(1 - p), J = p === 0 ? JB() : null;
+    const sig = [pl.active, m.name, m.moves.map(mv => mv.id).join(), pl.team.length, J ? (J.wild ? 'w' : 't') : ''].join('|');
+    if (row.dataset.sig !== sig) {
+      row.dataset.sig = sig;
+      row.innerHTML = `<div class="rstat"><span class="rlbl"></span><i class="rbar"><i></i></i><div class="rparty">${pl.team.map((x, i) => i === pl.active ? '' : `<button class="rsw" data-s="${i}" title="Switch to ${esc(x.name)}"><img src="${x.sprite}" alt=""><i class="rsh"><i></i></i></button>`).join('')}</div></div>
+        <div class="rmoves">${m.moves.map((mv, i) => `<button class="rmv" data-i="${i}" style="--c:${TYPE_COLORS[mv.type] || '#888'}"><span class="rk">${i + 1}</span><b class="rn">${esc(mv.name)}</b><em class="re"></em><span class="rmeta"><i class="rty">${esc(mv.type || '')}</i><i>${CAT_LBL[mv.cat] || ''}${mv.power ? ' ' + mv.power : ''}</i><i class="rpp"></i></span></button>`).join('')}</div>
+        ${J ? `<div class="rcmd"><button data-c="bag"><i>🎒</i>BAG</button>${J.wild ? '<button data-c="ball"><i class="rball"></i>BALL</button><button data-c="run"><i>»</i>RUN</button>' : ''}</div>` : ''}`;
       row.querySelectorAll('.rcmd button').forEach(b => b.onclick = () => { if (running && !ended && J.cmd) J.cmd(b.dataset.c); });
+      row.querySelectorAll('.rmv').forEach(b => b.onclick = () => queueMove(p, +b.dataset.i));
+      row.querySelectorAll('.rsw').forEach(b => b.onclick = () => { const f = F[p]; if (f && f.state === 'idle' && !b.disabled) { f.queuedSwitch = +b.dataset.s; row.querySelectorAll('.rsw').forEach(x => x.classList.toggle('q', x === b)); } });
     }
-    row.querySelectorAll('.rmv').forEach(b => b.onclick = () => queueMove(p, +b.dataset.i));
-    row.querySelectorAll('.rsw').forEach(b => b.onclick = () => { const f = F[p]; if (f && f.state === 'idle') { f.queuedSwitch = +b.dataset.s; b.classList.add('q'); } });
+    m.moves.forEach((mv, i) => {
+      const b = row.querySelector(`.rmv[data-i="${i}"]`);
+      if (!b) return;
+      b.disabled = mv.ppLeft <= 0;
+      b.querySelector('.rpp').textContent = `PP ${mv.ppLeft}/${mv.pp}`;
+      b.classList.toggle('lowpp', mv.ppLeft > 0 && mv.ppLeft <= Math.max(1, mv.pp / 4));
+      const [k, t] = effTag(mv, foe), e = b.querySelector('.re');
+      e.className = 're ' + k; e.textContent = t;
+    });
+    row.querySelectorAll('.rsw').forEach(b => {
+      const x = pl.team[+b.dataset.s], k = clamp(x.hp / x.maxhp, 0, 1);
+      b.disabled = x.hp <= 0;
+      const fill = b.querySelector('.rsh i');
+      fill.style.width = (k * 100) + '%'; fill.style.background = k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444';
+    });
+    ctlTick();
   }
   function queueMove(p, i) {
     const f = F[p], m = active(p);
     if (!f || f.state !== 'idle' || !m.moves[i] || m.moves[i].ppLeft <= 0) return;
     f.queued = i;
     document.querySelectorAll(`#rrow${p} .rmv`).forEach(b => b.classList.toggle('q', +b.dataset.i === i));
+    ctlTick();
+  }
+  // every frame: the charge bar fills as the cooldown runs down, and the label says what happens next
+  function ctlTick() {
+    for (const p of [0, 1]) {
+      const row = document.getElementById('rrow' + p), f = F[p];
+      if (!row || !row.dataset.sig) continue;
+      let lbl, k = 0, mode;
+      if (!running || ended) { lbl = ''; mode = 'wait'; ctlMax[p] = 0; }
+      else if (!f || f.state !== 'idle') { lbl = 'WAIT...'; mode = 'wait'; ctlMax[p] = 0; }
+      else if (f.stuck) { lbl = f.mon.status === 'slp' ? 'ASLEEP...' : 'FROZEN...'; mode = 'wait'; }
+      else if (f.busy) { lbl = 'ATTACKING!'; mode = 'busy'; k = 1; ctlMax[p] = 0; }
+      else {
+        const cd = Math.max(0, f.cd);
+        if (cd > ctlMax[p]) ctlMax[p] = cd;
+        k = ctlMax[p] > 0 ? 1 - cd / ctlMax[p] : 1;
+        const q = f.queued != null ? f.mon.moves[f.queued] : null;
+        if (cd > 0) { lbl = q ? 'NEXT: ' + q.name.toUpperCase() : 'CHARGING - PICK A MOVE'; mode = q ? 'next' : 'charge'; }
+        else { ctlMax[p] = 0; lbl = q ? 'GO: ' + q.name.toUpperCase() : 'YOUR MOVE!'; mode = q ? 'next' : 'ready'; }
+      }
+      if (row.dataset.mode !== mode) row.dataset.mode = mode;
+      const l = row.querySelector('.rlbl');
+      if (l && l.textContent !== lbl) l.textContent = lbl;
+      const bar = row.querySelector('.rbar i');
+      if (bar) bar.style.width = (k * 100).toFixed(1) + '%';
+    }
   }
   // multi battles: a strip of mini cards (portrait, name, HP) grouped by side, plus a knockout feed
   function buildMultiHud() {
@@ -6865,6 +6917,7 @@ const Retro = (() => {
     if (WM) { WM.host.frame(dt); return; }
     rpTick();
     timerTick();
+    ctlTick();
   }
   updaters.push(update);
   addEventListener('resize', () => {

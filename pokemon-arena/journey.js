@@ -743,7 +743,7 @@ const Journey = (() => {
     if (kind === 'menu') {
       el.innerHTML = `<div class="jp jp-menu">${[['party', 'POKéMON', G.party.length > 0], ['dex', 'POKéDEX', flag('dex')], ['bag', 'BAG', true], ['card', G.name.toUpperCase(), true], ['save', 'SAVE', true], ['exit', 'EXIT', true], ['close', 'CLOSE', true]].filter(x => x[2]).map(([a, t]) => `<button data-a="${a}">${t}</button>`).join('')}</div>`;
     } else if (kind === 'party') {
-      el.innerHTML = `<div class="jp">${head('POKéMON')}${G.party.map((m, i) => monRow(m, i)).join('')}</div>`;
+      el.innerHTML = `<div class="jp">${head('POKéMON')}<div class="jparty">${G.party.map((m, i) => `<div class="jpslot"><span class="jgrip" title="Drag to move"><i></i><i></i><i></i></span>${monRow(m, i, i === 0 ? '<em class="lead">LEAD</em>' : '')}</div>`).join('')}</div>${G.party.length > 1 ? '<div class="jhint">Drag a Pokémon up or down to change the order. The first one goes out first in battle.</div>' : ''}</div>`;
     } else if (kind === 'mon') {
       const m = G.party[data], s = sp(m.species), st = calcStats(s.base, m.level), max = Prog.hpMax(m.species, m.level);
       const next = m.level < 100 ? Prog.xpAt(m.species, m.level + 1) - m.xp : 0;
@@ -782,6 +782,42 @@ const Journey = (() => {
       el.innerHTML = `<div class="jp jp-wide">${head('CHOOSE YOUR PARTNER', 'none')}<div class="jtabs">${STARTERS.map(([n], i) => `<button data-a="region" data-p="${i}" class="${i === r ? 'on' : ''}">${n}</button>`).join('')}</div>
         <div class="jstart">${trio.map(s => `<button data-a="pickStarter" data-i="${s}"><img src="${sp(s).sprite}" alt=""><b>${esc(dname(s))}</b>${typeChips(s)}</button>`).join('')}</div><div class="jrow"><small>${region} starters. Pick any region's trio!</small></div></div>`;
     }
+  }
+  // the party list: drag a Pokémon up or down to reorder it (mouse: anywhere on its row; touch: by its grip, so the
+  // list still scrolls). The others slide aside to show where it will land; a plain tap still opens its summary.
+  function partyDrag(e) {
+    if (S.menu !== 'party' || e.button > 0) return;
+    const slot = e.target.closest('.jpslot');
+    if (!slot) return;
+    const grip = !!e.target.closest('.jgrip');
+    if (e.pointerType !== 'mouse' && !grip) return;
+    const list = slot.parentElement, slots = [...list.children], from = slots.indexOf(slot), last = slots.length - 1;
+    if (last < 1) return;
+    e.preventDefault();                                  // no native image drag or text selection
+    const tops = slots.map(x => x.getBoundingClientRect().top), pitch = tops[1] - tops[0], y0 = e.clientY;
+    let dragging = false, to = from;
+    const move = ev => {
+      if (!dragging) {
+        if (Math.abs(ev.clientY - y0) < (grip ? 3 : 8)) return;
+        dragging = true; slot.classList.add('drag'); list.classList.add('dragging');
+      }
+      ev.preventDefault();
+      const dy = Math.max(tops[0] - tops[from], Math.min(tops[last] - tops[from], ev.clientY - y0));
+      slot.style.transform = `translateY(${dy}px)`;
+      const t = Math.max(0, Math.min(last, Math.round(from + dy / pitch)));
+      if (t !== to) { to = t; sfx('lock'); }
+      slots.forEach((x, i) => { if (x === slot) return; const sh = from < to && i > from && i <= to ? -pitch : from > to && i >= to && i < from ? pitch : 0; x.style.transform = sh ? `translateY(${sh}px)` : ''; });
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (!dragging) return;
+      // the click that ends a drag is not a tap on the row
+      const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+      addEventListener('click', swallow, true); setTimeout(() => removeEventListener('click', swallow, true), 60);
+      if (to !== from) { G.party.splice(to, 0, G.party.splice(from, 1)[0]); sfx('pop'); save(); }
+      if (S.menu === 'party') renderPanel('party');
+    };
+    addEventListener('pointermove', move, { passive: false }); addEventListener('pointerup', up); addEventListener('pointercancel', up);
   }
   const canUse = (it, m) => it.revive ? m.hp <= 0 : it.heal ? m.hp > 0 && m.hp < Prog.hpMax(m.species, m.level) : it.cure ? !!m.status && it.cure.includes(m.status) && m.hp > 0 : it.candy ? m.level < 100 : it.evo ? !!Prog.evoTarget(m, { why: 'item', item: it.evo }) : it.tm ? tmOk(m, it.tm) : false;
   const tmOk = (m, id) => !m.moves.includes(id) && (tmMoves(m.species).includes(id) || sp(m.species).learnset.some(([, x]) => x === id));
@@ -962,6 +998,7 @@ const Journey = (() => {
     cv = root.querySelector('.jcv'); ctx = cv.getContext('2d');
     ui = { dialog: $q('.jdialog'), panel: $q('.jpanel'), evo: $q('.jevo'), fade: $q('.jfade'), banner: $q('.jbanner'), chapter: $q('.jchapter'), touch: $q('.jtouch'), bmenu: bm };
     ui.panel.addEventListener('click', panelClick);
+    ui.panel.addEventListener('pointerdown', partyDrag);
     ui.dialog.addEventListener('click', e => { if (!e.target.closest('button')) advance(); });
     $q('.jmenu-btn').onclick = () => { if (S.menu) closeMenu(); else if (!S.event) openMenu('menu'); };
     bindTouch();
