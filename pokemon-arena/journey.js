@@ -271,7 +271,7 @@ const Journey = (() => {
     stepNpcs(dt);
     const p = S.player;
     if (S.hop) { stepHop(dt); return; }
-    if (S.event || S.menu || S.battle || S.scripted) { p.moving = !!S.scripted; return; }
+    if (S.event || S.menu || S.battle || S.scripted || S.travel) { p.moving = !!S.scripted; return; }
     let { x: ix, y: iy } = inputVec();
     if (!ix && !iy) { p.moving = false; S.runHeld = false; return; }
     // the dominant direction sets the facing
@@ -343,8 +343,8 @@ const Journey = (() => {
         S.stepAcc -= TS; G.steps++;
         if (G.repel > 0 && --G.repel === 0) toast('The Repel wore off.');
         if (G.steps % 128 === 0) for (const mon of G.party) mon.friendship = Math.min(255, mon.friendship + 1);
-        // wild Pokémon: in tall grass, and anywhere on a cave floor
-        const enc = m.encounters && { tall: m.encounters.tall, cave: m.encounters.cave }[kindAt(tx, ty)];
+        // wild Pokémon: in tall grass, anywhere on a cave floor, and in deep snow
+        const enc = m.encounters && { tall: m.encounters.tall, cave: m.encounters.cave, snow: m.encounters.snow }[kindAt(tx, ty)];
         if (enc && Math.random() < enc.rate) { const w = rollWild(enc); if (w) return wildBattle(w); }
       }
     }
@@ -370,22 +370,34 @@ const Journey = (() => {
     loadMap(e.to, x, y, p.dir);
     save();
   }
-  async function enterBuilding(b) {
-    const p = S.player;
-    if (!conds(b.needs)) { await runEvent(b.locked); p.y += 6; S.warpLock = tileKey(...tileOf(p.x, p.y)); return; }
-    const to = JMaps.M[b.to];
-    sfx('lock');
-    await fade(() => loadMap(b.to, to.arrive.x * TS + 8, to.arrive.y * TS + 13, 'up'));
-    if (to.isCenter) G.lastCenter = { map: to.id };
-    save();
+  // one way through a door, mat or stairs at a time: the map only changes at the end of the fade, and until then the
+  // player stands still. (Without this every frame on the tile set off another trip; the later ones reloaded the map
+  // under a trainer who had already started walking up, and that walk never finished: the game hung.)
+  async function passage(fn) {
+    if (S.travel) return;
+    S.travel = true; S.player.moving = false;
+    try { await fn(); } finally { S.travel = false; }
   }
-  async function exitBuilding() {
-    const m = S.map, out = JMaps.M[m.outside], b = out.buildings.find(bb => bb.to === m.id), d = JMaps.doorsOf(b)[0];
-    sfx('lock');
-    await fade(() => loadMap(out.id, d.x * TS + (JArt.BUILD[b.b].door.length > 1 ? 16 : 8), (d.y + 1) * TS + 13, 'down'));
-    save();
+  function enterBuilding(b) {
+    return passage(async () => {
+      const p = S.player;
+      if (!conds(b.needs)) { await runEvent(b.locked); p.y += 6; S.warpLock = tileKey(...tileOf(p.x, p.y)); return; }
+      const to = JMaps.M[b.to];
+      sfx('lock');
+      await fade(() => loadMap(b.to, to.arrive.x * TS + 8, to.arrive.y * TS + 13, 'up'));
+      if (to.isCenter) G.lastCenter = { map: to.id };
+      save();
+    });
   }
-  async function warpTo(id, tx, ty, dir) { sfx('lock'); await fade(() => loadMap(id, tx * TS + 8, ty * TS + 13, dir)); save(); }
+  function exitBuilding() {
+    return passage(async () => {
+      const m = S.map, out = JMaps.M[m.outside], b = out.buildings.find(bb => bb.to === m.id), d = JMaps.doorsOf(b)[0];
+      sfx('lock');
+      await fade(() => loadMap(out.id, d.x * TS + (JArt.BUILD[b.b].door.length > 1 ? 16 : 8), (d.y + 1) * TS + 13, 'down'));
+      save();
+    });
+  }
+  function warpTo(id, tx, ty, dir) { return passage(async () => { sfx('lock'); await fade(() => loadMap(id, tx * TS + 8, ty * TS + 13, dir)); save(); }); }
 
   // ---- people: wandering, scripted walks, trainers' eyes
   function stepNpcs(dt) {
@@ -654,7 +666,7 @@ const Journey = (() => {
     const id = typeof def === 'string' ? def : def.id;
     const tr = typeof def === 'string' ? { id, ...TRAINERS[def] } : def;
     const team = G.party.filter(m => m.hp > 0);
-    if (!team.length) return 'lose';
+    if (!team.length) { await whiteout(); return 'lose'; }       // (nothing left to battle with: the Center, not a silent loss)
     const wild = !!tr.wild;
     const name = wild ? 'Wild ' + dname(tr.team[0][0]) : tr.name || (npc && npc.name) || 'Trainer';
     const look = wild ? null : lookOf(tr.look || (npc && npc.look) || 'man');
@@ -700,7 +712,10 @@ const Journey = (() => {
       save(); return 'caught';
     }
     if (result && result.ran) { await say('Got away safely!'); return 'ran'; }
-    const win = result === 0;
+    let win = result === 0;
+    // the last Pokémon on both sides fainted together: a draw, and a draw with nothing left standing is a loss -
+    // walking on with a fainted team would make every later battle end before it starts
+    if (win && !G.party.some(m => m.hp > 0)) { win = false; await say('Both sides\' last Pokémon fainted at the same time... It\'s a draw!'); }
     S.lastWin = win;
     if (win) {
       await shareXp(team, ft, !wild);
@@ -1006,6 +1021,8 @@ const Journey = (() => {
       G.flags['cut.' + S.map.id + '.' + c.x + '.' + c.y] = true; refresh(); sfx('slash');
     },
     async chapter(title, sub) { showChapter(title, sub); await J.wait(3200); },
+    // a ride somewhere else (the ferry, a train): fade out, arrive at (x, y) on map id
+    travel: (id, x, y, dir = 'down') => fade(() => { loadMap(id, x * TS + 8, y * TS + 13, dir); save(); }),
     pc: () => new Promise(res => { S.menuDone = res; openMenu('pc', true); }),
     shop: () => new Promise(res => { S.menuDone = res; openMenu('shop', 'buy'); })
   };
@@ -1112,7 +1129,7 @@ const Journey = (() => {
     if (!active) return;
     save();
     active = false; cancelAnimationFrame(S.raf);
-    S.event = false; S.menu = null; S.battle = false; S.dialog = null; S.keys.clear();
+    S.event = false; S.menu = null; S.battle = false; S.dialog = null; S.travel = false; S.keys.clear();
     if (S.pickRes) S.pickRes = null;
     document.body.classList.remove('journey');
     if (root) { root.classList.add('hidden'); closeDialog(); ui.panel.classList.add('hidden'); ui.bmenu.classList.add('hidden'); ui.evo.classList.add('hidden'); }

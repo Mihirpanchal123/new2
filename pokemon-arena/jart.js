@@ -40,9 +40,11 @@ const JArt = (() => {
   // what each map character is
   const KIND = {
     '.': 'grass', ',': 'path', ':': 'sand', '~': 'water', ';': 'tall', '*': 'flowers', 'v': 'ledge', 'f': 'fence', 'T': 'tree', 'B': 'bush', 'r': 'rock', 'S': 'grass', 'p': 'pine',
-    '#': 'wall', '_': 'wood', '+': 'tile', 'R': 'rug', 'm': 'mat', '<': 'stairsUp', '>': 'stairsDown', 'g': 'gymfloor', 'V': 'vine', 'k': 'void', 'c': 'cave', 'C': 'cavewall'
+    '#': 'wall', '_': 'wood', '+': 'tile', 'R': 'rug', 'm': 'mat', '<': 'stairsUp', '>': 'stairsDown', 'g': 'gymfloor', 'V': 'vine', 'k': 'void', 'c': 'cave', 'C': 'cavewall',
+    // the later chapters: snowfields, ice, volcanic ash and lava, steel and psychic floors
+    'n': 'snow', 'i': 'ice', 'o': 'ash', 'L': 'lava', 'h': 'metal', 'P': 'psyfloor'
   };
-  const SOLID = new Set(['water', 'fence', 'tree', 'bush', 'rock', 'wall', 'vine', 'void', 'pine', 'cavewall']);
+  const SOLID = new Set(['water', 'fence', 'tree', 'bush', 'rock', 'wall', 'vine', 'void', 'pine', 'cavewall', 'lava']);
   function grassAt(g, x0, y0, tx, ty) {
     P(g, C.grass, x0, y0, TS, TS);
     for (let i = 0; i < 5; i++) { const h = hash(tx, ty, i); const x = x0 + Math.floor(h * 15), y = y0 + Math.floor(hash(ty, tx, i + 9) * 15); P(g, i < 3 ? C.grassD : C.grassL, x, y, 1, 1); }
@@ -130,6 +132,29 @@ const JArt = (() => {
         break;
       }
       case 'void': P(g, C.voidC, x0, y0, TS, TS); break;
+      case 'snow': {
+        P(g, '#eef4fa', x0, y0, TS, TS);
+        for (let i = 0; i < 5; i++) P(g, i % 2 ? '#d4e2f0' : '#ffffff', x0 + Math.floor(hash(tx, ty, i) * 14), y0 + Math.floor(hash(ty, tx, i) * 14), i % 2 ? 2 : 1, 1);
+        if (hash(tx, ty, 31) < 0.3) { const x = x0 + 3 + Math.floor(hash(tx, ty, 32) * 8), y = y0 + 4 + Math.floor(hash(tx, ty, 33) * 8); P(g, '#c4d6ea', x, y, 4, 1); P(g, '#ffffff', x + 1, y - 1, 2, 1); }
+        break;
+      }
+      case 'ice': {
+        P(g, '#bfe4f6', x0, y0, TS, TS); P(g, '#a4d4ee', x0, y0 + TS - 1, TS, 1); P(g, '#a4d4ee', x0 + TS - 1, y0, 1, TS);
+        const s = Math.floor(hash(tx, ty, 7) * 8); P(g, '#ffffff', x0 + 2 + s, y0 + 3, 3, 1); P(g, '#e8f8ff', x0 + 3 + s, y0 + 4, 4, 1);
+        break;
+      }
+      case 'ash': P(g, '#8a7e76', x0, y0, TS, TS); for (let i = 0; i < 5; i++) P(g, i % 2 ? '#6e625c' : '#a2968c', x0 + Math.floor(hash(tx, ty, i) * 14), y0 + Math.floor(hash(ty, tx, i) * 14), 2, 1); break;
+      case 'lava': {
+        P(g, '#d8401c', x0, y0, TS, TS);
+        for (let i = 0; i < 3; i++) { const ly = y0 + 2 + i * 5, lx = x0 + ((Math.floor(hash(tx, ty + i, 3) * 10) + frame * 4) % 12); P(g, '#ffb030', lx, ly, 4, 1); P(g, '#ff7a1c', lx + 1, ly + 1, 3, 1); }
+        const cool = n => n && n !== 'lava';
+        if (cool(at(0, -1))) { P(g, '#5a2a1a', x0, y0, TS, 2); P(g, '#ff9a3a', x0, y0 + 2, TS, 1); }
+        if (cool(at(-1, 0))) P(g, '#5a2a1a', x0, y0, 2, TS);
+        if (cool(at(1, 0))) P(g, '#5a2a1a', x0 + TS - 2, y0, 2, TS);
+        break;
+      }
+      case 'metal': P(g, '#9aa4b0', x0, y0, TS, TS); P(g, '#7a8490', x0, y0, TS, 1); P(g, '#7a8490', x0, y0, 1, TS); P(g, '#b8c2cc', x0 + 1, y0 + 1, TS - 2, 1); for (const [rx, ry] of [[3, 3], [12, 3], [3, 12], [12, 12]]) P(g, '#6a7480', x0 + rx, y0 + ry, 1, 1); break;
+      case 'psyfloor': P(g, '#7a5aa8', x0, y0, TS, TS); P(g, '#5e4488', x0, y0, TS, 1); P(g, '#5e4488', x0, y0, 1, TS); if ((tx + ty) % 2) { P(g, '#9a7ac8', x0 + 4, y0 + 4, 8, 8); P(g, '#c8a8f0', x0 + 7, y0 + 7, 2, 2); } break;
       default: grassAt(g, x0, y0, tx, ty);
     }
   }
@@ -244,7 +269,7 @@ const JArt = (() => {
         P(g, '#3c78d0', 8, 34, W - 16, 8); for (const [x, y] of [[0, 0], [1, 0], [3, 0], [4, 0], [0, 1], [2, 1], [4, 1], [0, 2], [4, 2], [0, 3], [4, 3], [0, 4], [4, 4]]) P(g, '#ffffff', W / 2 - 5 + x * 2, 35 + y + 1, 2, 1);
         window2(g, 6, 46, 10, 9); window2(g, W - 16, 46, 10, 9); door(2);
       } else if (kind === 'gym') {
-        const rc = ['#3c9a58', '#3c78d0', '#e0b030', '#d85030'][variant % 4];
+        const rc = ['#3c9a58', '#3c78d0', '#e0b030', '#d85030', '#9a58c8', '#7a8a9a', '#58b8e0', '#c8a028'][variant % 8];   // leaf, tide, spark, ember, mind, iron, glacier, the League
         walls(40, '#ece4d4', '#d0c4ac'); roof(g, W, H, rc, 42);
         P(g, shade(rc, -0.2), 4, 44, 6, H - 44); P(g, shade(rc, -0.2), W - 10, 44, 6, H - 44);   // pillars
         window2(g, 14, 52, 12, 12); window2(g, W - 26, 52, 12, 12); door(3, true);
@@ -253,7 +278,9 @@ const JArt = (() => {
         P(g, '#ffd84a', cx - 9, cy - 9, 18, 18); P(g, '#b08a1a', cx - 9, cy + 8, 18, 1); P(g, '#ffffff', cx - 7, cy - 7, 14, 14);
         // a leaf, a drop, a bolt or a flame (by gym)
         const ART = [['......##', '....####', '...#####', '..#####.', '.#####..', '.####...', '.##.....', '#.......'], ['...##...', '...##...', '..####..', '.######.', '.######.', '########', '.######.', '..####..'],
-          ['....###.', '...###..', '..###...', '.######.', '...###..', '..###...', '.###....', '.##.....'], ['...#....', '..##..#.', '..###.##', '.######.', '########', '########', '.######.', '..####..']][variant % 4];
+          ['....###.', '...###..', '..###...', '.######.', '...###..', '..###...', '.###....', '.##.....'], ['...#....', '..##..#.', '..###.##', '.######.', '########', '########', '.######.', '..####..'],
+          ['........', '..####..', '.#....#.', '#..##..#', '#..##..#', '.#....#.', '..####..', '........'], ['...##...', '.#.##.#.', '..####..', '###..###', '###..###', '..####..', '.#.##.#.', '...##...'],
+          ['...#....', '.#.#.#..', '..###...', '#######.', '..###...', '.#.#.#..', '...#....', '........'], ['........', '#..##..#', '##.##.##', '########', '########', '.######.', '.######.', '........']][variant % 8];
         ART.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '#') P(g, rc, cx - 4 + x, cy - 4 + y, 1, 1); }));
         P(g, shade(rc, 0.45), cx - 1, cy - 2, 2, 2);
       } else if (kind === 'museum') {

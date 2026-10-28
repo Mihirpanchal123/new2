@@ -256,7 +256,14 @@ const JStory = (() => {
   on('gym2Locked', {}, J => J.say('The door is locked. A note is pinned to it: "At the museum. Back when I\'ve sorted this mess. - Rex"'));
   on('gymGuide2', {}, (J, n) => J.say(J.flag('badge.tide') ? 'You beat Rex! The Tide Badge looks good on you!' : J.flag('rex_back') ? 'Rex is back! He uses Water types: Grass and Electric moves are your best bet. Mind Quagsire - Electric won\'t touch it!' : 'Rex isn\'t in... He\'s at the museum, north-east of here.', n));
   on('caveGuard', { needs: ['!museum'] }, (J, n) => J.say('Seacliff Cave is off-limits - the tide tunnels are dangerous. Only Rex can let you through.', n));
-  on('ferry', {}, (J, n) => J.say(J.flag('badge.tide') ? 'The ferry to Voltara City is still in for repairs. Soon, I promise! (Chapter 3 is on its way.)' : 'The ferry to Voltara City is laid up for repairs. Come back later, kid!', n));
+  // the ferry: laid up until the Tide Badge; then it sails to Voltara City (Chapter 3, jch3.js: the map's dock is where you land)
+  on('ferry', { travel: [{ map: 'voltara', needs: ['ch3'] }] }, async (J, n) => {
+    const dock = JMaps.M.voltara && JMaps.M.voltara.dock;
+    if (!J.flag('ch3') || !dock) return J.say('The ferry to Voltara City is laid up for repairs. Come back later, kid!', n);
+    if (await J.ask('All aboard for Voltara City! Shall we cast off?', ['Yes', 'Not yet'], n) !== 0) return J.say('Take your time. The sea isn\'t going anywhere.', n);
+    await J.say('Hold on to your hat!', n);
+    await J.travel('voltara', dock.x, dock.y, dock.dir);
+  });
   on('portKid', {}, (J, n) => J.say('I found a shiny shell on the beach! ...Oh. It\'s a bottle cap.', n));
   on('portLady', {}, (J, n) => J.say('Rex has run that gym for thirty years. Folks say he can read the tide like a book.', n));
   on('portWoman', { sets: ['portGift'] }, async (J, n) => {
@@ -302,16 +309,27 @@ const JStory = (() => {
     await J.say('You got the Coral Meteorite back! Better take it to the museum.');
   });
   // ---- after Rex: the Tide Badge
-  on('rexWin', { sets: ['badge.tide', 'expshare'] }, async J => {
+  on('rexWin', { sets: ['badge.tide', 'expshare', 'ch3'] }, async J => {
     await J.say('A fine battle, captain! Here - the Tide Badge.', 'rex');
     J.badge('tide');
     await J.give('tm:water-pulse');
     await J.say(['And take this Exp. Share. With it, the Pokémon that sit out a battle still learn from it.', 'Every member of your crew grows together. That\'s how you weather any storm!'], 'rex');
     await J.give('expshare'); J.set('expshare');
-    await J.say(['Team Eclipse is after the meteor fragments - all of them. Keep your eyes open, {NAME}.', 'The ferry to Voltara City should sail again soon. Mila and the Spark Badge are waiting there!'], 'rex');
-    await J.chapter('Chapter 2 complete!', 'Next: Chapter 3 - Voltara City (coming soon)');
+    await J.say(['Team Eclipse is after the meteor fragments - all of them. Keep your eyes open, {NAME}.', 'And good news: the ferry is fixed! It sails for Voltara City from the pier. Mila and the Spark Badge are waiting there!'], 'rex');
+    await J.chapter('Chapter 2 complete!', 'Next: Chapter 3 - Sparks of Voltara');
+    J.set('ch3'); J.refresh();
+    await J.chapter('Chapter 3', 'Sparks of Voltara');
   });
   on('gymStatue2', {}, J => J.say(J.flag('badge.tide') ? 'CORALIS POKéMON GYM - LEADER: REX\nWinning trainers: {NAME}' : 'CORALIS POKéMON GYM - LEADER: REX\nWinning trainers this season: none yet!'));
 
-  return { ITEMS, BADGES, STARTERS, TRAINERS, T, META };
+  // ---- the chapters: where each starts, the party level a player has by then, its badge and the story flags it must
+  // reach (the checker and the playthrough test read these; jch3.js... register theirs the same way)
+  const CHAPTERS = {};
+  const chapter = c => { CHAPTERS[c.n] = c; };
+  chapter({ n: 1, title: 'A Bond Begins', start: { map: 'home2f', x: 2, y: 3 }, level: 5, badge: 'leaf',
+    goals: ['intro', 'shoes', 'starter', 'rival1', 'dex', 'soraR1', 'luna_back', 'shard1', 'badge.leaf', 'ride.cut', 'ch2'] });
+  chapter({ n: 2, title: 'Tides of Port Coralis', start: { map: 'verdant', x: 14, y: 14 }, level: 18, badge: 'tide',
+    goals: ['rival2', 'museum', 'kael', 'meteorite_back', 'rex_back', 'badge.tide', 'expshare', 'ch3'] });
+
+  return { ITEMS, BADGES, STARTERS, TRAINERS, T, META, on, CHAPTERS, chapter };
 })();

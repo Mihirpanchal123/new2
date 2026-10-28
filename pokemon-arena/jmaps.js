@@ -60,6 +60,9 @@ const JMaps = (() => {
     sailor: { hat: 'cap', hatColor: 0xffffff, hatFront: 0x2a3a6a, hair: 0x2b1d14, hairStyle: 'short', top: 0xffffff, sleeves: 'short', inner: 0x2a3a6a, legs: 0x2a3a6a, legStyle: 'pants', shoes: 0x2a2a34, bag: null },
     admin: { hat: null, hair: 0xa040e0, hairStyle: 'spiky', top: 0x2a2a3a, sleeves: 'long', inner: 0xffd84a, legs: 0x2a2a3a, legStyle: 'pants', shoes: 0xa040e0, bag: null, scarf: 0xa040e0 },
     rex: { hat: 'bandana', hatColor: 0x3c78d0, hair: 0xe8e0d0, hairStyle: 'spiky', top: 0x3c78d0, sleeves: 'none', inner: 0xffffff, legs: 0x2a3a5a, legStyle: 'pants', shoes: 0xffffff, bag: null },
+    // Team Eclipse's leaders, shared by the later chapters (jch4.js...): Director Vex and Admin Rhea
+    vex: { hat: null, hair: 0xe8e8f0, hairStyle: 'long', top: 0x1a1a2a, sleeves: 'long', inner: 0xa040e0, legs: 0x1a1a2a, legStyle: 'pants', shoes: 0x2a2a3a, bag: null, scarf: 0xffd84a },
+    rhea: { hat: null, hair: 0xe04828, hairStyle: 'pigtails', top: 0x2a2a3a, sleeves: 'none', inner: 0xff8a3a, legs: 0x2a2a3a, legStyle: 'skirt', shoes: 0xa040e0, bag: null },
     curator: { hat: null, hair: 0x9a9aa4, hairStyle: 'short', top: 0x6a4a3a, sleeves: 'long', inner: 0xe8dcc0, legs: 0x4a3a2a, legStyle: 'pants', shoes: 0x2a1e14, bag: null, scarf: 0xc84848 }
   };
 
@@ -151,14 +154,15 @@ const JMaps = (() => {
         { id: 'boy', x: 22, y: 12, dir: 'left', look: L.kid, wander: 3, talk: 'vBoy' }, { id: 'lady', x: 9, y: 13, dir: 'down', look: L.woman, wander: 2, talk: 'vLady' }] });
   }
   // ---- generic insides: Pokémon Center, Poké Mart
-  function center(id, outside) {
-    def({ id, name: 'Pokémon Center', kind: 'inside', outside, rows: grid(13, 9, '+').border('#').fill(1, 8, 11, 8, '+').put(6, 8, 'm').fill(5, 5, 7, 6, 'R').rows(), isCenter: true,
+  // o: anything more for the map (a chapter file passes { chapter: N })
+  function center(id, outside, o = {}) {
+    def({ ...o, id, name: 'Pokémon Center', kind: 'inside', outside, rows: grid(13, 9, '+').border('#').fill(1, 8, 11, 8, '+').put(6, 8, 'm').fill(5, 5, 7, 6, 'R').rows(), isCenter: true,
       arrive: { x: 6, y: 7 },
       furniture: [{ k: 'counter', x: 4, y: 3 }, { k: 'healer', x: 8, y: 2 }, { k: 'pc', x: 11, y: 1, talk: 'boxPc' }, { k: 'plant', x: 1, y: 1 }, { k: 'sofa', x: 1, y: 6 }, { k: 'plant', x: 11, y: 7 }, { k: 'shelf', x: 1, y: 3 }],
       npcs: [{ id: 'nurse', x: 6, y: 2, dir: 'down', look: L.nurse, name: 'Nurse Bell', talk: 'nurse', counter: true }] });
   }
-  function mart(id, outside, stock) {
-    def({ id, name: 'Poké Mart', kind: 'inside', outside, stock, rows: grid(11, 8, '+').border('#').fill(1, 7, 9, 7, '+').put(5, 7, 'm').rows(),
+  function mart(id, outside, stock, o = {}) {
+    def({ ...o, id, name: 'Poké Mart', kind: 'inside', outside, stock, rows: grid(11, 8, '+').border('#').fill(1, 7, 9, 7, '+').put(5, 7, 'm').rows(),
       arrive: { x: 5, y: 6 },
       furniture: [{ k: 'counter', x: 1, y: 3 }, { k: 'martshelf', x: 6, y: 1 }, { k: 'martshelf', x: 6, y: 4 }, { k: 'plant', x: 9, y: 6 }],
       npcs: [{ id: 'clerk', x: 2, y: 2, dir: 'down', look: L.clerk, name: 'Clerk', talk: 'clerk', counter: true }] });
@@ -261,7 +265,7 @@ const JMaps = (() => {
     // the pier, out into the sea
     B.fill(24, 21, 25, 25, '_');
     B.fill(28, 3, 31, 6, '*').fill(1, 16, 3, 17, '*');
-    def({ id: 'port', name: 'Port Coralis', kind: 'town', rows: B.rows(), music: 'town', battle: 'beach', center: { map: 'center_port' },
+    def({ id: 'port', name: 'Port Coralis', kind: 'town', rows: B.rows(), music: 'town', battle: 'beach', center: { map: 'center_port' }, dock: { x: 24, y: 22, dir: 'down' },
       buildings: [{ b: 'center', x: 3, y: 3, to: 'center_port' }, { b: 'mart', x: 10, y: 4, to: 'mart_port' }, { b: 'museum', x: 20, y: 2, to: 'museum' },
         { b: 'gym', x: 21, y: 12, to: 'gym2', variant: 1, needs: ['rex_back'], locked: 'gym2Locked' },
         { b: 'house', x: 4, y: 12, to: 'phouse', variant: 3 }, { b: 'house2', x: 10, y: 12, to: 'fhouse' }],
@@ -331,6 +335,9 @@ const JMaps = (() => {
         { id: 'rex', x: 7, y: 2, dir: 'down', look: L.rex, name: 'Leader Rex', trainer: 'rex' }] });
   }
 
+  // Chapter 2's maps (the chapter checker and the playthrough test go by these tags)
+  for (const id of ['route2', 'port', 'center_port', 'mart_port', 'phouse', 'fhouse', 'museum', 'seacliff', 'gym2']) M[id].chapter = 2;
+
   // tiles of a building's footprint / its door tiles (map coordinates)
   const doorsOf = b => JArt.BUILD[b.b].door.map(([dx, dy]) => ({ x: b.x + dx, y: b.y + dy }));
   // what blocks walking on a map, tile by tile (true = solid); the same grid the engine and the checker use
@@ -345,5 +352,6 @@ const JMaps = (() => {
     for (const ch of [['X', 'cut']]) m.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === ch[0] && flags['cut.' + m.id + '.' + x + '.' + y]) S[y][x] = false; }));
     return S;
   }
-  return { M, L, doorsOf, solidGrid, grid };
+  // chapter files (jch3.js...) add their maps with def, center and mart
+  return { M, L, doorsOf, solidGrid, grid, def, center, mart };
 })();

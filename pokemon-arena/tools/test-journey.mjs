@@ -1,7 +1,10 @@
 // Checks Journey's maps and story (jmaps.js, jstory.js) without a browser: every map is well-formed and linked both
 // ways, nothing stands in a wall, and - playing the story's flags forward from a new game - every map, person, item
 // and door can be reached and the chapter's goals are met, so the story can never get stuck.
-// Exits with code 1 on any failure. Usage: node tools/test-journey.mjs
+// The later chapters live in jch3.js, jch4.js... (loaded after jstory.js); each registers itself with JStory.chapter.
+// Exits with code 1 on any failure. Usage: node tools/test-journey.mjs [--chapter=N]
+//   --chapter=N  check one chapter on its own: start where it starts, with the chapters before it done, and report only
+//                its own maps (a map of a chapter not written yet is a warning, not a failure)
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
@@ -11,18 +14,28 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ctx = { console, document: { createElement: () => ({ getContext: () => ({}) }) } };
 ctx.window = ctx;
 vm.createContext(ctx);
-for (const f of ['data.js', 'jart.js', 'jmaps.js', 'jstory.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
-const { JMaps, JStory, JArt, DEX } = vm.runInContext('({ JMaps, JStory, JArt, DEX: window.POKEDEX })', ctx);
-const { M } = JMaps, { META, T, TRAINERS, ITEMS } = JStory;
-
 let fails = 0, warns = 0;
 const fail = msg => { fails++; console.log('FAIL ' + msg); };
 const warn = msg => { warns++; console.log('warn ' + msg); };
+for (const f of ['data.js', 'jart.js', 'jmaps.js', 'jstory.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+const CHFILES = fs.readdirSync(ROOT).filter(f => /^jch\d+\.js$/.test(f)).sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+for (const f of CHFILES) { try { vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f }); } catch (e) { fail(`${f} does not load: ${String(e.stack || e).split('\n').slice(0, 2).join(' | ')}`); } }
+const { JMaps, JStory, JArt, DEX } = vm.runInContext('({ JMaps, JStory, JArt, DEX: window.POKEDEX })', ctx);
+const { M } = JMaps, { META, T, TRAINERS, ITEMS, CHAPTERS } = JStory;
+const ONLY = +((process.argv.find(a => a.startsWith('--chapter=')) || '').split('=')[1]) || 0;
+if (ONLY && !CHAPTERS[ONLY]) { console.log(`no chapter ${ONLY} registered (JStory.chapter({ n: ${ONLY}, ... }))`); process.exit(1); }
+// which chapter a map belongs to (the first two chapters' maps carry no tag)
+const chOf = m => m.chapter || 0;
+const mine = m => !ONLY || chOf(m) === ONLY;
+const missing = msg => ONLY ? warn(msg + ' (not written yet?)') : fail(msg);
+for (const c of Object.values(CHAPTERS)) { if (!M[c.start.map]) missing(`chapter ${c.n}: start map ${c.start.map} missing`); if (!c.goals || !c.goals.length) fail(`chapter ${c.n}: no goals`); }
+for (const [k, it] of Object.entries(ITEMS)) if (it.tm && !DEX.moves[it.tm]) fail(`item ${k}: TM move ${it.tm} does not exist`);
 const KNOWN = new Set([...Object.keys(JArt.KIND), 'X', 'S']);
 const inB = (m, x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h;
 
 // ---- 1. every map on its own
 for (const m of Object.values(M)) {
+  if (!mine(m)) continue;
   if (m.rows.some(r => r.length !== m.w)) fail(`${m.id}: rows of different lengths`);
   m.rows.forEach((r, y) => [...r].forEach((c, x) => { if (!KNOWN.has(c)) fail(`${m.id}: unknown tile '${c}' at ${x},${y}`); }));
   const S = JMaps.solidGrid(m, {});
@@ -32,7 +45,7 @@ for (const m of Object.values(M)) {
     if (!B) { fail(`${m.id}: unknown building ${b.b}`); continue; }
     if (!inB(m, b.x, b.y) || !inB(m, b.x + B.w - 1, b.y + B.h - 1)) fail(`${m.id}: building ${b.b} out of the map`);
     const inside = M[b.to];
-    if (!inside) { fail(`${m.id}: building leads to missing map ${b.to}`); continue; }
+    if (!inside) { missing(`${m.id}: building leads to missing map ${b.to}`); continue; }
     if (inside.outside !== m.id) fail(`${b.to}: its outside should be ${m.id} (is ${inside.outside})`);
     if (!inside.arrive) fail(`${b.to}: no arrive point`);
     for (const d of JMaps.doorsOf(b)) if (solid(d.x, d.y + 1)) fail(`${m.id}: the tile below the ${b.b} door (${d.x},${d.y + 1}) is blocked`);
@@ -41,7 +54,7 @@ for (const m of Object.values(M)) {
     for (const o of m.buildings) if (o !== b) { const O = JArt.BUILD[o.b]; if (b.x < o.x + O.w && o.x < b.x + B.w && b.y < o.y + O.h && o.y < b.y + B.h) fail(`${m.id}: buildings ${b.b} and ${o.b} overlap`); }
   }
   if (m.outside) {
-    if (!M[m.outside]) fail(`${m.id}: outside map ${m.outside} missing`);
+    if (!M[m.outside]) missing(`${m.id}: outside map ${m.outside} missing`);
     else if (!M[m.outside].buildings.some(b => b.to === m.id)) fail(`${m.id}: no building in ${m.outside} leads here`);
     if (!m.rows.some(r => r.includes('m'))) fail(`${m.id}: no door mat`);
     if (m.arrive && solid(m.arrive.x, m.arrive.y)) fail(`${m.id}: arrive point is blocked`);
@@ -71,13 +84,13 @@ for (const m of Object.values(M)) {
   for (const f of m.furniture) { if (!JArt.FURN[f.k]) fail(`${m.id}: unknown furniture ${f.k}`); if (f.talk && !T[f.talk]) fail(`${m.id}: furniture talk ${f.talk} missing`); }
   for (const it of m.items) { if (!ITEMS[it.item]) fail(`${m.id}: unknown item ${it.item}`); if (it.hidden ? solid(it.x, it.y) : !inB(m, it.x, it.y)) fail(`${m.id}: item ${it.item} at ${it.x},${it.y} is in a wall`); if (!it.hidden && S[it.y][it.x] && JArt.SOLID.has(JArt.KIND[m.rows[it.y][it.x]])) fail(`${m.id}: item ${it.item} placed on a solid tile`); }
   for (const z of m.zones) if (!T[z.event]) fail(`${m.id}: zone event ${z.event} missing`);
-  for (const w of m.warps) { const t = M[w.to]; if (!t) fail(`${m.id}: warp to missing ${w.to}`); else if (!inB(t, w.tx, w.ty) || JMaps.solidGrid(t, {})[w.ty][w.tx]) fail(`${m.id}: warp lands in a wall of ${w.to} (${w.tx},${w.ty})`); }
+  for (const w of m.warps) { const t = M[w.to]; if (!t) missing(`${m.id}: warp to missing ${w.to}`); else if (!inB(t, w.tx, w.ty) || JMaps.solidGrid(t, {})[w.ty][w.tx]) fail(`${m.id}: warp lands in a wall of ${w.to} (${w.tx},${w.ty})`); }
   if (m.stock) for (const k of m.stock) if (!ITEMS[k] || !ITEMS[k].price) fail(`${m.id}: stock ${k} is not for sale`);
   if (m.encounters) for (const e of Object.values(m.encounters)) for (const [s] of e.table) { if (!DEX.species[s]) fail(`${m.id}: wild ${s} missing`); else if (!DEX.species[s].catchRate) fail(`${m.id}: ${s} has no catch rate`); }
   // edges: the other map links back, and both sides are open
   for (const [side, e] of Object.entries(m.edges)) {
     const t = M[e.to];
-    if (!t) { fail(`${m.id}: edge ${side} to missing ${e.to}`); continue; }
+    if (!t) { missing(`${m.id}: edge ${side} to missing ${e.to}`); continue; }
     const back = { n: 's', s: 'n', w: 'e', e: 'w' }[side], be = t.edges[back];
     if (!be || be.to !== m.id) { fail(`${m.id}: ${e.to} has no ${back} edge back`); continue; }
     if ((e.dx || 0) !== -(be.dx || 0) || (e.dy || 0) !== -(be.dy || 0)) fail(`${m.id} <-> ${e.to}: offsets don't match`);
@@ -91,12 +104,16 @@ for (const m of Object.values(M)) {
 
 // ---- 2. the story, played forward from a new game
 const flags = { };
+if (ONLY) for (const c of Object.values(CHAPTERS)) if (c.n < ONLY) for (const g of c.goals) flags[g] = true;
+const START = ONLY ? CHAPTERS[ONLY].start : { map: 'home2f', x: 2, y: 3 };
+const rides = new Map();   // META travel: map -> needs, once the talk that offers the ride has happened
 const cond = list => !list || list.every(c => c[0] === '!' ? !flags[c.slice(1)] : !!flags[c]);
 const fired = new Set(), reachedMaps = new Set(), metNpc = new Set(), gotItem = new Set();
 function reach() {
   // flood fill over every map from the start, through doors, mats, stairs and edges the flags allow
   const seen = new Map();   // map -> Set of "x,y"
-  const queue = [['home2f', 2, 3]];
+  const queue = [[START.map, START.x, START.y]];
+  for (const [id, needs] of rides) if (cond(needs) && M[id] && M[id].dock) queue.push([id, M[id].dock.x, M[id].dock.y]);
   const solids = {};
   const grid = id => solids[id] || (solids[id] = (() => {
     const m = M[id], S = JMaps.solidGrid(m, flags).map(r => r.slice());
@@ -122,14 +139,14 @@ function reach() {
         queue.push([id, nx, ny]);
       } else {
         const side = ny < 0 ? 'n' : ny >= m.h ? 's' : nx < 0 ? 'w' : 'e', e = m.edges[side];
-        if (!e || !cond(e.needs)) continue;
+        if (!e || !cond(e.needs) || !M[e.to]) continue;                  // (a map of a chapter not written yet: reported above)
         const t = M[e.to], tx = side === 'n' || side === 's' ? x + (e.dx || 0) : side === 'w' ? t.w - 1 : 0, ty = side === 'w' || side === 'e' ? y + (e.dy || 0) : side === 'n' ? t.h - 1 : 0;
         if (inB(t, tx, ty) && !grid(e.to)[ty][tx]) queue.push([e.to, tx, ty]);
       }
     }
-    for (const b of m.buildings) for (const d of JMaps.doorsOf(b)) if (d.x === x && d.y === y && cond(b.needs)) { const t = M[b.to]; queue.push([b.to, t.arrive.x, t.arrive.y]); }
+    for (const b of m.buildings) for (const d of JMaps.doorsOf(b)) if (d.x === x && d.y === y && cond(b.needs) && M[b.to]) { const t = M[b.to]; queue.push([b.to, t.arrive.x, t.arrive.y]); }
     if (m.rows[y][x] === 'm' && m.outside) { const o = M[m.outside], b = o.buildings.find(bb => bb.to === id), d = JMaps.doorsOf(b)[0]; queue.push([o.id, d.x, d.y + 1]); }
-    for (const w of m.warps) if (Math.abs(w.x - x) + Math.abs(w.y - y) === 1) queue.push([w.to, w.tx, w.ty]);
+    for (const w of m.warps) if (Math.abs(w.x - x) + Math.abs(w.y - y) === 1 && M[w.to]) queue.push([w.to, w.tx, w.ty]);
   }
   return seen;
 }
@@ -139,14 +156,17 @@ for (let round = 0; round < 50; round++) {
   let changed = false;
   const before = { ...flags }, shown = list => !list || list.every(c => c[0] === '!' ? !before[c.slice(1)] : !!before[c]);
   const fire = (id, sets) => { if (fired.has(id)) return; fired.add(id); for (const s of sets || []) if (!flags[s]) { flags[s] = true; changed = true; } changed = true; };
-  if (!fired.has('intro')) fire('intro', META.intro.sets);
+  if (!ONLY && !fired.has('intro')) fire('intro', META.intro.sets);
   for (const [id, set] of seen) {
     reachedMaps.add(id);
     const m = M[id];
     for (const n of m.npcs) {
       if (!shown(n.show) || before['gone.' + id + '.' + n.id] || !near(seen, id, n.x, n.y, false)) continue;
       metNpc.add(id + '.' + n.id);
-      if (n.talk && cond(META[n.talk] && META[n.talk].needs)) fire(n.talk + '@' + id, (META[n.talk] || {}).sets);
+      if (n.talk && cond(META[n.talk] && META[n.talk].needs)) {
+        fire(n.talk + '@' + id, (META[n.talk] || {}).sets);
+        for (const r of (META[n.talk] && META[n.talk].travel) || []) if (!rides.has(r.map)) { rides.set(r.map, r.needs); changed = true; }
+      }
       if (n.trainer) { fire('tr.' + id + '.' + n.id, ['tr.' + id + '.' + n.id]); const tr = TRAINERS[n.trainer]; if (tr.onWin) fire(tr.onWin, META[tr.onWin].sets); }
     }
     for (const z of m.zones) { let hit = false; for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) if (set.has(x + ',' + y) || near(seen, id, x, y)) hit = true; if (hit && cond(META[z.event] && META[z.event].needs) && cond(z.needs)) fire(z.event + '@' + id, META[z.event].sets); }
@@ -155,13 +175,13 @@ for (let round = 0; round < 50; round++) {
   }
   if (!changed) break;
 }
-const GOALS = ['intro', 'shoes', 'starter', 'rival1', 'dex', 'soraR1', 'luna_back', 'shard1', 'badge.leaf', 'ride.cut',
-  'ch2', 'rival2', 'museum', 'kael', 'meteorite_back', 'rex_back', 'badge.tide', 'expshare'];
+const GOALS = Object.values(CHAPTERS).filter(c => !ONLY || c.n === ONLY).flatMap(c => c.goals);
 for (const g of GOALS) if (!flags[g]) fail(`story: the flag '${g}' can never be set`);
-for (const id of Object.keys(M)) if (!reachedMaps.has(id)) fail(`story: map ${id} can never be reached`);
+for (const m of Object.values(M)) if (mine(m) && !reachedMaps.has(m.id)) fail(`story: map ${m.id} can never be reached`);
 for (const m of Object.values(M)) {
+  if (!mine(m)) continue;
   for (const n of m.npcs) if ((n.talk || n.trainer) && !metNpc.has(m.id + '.' + n.id)) fail(`story: nobody can ever talk to ${m.id}.${n.id}`);
   for (const it of m.items) if (!gotItem.has(m.id + '.' + it.x + '.' + it.y)) fail(`story: item ${it.item} at ${m.id} ${it.x},${it.y} can never be picked up`);
 }
-console.log(`maps: ${Object.keys(M).length} · flags reached: ${Object.keys(flags).length} · events fired: ${fired.size} · ${fails ? fails + ' FAILURES' : 'all good'}${warns ? ` · ${warns} warnings` : ''}`);
+console.log(`${ONLY ? 'chapter ' + ONLY + ' · ' : ''}maps: ${Object.values(M).filter(mine).length} · flags reached: ${Object.keys(flags).length} · events fired: ${fired.size} · ${fails ? fails + ' FAILURES' : 'all good'}${warns ? ` · ${warns} warnings` : ''}`);
 process.exit(fails ? 1 : 0);

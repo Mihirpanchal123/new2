@@ -273,7 +273,7 @@ function botMain(seed) {
   B.start = goal => { B.goal = { ...goal }; B.status = 'busy'; B.msg = ''; path = null; tries = 0; idleT = 0; B.avoid = []; throws = 0; return true; };
   const done = () => { B.status = 'done'; B.goal = null; hold([]); };
   const fail = msg => { B.status = 'fail'; B.msg = msg; B.goal = null; hold([]); };
-  const busy = () => { const s = S(); return !!(s.event || s.menu || s.battle || s.dialog || s.hop || s.scripted || s.evoStop); };
+  const busy = () => { const s = S(); return !!(s.event || s.menu || s.battle || s.dialog || s.hop || s.scripted || s.evoStop || s.travel); };
   function targetsOf(g) {
     if (g.type === 'trigger') return [{ map: g.map, x: g.x, y: g.y }];
     if (g.type === 'goto') {
@@ -379,8 +379,11 @@ function botMain(seed) {
     return JSON.stringify([s.map && s.map.id, p && Math.round(p.x), p && Math.round(p.y), s.dialog && (s.dialog.full || 'choice'), textNow().length, s.menu, $$('#journey .jpanel button').length, s.battle, hp, fx, R && R.running, s.event, !!s.evoStop, B.transcript.length, B.status]);
   };
   B.where = () => { const s = S(), p = s.player; const t = p ? tileOf(p.x, p.y) : []; return { map: s.map && s.map.id, tile: t, px: p && [Math.round(p.x), Math.round(p.y)], dir: p && p.dir, event: s.event, menu: s.menu, battle: s.battle, dialog: s.dialog ? s.dialog.opts ? { choice: s.dialog.opts } : s.dialog.full : null, text: textNow(), goal: B.goal, status: B.status, msg: B.msg,
+    walk: { steps: G().steps, repel: G().repel, stepAcc: s.stepAcc, hop: !!s.hop, warpLock: s.warpLock, zoneLock: s.zoneLock, keys: [...s.keys], tileKind: s.player && JArt.KIND[s.map.rows[tileOf(s.player.x, s.player.y)[1]][tileOf(s.player.x, s.player.y)[0]]] },
     clock: { PAUSED, TIME_SCALE, FX_TIME, pauseMenu: !document.getElementById('pauseMenu').classList.contains('hidden'), bmenu: !document.querySelector('.jbmenu').classList.contains('hidden') },
-    fight: s.battle && Retro._debug ? (() => { const d = Retro._debug(); return { running: d.running, T: d.T && +d.T.toFixed(2), F: d.F.map(f => f && { p: f.p, mon: f.mon.name, hp: Math.round(f.mon.hp), state: f.state }), team: state.players.map(pl => pl.team.map(m => m.name + ':' + Math.round(m.hp)).join(',') + ' active ' + pl.active) }; })() : null }; };
+    fight: s.battle && Retro._debug ? (() => { const d = Retro._debug(); return { running: d.running, T: d.T && +d.T.toFixed(2), megaHold: d.megaHold, megaPending: d.megaPending, shot: d.shot, tweens: tweens.length, btl: s.btl && { throwing: s.btl.throwing, wild: s.btl.wild },
+      F: d.F.map(f => f && { p: f.p, mon: f.mon.name, hp: Math.round(f.mon.hp), state: f.state, busy: !!f.busy, acting: !!f.acting, stuck: !!f.stuck, status: f.mon.status, cd: +(f.cd || 0).toFixed(2), stagger: +(f.stagger || 0).toFixed(2), holdT: +(f.holdT || 0).toFixed(2), queued: f.queued, plan: f.plan, forceMove: f.forceMove, ready: !!f.ready, rechargeUntil: f.rechargeUntil, invuln: !!f.invuln, protectUntil: f.protectUntil, lastMove: f.lastMove && f.lastMove.id }),
+      team: state.players.map(pl => pl.team.map(m => m.name + ':' + Math.round(m.hp)).join(',') + ' active ' + pl.active) }; })() : null }; };
   return true;
 }
 
@@ -397,8 +400,12 @@ async function screenshot() {
 async function die(why) {
   failed = true;
   console.log(`\n${stamp()}  FAIL: ${why}`);
+  if (problems.length && !why.includes(problems[0])) console.log('  errors in the page:\n    ' + problems.join('\n    '));
   try {
     console.log('  on screen:', JSON.stringify(await ev('__bot.where()')));
+    // is the battle clock still moving? (a frozen clock and a stalled-but-ticking battle are different bugs)
+    const t1 = await ev('Retro._debug ? Retro._debug().T : null'); await sleep(1000); const t2 = await ev('Retro._debug ? Retro._debug().T : null');
+    if (t1 != null) console.log(`  battle clock: ${t1.toFixed(2)} -> ${t2.toFixed(2)} over 1 s`);
     console.log('  last dialog:\n' + (await ev('__bot.transcript.slice(-15)')).map(l => '    | ' + l).join('\n'));
     console.log('  screenshot:', await screenshot());
   } catch (e) { console.log('  (could not read the page: ' + e.message + ')'); }
@@ -443,16 +450,29 @@ async function beat(label, map, npc, flag, L) {
   }
   await die(`${label}: lost three times`);
 }
+// the same for a battle that starts by stepping onto a spot (a story zone)
+async function beatAt(label, map, x, y, flag, L) {
+  for (let i = 0; i < 3 && !(await G(`!!G.flags[${JSON.stringify(flag)}]`)); i++) {
+    if (i) { console.log(`${stamp()}    lost - training up and trying again`); await boost(L + 6 * i); }
+    await goto(label + (i ? ` (try ${i + 1})` : ''), map, x, y);
+  }
+  if (!(await G(`!!G.flags[${JSON.stringify(flag)}]`))) await die(`${label}: lost three times`);
+}
 
 // ---------------------------------------------------------------------
 //  The playthrough
 // ---------------------------------------------------------------------
 // Sections run in order; --from=<section> starts at one with a ready-made save (the end of the chapter before) so a
 // change late in the story can be checked without playing everything before it.
-const CHAPTER = arg('chapter', null), FROM = arg('from', 'story1');
-const SECTIONS = ['story1', 'extras', 'story2'];
+// Chapters 3 and on are played by tools/play/chN.mjs (one file per chapter); --from=chN starts it from a save made
+// from the chapter list (JStory.CHAPTERS: the badges and story flags of the chapters before, a party at its level).
+const CHAPTER = +arg('chapter', 0) || 0, FROM = arg('from', 'story1');
+const PLAYDIR = path.join(ROOT, 'tools', 'play');
+const CHSCRIPTS = (fs.existsSync(PLAYDIR) ? fs.readdirSync(PLAYDIR) : []).filter(f => /^ch\d+\.mjs$/.test(f)).map(f => 'ch' + parseInt(f.slice(2))).sort((a, b) => parseInt(a.slice(2)) - parseInt(b.slice(2)));
+const SECTIONS = ['story1', 'extras', 'story2', ...CHSCRIPTS];
 if (!SECTIONS.includes(FROM)) { console.log(`--from must be one of: ${SECTIONS.join(', ')}`); await quit(2); }
-const runs = s => SECTIONS.indexOf(s) >= SECTIONS.indexOf(FROM) && !(CHAPTER == 1 && s === 'story2');
+const chapterOf = s => ({ story1: 1, extras: 1, story2: 2 })[s] || parseInt(s.slice(2));
+const runs = s => SECTIONS.indexOf(s) >= SECTIONS.indexOf(FROM) && (!CHAPTER || chapterOf(s) <= CHAPTER);
 console.log(`Journey playthrough · seed ${SEED} · ${path.basename(browserPath)}${SHOW ? ' (visible)' : ''}${FROM !== 'story1' ? ' · from ' + FROM : ''}`);
 async function load(seed) {
   for (let i = 0; i < 80; i++) { await sleep(250); if (await ev(`typeof Journey === 'object' && typeof Retro === 'object' && !!document.getElementById('journeyBtn')`).catch(() => false)) break; }
@@ -492,8 +512,39 @@ async function title(how) {
   } else await ev(`document.querySelector('.jtitle [data-a=cont]').click(); true`);
   await sleep(600);
 }
+// the start of chapter n, as a save: what a player has who finished the chapters before it
+const START_OF = n => `(() => {
+  const C = JStory.CHAPTERS, c = C[${n}], grown = Journey._J.grown;
+  const g = Journey._newGame('Tester', 'blue');
+  for (const f of ['intro', 'shoes', 'starter', 'rival1', 'dex', 'film']) g.flags[f] = true;
+  for (const k of Object.keys(C)) if (+k < ${n}) for (const f of C[k].goals) g.flags[f] = true;
+  g.flags.rivalStarter = 'piplup';
+  g.badges = Object.values(C).filter(x => x.n < ${n} && x.badge).map(x => x.badge);
+  for (const b of g.badges) g.flags['badge.' + b] = true;
+  g.money = 6000 + 3000 * ${n};
+  g.party = ['chimchar', 'pidgey', 'mareep'].map(s => Prog.newMon(grown(s, c.level), c.level, { met: 'Valoria' }));
+  g.bag = { shoes: 1, pokedex: 1, ridepager: 1, expshare: 1, poke: 10, great: 10, potion: 10, superpotion: 10, fullheal: 5, revive: 3 };
+  for (const m of g.party) g.dex.seen[m.species] = g.dex.caught[m.species] = true;
+  g.map = c.start.map; g.x = c.start.x * 16 + 8; g.y = c.start.y * 16 + 13; g.dir = c.start.dir || 'down';
+  g.lastCenter = c.center ? { map: c.center } : null;
+  localStorage.setItem('pokemon-arena-journey-v1', JSON.stringify(g));
+  return true;
+})()`;
 if (FROM === 'story1') { console.log(`${stamp()}  title screen: new game`); await title('new'); await expect('the game to start in your room', `Journey.active && S.map.id === 'home2f'`); }
-else { console.log(`${stamp()}  title screen: Continue (a save from the end of Chapter 1)`); await ev(END_OF_CH1); await title('cont'); await expect('the saved game', `Journey.active && G.badges.length === 1`); }
+else if (FROM === 'extras' || FROM === 'story2') { console.log(`${stamp()}  title screen: Continue (a save from the end of Chapter 1)`); await ev(END_OF_CH1); await title('cont'); await expect('the saved game', `Journey.active && G.badges.length === 1`); }
+else {
+  const n = chapterOf(FROM);
+  if (!(await ev(`!!JStory.CHAPTERS[${n}] && !!JMaps.M[JStory.CHAPTERS[${n}].start.map]`))) await die(`chapter ${n} is not registered or its start map is missing`);
+  console.log(`${stamp()}  title screen: Continue (a save from the start of Chapter ${n})`);
+  await ev(START_OF(n)); await title('cont');
+  await expect(`the start of Chapter ${n}`, `Journey.active && S.map.id === JStory.CHAPTERS[${n}].start.map`);
+}
+// after a chapter: every story flag it lists was set
+async function chapterDone(n) {
+  const missingFlags = await G(`(JStory.CHAPTERS[${n}] ? JStory.CHAPTERS[${n}].goals : []).filter(f => !G.flags[f])`);
+  if (missingFlags.length) await die(`Chapter ${n} is over but these story flags were never set: ${missingFlags.join(', ')}`);
+  console.log(`${stamp()}  Chapter ${n} done: every story flag set`);
+}
 
 // ===== Chapter 1 =====
 if (runs('story1')) {
@@ -585,7 +636,7 @@ if (runs('extras')) {
   await expect('to wake up at the Pokémon Center', `S.map.id === 'center_verdant' && G.party.every(m => m.hp > 0)`);
   await talk('Nurse Bell after the whiteout', 'center_verdant', 'nurse');
 }
-if (CHAPTER == 1) { console.log(`\n${stamp()}  PASS: Chapter 1 played through (seed ${SEED})`); await quit(0); }
+if (runs('story1')) await chapterDone(1);
 
 // ===== Chapter 2 =====
 if (runs('story2')) {
@@ -670,6 +721,21 @@ if (runs('story2')) {
   await step('the Bag: teach TM Water Pulse', { type: 'press', key: 'Escape' }, 120);
   const learned = await G(`G.party.some(m => m.moves.includes('water-pulse'))`);
   console.log(`${stamp()}    ${learned ? 'a party Pokémon learned Water Pulse' : 'no one in the party can learn Water Pulse (the menu said so)'}`);
+  await chapterDone(2);
 }
-console.log(`\n${stamp()}  PASS: played through (seed ${SEED})`);
+
+// ===== Chapter 3 and on: tools/play/chN.mjs =====
+// each exports a default async function (t) that plays its chapter with these helpers
+const t = { step, talk, goto, trigger, grass, beat, beatAt, expect, policy, boost, G, ev, die, stamp, sleep, send,
+  press: (label, key) => step(label, { type: 'press', key }),
+  wild: (label, species, level) => step(label, { type: 'press', js: `Journey._wild(${JSON.stringify(species)}, ${level})` }) };
+for (const sec of CHSCRIPTS) {
+  if (!runs(sec)) continue;
+  const n = chapterOf(sec);
+  console.log(`${stamp()}  ===== Chapter ${n}: ${await ev(`(JStory.CHAPTERS[${n}] || {}).title || '?'`)} =====`);
+  const mod = await import('file:///' + path.join(PLAYDIR, sec + '.mjs').split(path.sep).join('/'));
+  await mod.default(t);
+  await chapterDone(n);
+}
+console.log(`\n${stamp()}  PASS: played through${CHAPTER ? ' to the end of Chapter ' + CHAPTER : ''} (seed ${SEED})`);
 await quit(0);
