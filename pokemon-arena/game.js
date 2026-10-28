@@ -187,7 +187,7 @@ function toast(text, ms = 2500) {
   toastTimer = setTimeout(() => toastEl.style.opacity = 0, ms);
 }
 
-// Records the browser tab (3D arena + HUD + cries). Each battle is saved as its own file.
+// Records the browser tab (arena + HUD + cries). Each battle is saved as its own file.
 const Rec = { stream: null, recorder: null, chunks: [], mime: '', label: 'battle' };
 const recBtn = document.getElementById('recBtn');
 const recBtn2 = document.getElementById('recBtn2');

@@ -1,4 +1,4 @@
-// Downloads Pokémon data, sprites and cries from PokéAPI and writes ../data.js
+// Downloads Pokémon data and cries from PokéAPI and writes ../data.js (the pictures, faces/, come from tools/build-pmd.mjs: run it after this)
 // Usage:  node tools/build-data.mjs
 // Raw API responses are cached in tools/.cache so re-runs are fast.
 import fs from 'node:fs/promises';
@@ -201,7 +201,6 @@ function evoMethod(d, parentMin) {
 
 async function main() {
   await fs.mkdir(CACHE, { recursive: true });
-  await fs.mkdir(path.join(ROOT, 'sprites'), { recursive: true });
   await fs.mkdir(path.join(ROOT, 'cries'), { recursive: true });
 
   // 1. walk evolution chains
@@ -255,16 +254,10 @@ async function main() {
     species[name] = entry;
   });
 
-  // 3. sprites + cries
-  console.log(`Downloading ${sprites.length} sprites and cries...`);
+  // 3. pictures (the pixel faces made by build-pmd.mjs, for whatever has artwork) + cries
+  console.log(`Downloading ${sprites.length} cries...`);
   await pool(sprites, 8, async ([entry, p]) => {
-    const gif = p.sprites.other?.showdown?.front_default;
-    const png = p.sprites.front_default;
-    const url = gif || png;
-    if (url) {
-      const file = `sprites/${entry.name}${gif ? '.gif' : '.png'}`;
-      if (await download(url, path.join(ROOT, file))) entry.sprite = file;
-    }
+    if (p.sprites.other?.showdown?.front_default || p.sprites.front_default) entry.sprite = `faces/${entry.name}.png`;
     const cry = p.cries?.latest || p.cries?.legacy;
     if (cry && entry.sprite) {
       const file = `cries/${entry.name}.ogg`;

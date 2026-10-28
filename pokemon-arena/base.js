@@ -1,20 +1,19 @@
 'use strict';
 // =====================================================================
 //  BASE — what every mode needs: the game clock (tweens, timers), the
-//  render loop, the frame and small helpers. The 3D engine (core.js and
-//  the other 3D scripts) loads only when 3D mode is picked; until then
-//  World holds harmless stand-ins for the few 3D calls menus make.
+//  render loop, the frame and small helpers. World holds the shared
+//  timers, slow motion and frame capture the modes use.
 // =====================================================================
 let SPEED = 1;                 // global animation speed (1 = normal, lower = faster)
 let PAUSED = false;            // freezes the game clock (tweens, timers, animation, effects)
 let TIME_SCALE = 1;            // < 1 = slow motion (crits, knockouts, replays)
-let FX_TIME = 1;               // < 1 while a 3D move animation plays (longer, slower move effects)
+let FX_TIME = 1;               // < 1 slows the move effects (longer, slower animations)
 
 // the game view lives in #frame (full window, or a 9:16 column in Shorts mode)
 const frameEl = document.getElementById('frame');
 const frameSize = () => [frameEl.clientWidth || innerWidth, frameEl.clientHeight || innerHeight];
 
-// trainer outfits (3D trainers and the Retro pixel trainers both use them)
+// trainer outfits (the colours and styles of the pixel trainers)
 const OUTFITS = {
   red:   { label: 'Red',   hat: 'cap',     hatColor: 0xd62828, hatFront: 0xffffff, hair: 0x2b1d14, hairStyle: 'short',    top: 0xd62828, sleeves: 'short', inner: 0x222222, legs: 0x2f4b8f, legStyle: 'pants',  shoes: 0xd62828, bag: 0xe9b949 },
   blue:  { label: 'Blue',  hat: null,      hair: 0x9a6430, hairStyle: 'spiky',    top: 0x5b3a8e, sleeves: 'long',  inner: 0x2b2b2b, legs: 0x6b5a45, legStyle: 'pants',  shoes: 0x333333, bag: null, necklace: 0xcfd8dc },

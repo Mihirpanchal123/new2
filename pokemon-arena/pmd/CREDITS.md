@@ -261,6 +261,38 @@ artists below ("CHUNSOFT" marks sprites from the original Pokémon Mystery Dunge
 | Mawile | CHUNSOFT |
 | Medicham | CHUNSOFT |
 | Meditite | CHUNSOFT |
+| Mega Absol | Emboarger |
+| Mega Aerodactyl | Caitemis |
+| Mega Alakazam | Michael12, baronessfaron |
+| Mega Altaria | Emmuffin |
+| Mega Banette | baronessfaron |
+| Mega Camerupt | Caitemis |
+| Mega Charizard X | Kevin0itachi, G〜, Kevin |
+| Mega Darkrai | Johanne2 |
+| Mega Diancie | baronessfaron |
+| Mega Eelektross | Top_Kec |
+| Mega Excadrill | Soulja, pi3.14, DeltaL |
+| Mega Floette | pi3.14, DeltaL |
+| Mega Gallade | JFain |
+| Mega Gardevoir | baronessfaron |
+| Mega Gengar | Michael12, Emboarger, baronessfaron |
+| Mega Glalie | baronessfaron |
+| Mega Houndoom | Top_Kec |
+| Mega Kangaskhan | Deeshura |
+| Mega Latias | Emmuffin |
+| Mega Latios | Emmuffin |
+| Mega Lopunny | JFain |
+| Mega Lucario | baronessfaron |
+| Mega Manectric | Top_Kec |
+| Mega Mawile | baronessfaron |
+| Mega Medicham | JFain |
+| Mega Mewtwo Y | JFain |
+| Mega Rayquaza | Top_Kec |
+| Mega Sableye | Emmuffin |
+| Mega Skarmory | Johanne2 |
+| Mega Steelix | baronessfaron |
+| Mega Tyranitar | JFain |
+| Mega Zeraora | pi3.14, DeltaL |
 | Meganium | CHUNSOFT |
 | Melmetal | Jhony-Rex, DeltaL, Soulja |
 | Meloetta | baronessfaron, Ariakyu |

@@ -1,8 +1,8 @@
 'use strict';
 // =====================================================================
 //  RETRO 2D — top-down pixel-art battles in real time.
-//  Same Pokémon, moves, damage formula, type chart and AI as the 3D mode,
-//  drawn on a 2D canvas: animated sprites, an original pixel plaza,
+//  The Pokémon, moves, damage formula, type chart and AI of game.js,
+//  drawn on a 2D canvas: animated pixel sprites, an original pixel plaza,
 //  pixel move effects and a broadcast-style HUD. Both Pokémon move and
 //  attack at the same time (each on its own cooldown), so beams can clash.
 // =====================================================================
@@ -291,7 +291,9 @@ const Retro = (() => {
   // ---------------------------------------------------------------------
   const lives = new Set();                             // fighters showing a pixel sprite (released when they leave the field)
   function dropLive(f) { if (f.live) { f.live.dispose(); f.live = null; } lives.delete(f); }
-  const getPixel = species => PixelMons.has(species).then(ok => ok ? PixelMons.create(species) : null).catch(() => null);
+  // a Mega form without a pixel sprite of its own wears its species' one
+  const getPixel = species => PixelMons.has(species).then(ok => ok ? species : /-mega/.test(species) && PixelMons.has(species.replace(/-mega.*$/, '')).then(b => b ? species.replace(/-mega.*$/, '') : null))
+    .then(k => k ? PixelMons.create(k) : null).catch(() => null);
   function frameAt(a, t) {
     if (a.frames.length === 1) return a.frames[0].img;
     let k = t % a.total;
@@ -691,7 +693,7 @@ const Retro = (() => {
   }
 
   // ---------------------------------------------------------------------
-  //  Pixel trainers (original art, colours from the 3D outfits)
+  //  Pixel trainers (original art, colours from OUTFITS in base.js)
   // ---------------------------------------------------------------------
   function outline(c, col = '#1a1a22') {
     const g = c.getContext('2d'), W = c.width, H = c.height;
