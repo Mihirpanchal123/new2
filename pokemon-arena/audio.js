@@ -247,6 +247,8 @@ const AudioFX = (() => {
 
   return {
     SFX, Crowd, Music, unlock,
+    // raw notes on the music bus (it follows the music volume) for scripted scores such as Journey's opening film
+    synth: { tone: o => tone({ ...o, dest: musicBus }), now: () => ok() ? ctx.currentTime : 0 },
     setVolume(kind, v) { vol[kind] = v; if (!ctx) return; if (kind === 'music') musicBus.gain.value = v * 0.45; else { sfxBus.gain.value = v; crowdBus.gain.value = v * 0.6; } },
     suspend(on) { if (!ctx) return; on ? ctx.suspend() : ctx.resume(); }
   };

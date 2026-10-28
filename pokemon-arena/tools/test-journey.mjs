@@ -46,8 +46,21 @@ for (const m of Object.values(M)) {
     if (!m.rows.some(r => r.includes('m'))) fail(`${m.id}: no door mat`);
     if (m.arrive && solid(m.arrive.x, m.arrive.y)) fail(`${m.id}: arrive point is blocked`);
   }
+  // a story zone is a tripwire across a path: with its tiles blocked, the tiles on either side of it must fall apart,
+  // or the player can walk around it and the scene never starts
+  for (const z of m.zones) {
+    const inZ = (x, y) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h;
+    const open = (x, y) => !solid(x, y) && !inZ(x, y) && m.rows[y][x] !== 'v';
+    const sides = [];
+    for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) if (open(x + dx, y + dy)) sides.push((x + dx) + ',' + (y + dy));
+    if (sides.length < 2) continue;
+    const seen = new Set([sides[0]]), q = [sides[0].split(',').map(Number)];
+    while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const k = (x + dx) + ',' + (y + dy); if (!seen.has(k) && open(x + dx, y + dy)) { seen.add(k); q.push([x + dx, y + dy]); } } }
+    if (sides.every(k => seen.has(k))) fail(`${m.id}: the ${z.event} zone at ${z.x},${z.y} can be walked around`);
+  }
   for (const n of m.npcs) {
     if (!inB(m, n.x, n.y) || S[n.y][n.x]) fail(`${m.id}: ${n.id} stands in a wall at ${n.x},${n.y}`);
+    if (!n.talk && !n.trainer) fail(`${m.id}: ${n.id} says nothing when you talk to them`);
     if (n.talk && !T[n.talk]) fail(`${m.id}: ${n.id} talk ${n.talk} missing`);
     if (n.trainer) {
       const tr = TRAINERS[n.trainer];
@@ -142,9 +155,10 @@ for (let round = 0; round < 50; round++) {
   }
   if (!changed) break;
 }
-const GOALS = ['intro', 'shoes', 'starter', 'rival1', 'dex', 'soraR1', 'luna_back', 'shard1', 'badge.leaf', 'ride.cut'];
+const GOALS = ['intro', 'shoes', 'starter', 'rival1', 'dex', 'soraR1', 'luna_back', 'shard1', 'badge.leaf', 'ride.cut',
+  'ch2', 'rival2', 'museum', 'kael', 'meteorite_back', 'rex_back', 'badge.tide', 'expshare'];
 for (const g of GOALS) if (!flags[g]) fail(`story: the flag '${g}' can never be set`);
-for (const id of Object.keys(M)) if (!reachedMaps.has(id) && id !== 'route2') fail(`story: map ${id} can never be reached`);
+for (const id of Object.keys(M)) if (!reachedMaps.has(id)) fail(`story: map ${id} can never be reached`);
 for (const m of Object.values(M)) {
   for (const n of m.npcs) if ((n.talk || n.trainer) && !metNpc.has(m.id + '.' + n.id)) fail(`story: nobody can ever talk to ${m.id}.${n.id}`);
   for (const it of m.items) if (!gotItem.has(m.id + '.' + it.x + '.' + it.y)) fail(`story: item ${it.item} at ${m.id} ${it.x},${it.y} can never be picked up`);

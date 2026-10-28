@@ -755,6 +755,11 @@ $('setChannel').value = prefs.channel || ''; Broadcast.opts.channel = prefs.chan
 $('setMusic').oninput = e => { prefs.music = +e.target.value; AudioFX.setVolume('music', prefs.music); savePrefs(); };
 $('setSfx').oninput = e => { prefs.sfx = +e.target.value; AudioFX.setVolume('sfx', prefs.sfx); savePrefs(); };
 $('setReplays').onchange = e => { prefs.replays = e.target.checked; savePrefs(); };
+// the FPS readout (fps.js): on unless turned off; the checkbox or F3, in any mode
+const setFps = v => { prefs.fps = v; $('setFps').checked = v; FPS.show(v); savePrefs(); };
+$('setFps').checked = prefs.fps !== false; FPS.show(prefs.fps !== false);
+$('setFps').onchange = e => setFps(e.target.checked);
+addEventListener('keydown', e => { if (e.code === 'F3') { e.preventDefault(); setFps(!FPS.on); } });
 $('setFlashes').onchange = e => { prefs.flashes = e.target.checked; savePrefs(); };
 $('setCutins').onchange = e => { prefs.cutins = e.target.checked; savePrefs(); };
 $('setSudden').onchange = e => { prefs.suddenDeath = +e.target.value; savePrefs(); };

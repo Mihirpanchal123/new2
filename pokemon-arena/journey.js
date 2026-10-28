@@ -37,6 +37,8 @@ const Journey = (() => {
     for (const m of [...s.party, ...s.box]) { m.pp = m.moves.map((id, i) => Math.min(MOVES[id].pp, (m.pp || [])[i] ?? MOVES[id].pp)); m.hp = Math.max(0, Math.min(Prog.hpMax(m.species, m.level), m.hp ?? 0)); m.friendship = m.friendship ?? 70; }
     s.bag = Object.fromEntries(Object.entries(s.bag || {}).filter(([k, n]) => ITEMS[k] && n > 0));
     s.flags = s.flags || {}; s.dex = s.dex || { seen: {}, caught: {} }; s.badges = (s.badges || []).filter(b => BADGES.some(x => x.id === b));
+    // saves from before Chapter 2 existed: beating Luna now opens Route 2
+    if (s.flags['badge.leaf']) s.flags.ch2 = true;
     return true;
   }
   function save(quiet = true) {
@@ -66,6 +68,7 @@ const Journey = (() => {
     S.player = { x, y, dir: dir || 'down', step: 0, walkT: 0, moving: false, frames: JArt.person(lookOf(G.outfit)) };
     S.warpLock = tileKey(...tileOf(x, y)); S.zoneLock = S.warpLock;
     refresh();
+    palReset();
     if (m.kind !== 'inside' && (!S.banner || S.banner.id !== m.id)) showBanner(m.name);
     S.cam = null;
   }
@@ -126,7 +129,7 @@ const Journey = (() => {
     let cy = mh <= H ? (mh - H) / 2 : Math.max(0, Math.min(mh - H, p.y - 8 - H / 2));
     cx = Math.round(cx); cy = Math.round(cy);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = m.kind === 'inside' ? '#18141e' : '#1d3a1a'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = m.kind === 'inside' ? '#18141e' : m.kind === 'cave' ? '#1a1612' : '#1d3a1a'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(k, 0, 0, k, -cx * k, -cy * k);
     ctx.drawImage(S.ground[Math.floor(S.t / 0.7) % 2], 0, 0);
@@ -151,9 +154,11 @@ const Journey = (() => {
     for (const it of m.items) if (!it.hidden && !G.flags['it.' + m.id + '.' + it.x + '.' + it.y]) list.push({ y: it.y * TS + 12, img: it.item === 'shard' ? JArt.shard() : JArt.ballItem(), x: it.x * TS + 3, abs: it.y * TS + 4 });
     for (const n of S.npcs) if (!n.hidden) list.push({ y: n.py, person: n });
     list.push({ y: p.y + 0.5, person: p, me: true });
+    if (pal.actor && palMon()) list.push({ y: pal.y, pal: true });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
-      if (o.person) drawPerson(o.person);
+      if (o.pal) drawPal();
+      else if (o.person) drawPerson(o.person);
       else ctx.drawImage(o.img, o.x, o.abs != null ? o.abs : o.y - o.img.height + 1 + (o.dy || 0));
     }
     // hidden items twinkle now and then
@@ -161,7 +166,7 @@ const Journey = (() => {
     // emotes ("!")
     for (const e of S.emotes) { const o = e.who; ctx.fillStyle = '#ffffff'; ctx.fillRect(o.px - 4 || 0, o.py - 34, 9, 10); ctx.fillStyle = '#202028'; ctx.fillRect(o.px - 4, o.py - 34, 9, 1); ctx.fillRect(o.px - 4, o.py - 25, 9, 1); ctx.fillRect(o.px - 4, o.py - 34, 1, 10); ctx.fillRect(o.px + 4, o.py - 34, 1, 10); ctx.fillStyle = '#e04848'; ctx.fillRect(o.px, o.py - 32, 1, 4); ctx.fillRect(o.px, o.py - 27, 1, 1); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (m.dark) { const gr = ctx.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.25, cv.width / 2, cv.height / 2, cv.height * 0.85); gr.addColorStop(0, 'rgba(10,30,10,0)'); gr.addColorStop(1, `rgba(10,30,10,${m.dark * 2})`); ctx.fillStyle = gr; ctx.fillRect(0, 0, cv.width, cv.height); }
+    if (m.dark) { const gr = ctx.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.25, cv.width / 2, cv.height / 2, cv.height * 0.85); const tint = m.kind === 'cave' ? '14,10,24' : '10,30,10'; gr.addColorStop(0, `rgba(${tint},0)`); gr.addColorStop(1, `rgba(${tint},${m.dark * 2})`); ctx.fillStyle = gr; ctx.fillRect(0, 0, cv.width, cv.height); }
   }
   let BIG = null;
   function bigTree() {
@@ -180,6 +185,73 @@ const Journey = (() => {
     ctx.drawImage(img, x - 8, y - 21);
     const [tx, ty] = tileOf(o.px ?? o.x, o.py ?? o.y);
     if (kindAt(tx, ty) === 'tall' && !o.hopZ) ctx.drawImage(JArt.tallFront(), tx * TS, ty * TS);
+  }
+
+  // ---- the partner: the first Pokémon in the party that can still battle walks behind you. It follows your exact
+  // path (a trail of your positions) PAL_GAP pixels back, so it never needs its own collision; A on it says how it feels.
+  const PAL_GAP = 20;
+  const pal = { species: null, actor: null, x: 0, y: 0, trail: [], face: 1, heart: 0 };
+  const palMon = () => G && G.party.find(m => m.hp > 0);
+  function palReset() {
+    const p = S.player, [dx, dy] = DIRS[p.dir] || [0, 1];
+    let x = p.x - dx * 16, y = p.y - dy * 16;
+    const [tx, ty] = tileOf(x, y);
+    if (tx < 0 || ty < 0 || tx >= S.map.w || ty >= S.map.h || S.solid[ty][tx]) { x = p.x; y = p.y; }
+    pal.x = x; pal.y = y; pal.trail = [{ x, y }, { x: p.x, y: p.y }];
+  }
+  function stepPal(dt) {
+    const m = palMon(), sp = m ? m.species : null;
+    if (sp !== pal.species) {
+      pal.species = sp; pal.actor = null;
+      if (sp && typeof PixelMons !== 'undefined') PixelMons.create(sp).then(a => { if (pal.species === sp) pal.actor = a; }).catch(() => {});
+    }
+    if (!sp) return;
+    const p = S.player, last = pal.trail[pal.trail.length - 1];
+    if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 1) pal.trail.push({ x: p.x, y: p.y });
+    // walk back along the trail from the player
+    let need = PAL_GAP, i = pal.trail.length - 1, x = pal.trail[0].x, y = pal.trail[0].y;
+    for (; i > 0; i--) {
+      const a = pal.trail[i], b = pal.trail[i - 1], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d >= need) { x = a.x + (b.x - a.x) * need / d; y = a.y + (b.y - a.y) * need / d; break; }
+      need -= d;
+    }
+    if (i > 1) pal.trail.splice(0, i - 1);              // what lies further back is never needed again
+    const vx = (x - pal.x) / Math.max(dt, 1e-3), vy = (y - pal.y) / Math.max(dt, 1e-3), moving = Math.hypot(x - pal.x, y - pal.y) > 0.05;
+    pal.x = x; pal.y = y;
+    if (moving && Math.abs(vx) > 4) pal.face = Math.sign(vx);
+    if (pal.actor) pal.actor.drive(dt, { moving, vx, vy, face: pal.face });
+    pal.heart = Math.max(0, pal.heart - dt);
+  }
+  function drawPal() {
+    const A = pal.actor.anim, k = A.bh > 30 ? 30 / A.bh : 1, x = Math.round(pal.x), y = Math.round(pal.y);
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(x - 5, y - 1, 10, 2); ctx.fillRect(x - 4, y - 2, 8, 4);
+    ctx.drawImage(A.frames[0].img, Math.round(x - A.foot[0] * k), Math.round(y + 1 - A.foot[1] * k), Math.round(A.w * k), Math.round(A.h * k));
+    const [tx, ty] = tileOf(pal.x, pal.y);
+    if (kindAt(tx, ty) === 'tall') ctx.drawImage(JArt.tallFront(), tx * TS, ty * TS);
+    if (pal.heart > 0) {
+      const hy = Math.round(y - A.bh * k - 10 - (1.6 - pal.heart) * 4);
+      ctx.fillStyle = '#ff5a7a';
+      for (const [dx, dy, w] of [[-3, 0, 2], [1, 0, 2], [-4, 1, 7], [-4, 2, 7], [-3, 3, 5], [-2, 4, 3], [-1, 5, 1]]) ctx.fillRect(x + dx, hy + dy, w, 1);
+    }
+  }
+  // is the partner right in front of you?
+  function palAhead() {
+    if (!pal.actor || !palMon()) return false;
+    const p = S.player, [dx, dy] = DIRS[p.dir];
+    return Math.hypot(pal.x - (p.x + dx * 16), pal.y - (p.y + dy * 16)) < 12;
+  }
+  function talkPal() {
+    const m = palMon(), n = Prog.nameOf(m), max = Prog.hpMax(m.species, m.level);
+    pal.heart = 1.6; pal.actor.play('win'); sfx('pop');
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    const line = m.status === 'slp' ? `${n} is yawning... it looks sleepy.`
+      : m.status ? `${n} doesn't look well. A visit to the Pokémon Center would help.`
+      : m.hp < max / 3 ? `${n} looks tired, but it's doing its best to keep up with you.`
+      : m.friendship >= 220 ? pick([`${n} snuggles up to you. It loves being with you!`, `${n} is overjoyed to be walking with you!`])
+      : m.friendship >= 150 ? pick([`${n} is happily keeping pace with you.`, `${n} hums along cheerfully.`, `${n} looks up at you with sparkling eyes.`])
+      : m.friendship >= 90 ? pick([`${n} is looking around curiously.`, `${n} sniffs the air.`, `${n} gives a little cry.`])
+      : pick([`${n} glances at you, still getting used to you.`, `${n} is keeping a careful eye on its surroundings.`]);
+    return runScript(J => J.say(line));
   }
 
   // =====================================================================
@@ -271,7 +343,9 @@ const Journey = (() => {
         S.stepAcc -= TS; G.steps++;
         if (G.repel > 0 && --G.repel === 0) toast('The Repel wore off.');
         if (G.steps % 128 === 0) for (const mon of G.party) mon.friendship = Math.min(255, mon.friendship + 1);
-        if (kindAt(tx, ty) === 'tall' && m.encounters && m.encounters.tall) { if (Math.random() < m.encounters.tall.rate) { const w = rollWild(m.encounters.tall); if (w) return wildBattle(w); } }
+        // wild Pokémon: in tall grass, and anywhere on a cave floor
+        const enc = m.encounters && { tall: m.encounters.tall, cave: m.encounters.cave }[kindAt(tx, ty)];
+        if (enc && Math.random() < enc.rate) { const w = rollWild(enc); if (w) return wildBattle(w); }
       }
     }
   }
@@ -381,6 +455,7 @@ const Journey = (() => {
     if (it) return runScript(async J => { G.flags['it.' + m.id + '.' + it.x + '.' + it.y] = true; refresh(); await J.give(it.item, it.n || 1, true); });
     if (chAt(fx, fy) === 'X' && !G.flags['cut.' + m.id + '.' + fx + '.' + fy]) return runEvent('cutTree', { x: fx, y: fy });
     for (const f of m.furniture) { const F0 = JArt.FURN[f.k]; if (f.talk && fx >= f.x && fx < f.x + F0.w && fy >= f.y && fy < f.y + F0.h) return runEvent(f.talk); }
+    if (palAhead()) return talkPal();
   }
   function talkTo(n) {
     if (!n.moving) n.dir = OPP[S.player.dir];
@@ -922,6 +997,8 @@ const Journey = (() => {
       return a === 0 ? s : J.pickStarter();
     }),
     rivalStarter(s) { for (const [, trio] of STARTERS) { const i = trio.indexOf(s); if (i >= 0) return trio[(i + 1) % 3]; } return 'eevee'; },
+    // a trainer's Pokémon at level L: evolved as far as that level allows (Sora's starter grows with her)
+    grown(s, L) { let m = { species: s, level: L, friendship: 0 }, to; while ((to = Prog.evoTarget(m, { why: 'level' }))) m = { ...m, species: to }; return m.species; },
     badge(id) { if (!G.badges.includes(id)) G.badges.push(id); G.flags['badge.' + id] = true; const b = BADGES.find(x => x.id === id); sfx('buff'); try { AudioFX.Music.victory(); } catch (e) {} showChapter(`${G.name} received the ${b.name}!`, '', b.col); },
     async cut(c) {
       sfx('slash');
@@ -1013,6 +1090,7 @@ const Journey = (() => {
     const dt = Math.min(0.05, (now - (S.lastT || now)) / 1000); S.lastT = now;
     if (S.battle) return;
     step(dt);
+    stepPal(dt);
     draw();
   }
   function start(g) {
@@ -1053,25 +1131,29 @@ const Journey = (() => {
       <div class="jt-new"><b>${sv ? 'New game' : 'Who are you?'}</b><input maxlength="10" placeholder="Your name" value="${sv ? '' : ''}">
       <div class="jt-looks">${looks.map(k => `<button data-l="${k}" class="${k === pick ? 'on' : ''}"><img src="${JArt.person(OUTFITS[k]).face}" alt=""><small>${OUTFITS[k].label}</small></button>`).join('')}</div>
       <button class="btn ${sv ? 'alt' : ''}" data-a="new">${sv ? 'Start over (erases your save)' : '★ Begin your journey'}</button></div>
-      <button class="btn alt" data-a="back">Back</button></div>`;
+      <button class="btn alt" data-a="film">🎬 Watch the intro</button><button class="btn alt" data-a="back">Back</button></div>`;
     document.body.append(el);
     el.addEventListener('click', e => {
       const l = e.target.closest('[data-l]');
       if (l) { pick = l.dataset.l; el.querySelectorAll('[data-l]').forEach(b => b.classList.toggle('on', b === l)); return; }
       const a = e.target.closest('[data-a]'); if (!a) return;
       if (a.dataset.a === 'back') return el.remove();
+      if (a.dataset.a === 'film') { el.classList.add('hidden'); JIntro.play({ name: sv ? sv.name : '', look: lookOf(sv ? sv.outfit : pick) }).then(() => el.classList.remove('hidden')); return; }
       if (a.dataset.a === 'cont') { el.remove(); return start(sv); }
       if (a.dataset.a === 'new') {
         if (sv && !confirm('Start a new game? Your saved journey will be erased.')) return;
         const name = el.querySelector('input').value.trim().slice(0, 10) || OUTFITS[pick].label;
-        el.remove(); start(newGame(name, pick));
+        // the opening film first; the story then skips the legend it already showed
+        el.remove();
+        const g = newGame(name, pick);
+        JIntro.play({ name, look: lookOf(pick) }).then(() => { g.flags.film = true; start(g); });
       }
     });
     setTimeout(() => { const i = el.querySelector('input'); if (i && !sv) i.focus(); }, 50);
   }
   return { open, leave, get active() { return active; }, save,
     // tests
-    _G: () => G, _S: () => S, _J: J, _start: g => start(g || newGame('Test', 'red')), _newGame: newGame, _warp: (id, tx, ty, dir) => loadMap(id, tx * TS + 8, ty * TS + 13, dir || 'down'),
+    _G: () => G, _S: () => S, _pal: () => pal, _J: J, _start: g => start(g || newGame('Test', 'red')), _newGame: newGame, _warp: (id, tx, ty, dir) => loadMap(id, tx * TS + 8, ty * TS + 13, dir || 'down'),
     // tests: the whole map drawn at scale k, as a data URL
     _mapShot(id, k = 2) {
       const keep = { cv, ctx, scale, map: S.map ? S.map.id : null, x: S.player && S.player.x, y: S.player && S.player.y };

@@ -36,7 +36,12 @@ const JStory = (() => {
     ridepager: { name: 'Ride Pager', pocket: 'key', price: 0, desc: 'Calls Ride Pokémon. Scyther: Cut (face a small tree and press A).' },
     pokedex: { name: 'Pokédex', pocket: 'key', price: 0, desc: 'Records the Pokémon you see and catch. Open it from the menu.' },
     shoes: { name: 'Running Shoes', pocket: 'key', price: 0, desc: 'Hold Shift (or B) to run.' },
-    'tm:magical-leaf': { name: 'TM Magical Leaf', pocket: 'tms', price: 0, tm: 'magical-leaf', desc: 'Teaches Magical Leaf: a Grass move that never misses.' }
+    'tm:magical-leaf': { name: 'TM Magical Leaf', pocket: 'tms', price: 0, tm: 'magical-leaf', desc: 'Teaches Magical Leaf: a Grass move that never misses.' },
+    // Chapter 2
+    'tm:rock-tomb': { name: 'TM Rock Tomb', pocket: 'tms', price: 0, tm: 'rock-tomb', desc: 'Teaches Rock Tomb: hurls boulders and lowers the target\'s Speed.' },
+    'tm:water-pulse': { name: 'TM Water Pulse', pocket: 'tms', price: 0, tm: 'water-pulse', desc: 'Teaches Water Pulse: a pulsing blast of water that may confuse.' },
+    meteorite: { name: 'Coral Meteorite', pocket: 'key', price: 0, desc: 'The Maritime Museum\'s star exhibit, taken back from Team Eclipse. Return it to Curator Wells.' },
+    expshare: { name: 'Exp. Share', pocket: 'key', price: 0, desc: 'Pokémon that did not fight still get half the Exp. Points from a battle.' }
   };
   const BADGES = [
     { id: 'leaf', name: 'Leaf Badge', leader: 'Luna', col: '#3c9a58' }, { id: 'tide', name: 'Tide Badge', leader: 'Rex', col: '#3c78d0' },
@@ -58,7 +63,21 @@ const JStory = (() => {
     g1fern: { team: [['oddish', 9], ['bellsprout', 10]], pay: 24, theme: 'stadium', before: 'Smell the flowers... they\'re the last thing you\'ll notice before you lose!', lose: 'My bouquet... wilted.', after: 'Luna\'s Pokémon can heal themselves by draining HP. End it fast!' },
     g1ivo: { team: [['shroomish', 11]], pay: 20, theme: 'stadium', before: 'You found your way through the vines? Not past me!', lose: 'Ugh, the vines were my only trick.', after: 'Fire, Flying, Bug, Poison and Ice moves hit Grass types hard.' },
     g1tess: { team: [['bellsprout', 10], ['oddish', 11]], pay: 24, theme: 'stadium', before: 'One more step and you\'re in Luna\'s garden. Prove you belong!', lose: 'Bloom where you\'re planted... I guess I\'m planted here.', after: 'Go on. She\'s been looking forward to this.' },
-    luna: { team: [['shroomish', 12], ['bellsprout', 12], ['grovyle', 14]], pay: 100, theme: 'stadium', gym: 0, onWin: 'lunaWin', before: 'You saved my ancient tree, so I owe you a real battle - no holding back! Let\'s see if your bond with your Pokémon can bloom!', lose: 'Beautiful... you and your Pokémon grow together like roots and leaves.', after: 'Route 2 opens once the rocks are cleared. Port Coralis and Rex are waiting beyond!' }
+    luna: { team: [['shroomish', 12], ['bellsprout', 12], ['grovyle', 14]], pay: 100, theme: 'stadium', gym: 0, onWin: 'lunaWin', before: 'You saved my ancient tree, so I owe you a real battle - no holding back! Let\'s see if your bond with your Pokémon can bloom!', lose: 'Beautiful... you and your Pokémon grow together like roots and leaves.', after: 'Route 2 is open again - east of town. Port Coralis and Rex are waiting beyond!' },
+    // ---- Chapter 2: Route 2
+    r2dale: { team: [['geodude', 11], ['onix', 12]], pay: 20, theme: 'forest', before: 'The mountain came down, so I came down with it! Let\'s rumble!', lose: 'Crushed like gravel...', after: 'When the rocks slid, something purple and shiny rolled out up north-east. Didn\'t fancy carrying it.' },
+    r2joy: { team: [['mareep', 11], ['buneary', 12]], pay: 18, theme: 'forest', before: 'A picnic is no fun without a battle for dessert!', lose: 'My sandwiches... are all yours, I guess.', after: 'Mareep\'s wool is so fluffy. It crackles when it rains!' },
+    r2gil: { team: [['magikarp', 9], ['magikarp', 10], ['horsea', 13]], pay: 16, theme: 'beach', before: 'You scared off my bite! You\'ll have to pay for that - in battle!', lose: 'The one that got away... was me.', after: 'Magikarp looks useless, but give it time. Patience is a fisherman\'s best friend.' },
+    r2ren: { team: [['shinx', 12], ['rockruff', 12]], pay: 18, theme: 'forest', before: 'I\'ve camped out here three nights waiting for a real trainer. Finally!', lose: 'Guess I\'ll pitch my tent somewhere else.', after: 'Port Coralis is just east. Try the seafood - and the gym, if you\'re brave.' },
+    // ---- Seacliff Cave: Team Eclipse
+    grunt3: { team: [['zubat', 13], ['sandile', 14]], pay: 40, theme: 'volcano', before: 'Team Eclipse is busy in here. Scram, kid - or get scrammed!', lose: 'I got... scrammed.', after: 'Admin Kael is up ahead. You don\'t stand a chance against an Admin!', look: 'grunt', name: 'Eclipse Grunt' },
+    grunt4: { team: [['croagunk', 14], ['murkrow', 15]], pay: 40, theme: 'volcano', before: 'You beat the lookout? Then you\'ll have to go through me!', lose: 'Ugh. Kael is going to make me scrub the hideout.', after: 'The meteorite hums when you hold it. Creepy, right?', look: 'grunt', name: 'Eclipse Grunt' },
+    kael: { team: [['murkrow', 16], ['croagunk', 17], ['sableye', 18]], pay: 60, theme: 'volcano', name: 'Admin Kael', look: 'admin', before: 'The kid from Whisperwood. Director Vex warned me about you.', lose: 'Tch. Fine - keep your rock. We have plenty of other leads.' },
+    // ---- Coralis Gym
+    g2nia: { team: [['tentacool', 16], ['wingull', 17]], pay: 24, theme: 'beach', before: 'Splash! I swim these channels every morning. Can you keep up?', lose: 'I\'m all washed up...', after: 'Rex\'s Pokémon are tough. Grass and Electric moves will help!' },
+    g2otto: { team: [['psyduck', 16], ['poliwag', 17]], pay: 24, theme: 'beach', before: 'Reeling in challengers is my specialty. Hooked you!', lose: 'Snapped my line...', after: 'Quagsire doesn\'t mind Electric moves. It\'s part Ground, see?' },
+    g2kai: { team: [['horsea', 17], ['staryu', 18]], pay: 24, theme: 'beach', before: 'Last stop before the captain. Show me your sea legs!', lose: 'Man overboard! That\'s me.', after: 'Go on, Rex is waiting. He loves a challenger who doesn\'t give up.' },
+    rex: { team: [['carvanha', 20], ['quagsire', 20], ['poliwhirl', 22]], pay: 100, theme: 'beach', gym: 1, onWin: 'rexWin', before: 'You brought the meteorite home - I owe you one. But in here, I don\'t go easy on anyone. Hoist the sails!', lose: 'Ha! You rode that wave like a true captain.', after: 'The ferry to Voltara City will sail again soon. Mila and her Spark Badge are waiting on the other side!' }
   };
 
   // ---- talks and events: (J, npc) => ...; meta lists the flags each one needs and sets (the checker reads it)
@@ -67,7 +86,8 @@ const JStory = (() => {
   const on = (id, meta, fn) => { T[id] = fn; META[id] = meta; };
 
   on('intro', { sets: ['intro'] }, async J => {
-    await J.say(['Long ago, a meteor shattered over the Valoria region.', 'Its glowing fragments became the Mega Stones and Key Stones... stones that answer when a Pokémon and its trainer share a deep bond.', 'Today, in the little town of Willowbrook, a new journey begins.']);
+    if (!J.flag('film')) await J.say(['Long ago, a meteor shattered over the Valoria region.', 'Its glowing fragments became the Mega Stones and Key Stones... stones that answer when a Pokémon and its trainer share a deep bond.']);   // the opening film told it already
+    await J.say('Today, in the little town of Willowbrook, a new journey begins.');
     await J.say('{NAME}! Are you up? Professor Hazel called - she\'s waiting for you at her lab!', { name: 'Mom (downstairs)', look: 'mom' });
     J.set('intro');
   });
@@ -143,7 +163,7 @@ const JStory = (() => {
     await J.walk('sora', ['up', 6]);
     J.set('soraR1'); J.refresh();
   });
-  on('worker', {}, (J, n) => J.say('Sorry, kid! A rockslide buried Route 2. We\'re digging it out - it\'ll take a while. (Route 2 and Port Coralis open in Chapter 2!)', n));
+  on('worker', {}, (J, n) => J.say('Sorry, kid! A rockslide buried Route 2. We\'re digging it out - give us till you\'ve earned your first badge, and the way to Port Coralis will be clear!', n));
   on('gymGuide', {}, (J, n) => J.say(J.flag('badge.leaf') ? 'You beat Luna! The Leaf Badge is yours. Champion material, I tell you!' : J.flag('luna_back') ? 'Luna is back and ready! She uses Grass types: Fire, Flying, Bug, Poison and Ice moves are super effective!' : 'The gym leader Luna isn\'t here... She ran off to Whisperwood Forest when she heard about strangers digging by the ancient tree.', n));
   on('gymLocked', {}, J => J.say('The door is locked. A note is taped to it: "Gone to Whisperwood Forest. Back soon! - Luna"'));
   on('vBoy', {}, (J, n) => J.say('Luna\'s Pokémon smell like flowers. Even when they\'re beating you!', n));
@@ -206,15 +226,92 @@ const JStory = (() => {
     await J.fade(() => { J.set('shard1'); J.set('luna_back'); J.refresh(); });
   });
   // ---- after Luna: the Leaf Badge
-  on('lunaWin', { sets: ['badge.leaf', 'ride.cut'] }, async J => {
+  on('lunaWin', { sets: ['badge.leaf', 'ride.cut', 'ch2'] }, async J => {
     await J.say('You win! Take this - the Leaf Badge. Proof you beat me!', 'luna');
     J.badge('leaf');
     await J.give('tm:magical-leaf');
     await J.say(['And this: the Ride Pager. I\'ve registered my old friend Scyther. Call it to cut down small trees that block your way.', 'There\'s one in the south-west corner of town - I hear something nice is hidden behind it.'], 'luna');
     await J.give('ridepager'); J.set('ride.cut');
-    await J.say('The rockslide on Route 2 should be cleared soon. When it is, Port Coralis and its leader Rex are waiting. Grow strong, {NAME}!', 'luna');
-    await J.chapter('Chapter 1 complete!', 'Next: Chapter 2 - Port Coralis (coming soon)');
+    await J.say('Oh - and the workers just cleared the rockslide! Route 2 is open, east of town. Port Coralis and its leader Rex are waiting. Grow strong, {NAME}!', 'luna');
+    await J.chapter('Chapter 1 complete!', 'Next: Chapter 2 - Tides of Port Coralis');
+    J.set('ch2'); J.refresh();
+    await J.chapter('Chapter 2', 'Tides of Port Coralis');
   });
+  // =====================================================================
+  //  Chapter 2 - Tides of Port Coralis
+  // =====================================================================
+  on('worker2', {}, (J, n) => J.say(['Phew! We dug out the last of the rocks this morning. Port Coralis is east of here.', 'Funny thing - Hiker Dale swears the slide shook loose something purple and glowing, up in the north-east meadow.'], n));
+  // ---- Sora's second battle, near the end of Route 2
+  on('soraRoute2', { needs: ['!rival2'], sets: ['rival2'] }, async J => {
+    await J.emote('sora', '!');
+    await J.say(['{NAME}! There you are! I got to Port Coralis first - and look who evolved!', 'Hey, the gym leader there wasn\'t even in. Something\'s up in town... but first: battle me! Let\'s see who\'s grown more!'], 'sora');
+    const rs = J.get('rivalStarter') || 'eevee';
+    await J.battle({ id: 'rival2', name: 'Sora', look: 'sora', team: [['staravia', 15], [J.grown(rs, 17), 17]], pay: 40, theme: 'forest', canLose: true, before: 'No holding back this time!', lose: 'No way! Again?!', win: 'Ha! Told you I\'d train like crazy!' });
+    await J.say(J.lastWin() ? ['Man, you\'re strong... I won\'t lose to you at the gym, though!', 'People in town are talking about a break-in at the museum. Go see!'] : ['Don\'t sweat it - that was a close one!', 'People in town are talking about a break-in at the museum. Go see!'], 'sora');
+    await J.walk('sora', ['right', 3]);
+    J.set('rival2'); J.refresh();
+  });
+  // ---- Port Coralis
+  on('portSailor', {}, (J, n) => J.say(J.flag('rex_back') ? 'Rex is back at the gym, and the meteorite is home. Port Coralis owes you one, kid!' : J.flag('museum') ? 'Seacliff Cave is up the path north of town. Hal will let you through now.' : ['Welcome to Port Coralis! Smell that sea air?', 'If you\'re here for the gym, Rex isn\'t in. He went charging into the Maritime Museum this morning - something about a break-in!'], n));
+  on('gym2Locked', {}, J => J.say('The door is locked. A note is pinned to it: "At the museum. Back when I\'ve sorted this mess. - Rex"'));
+  on('gymGuide2', {}, (J, n) => J.say(J.flag('badge.tide') ? 'You beat Rex! The Tide Badge looks good on you!' : J.flag('rex_back') ? 'Rex is back! He uses Water types: Grass and Electric moves are your best bet. Mind Quagsire - Electric won\'t touch it!' : 'Rex isn\'t in... He\'s at the museum, north-east of here.', n));
+  on('caveGuard', { needs: ['!museum'] }, (J, n) => J.say('Seacliff Cave is off-limits - the tide tunnels are dangerous. Only Rex can let you through.', n));
+  on('ferry', {}, (J, n) => J.say(J.flag('badge.tide') ? 'The ferry to Voltara City is still in for repairs. Soon, I promise! (Chapter 3 is on its way.)' : 'The ferry to Voltara City is laid up for repairs. Come back later, kid!', n));
+  on('portKid', {}, (J, n) => J.say('I found a shiny shell on the beach! ...Oh. It\'s a bottle cap.', n));
+  on('portLady', {}, (J, n) => J.say('Rex has run that gym for thirty years. Folks say he can read the tide like a book.', n));
+  on('portWoman', { sets: ['portGift'] }, async (J, n) => {
+    if (J.flag('portGift')) return J.say('Fresh sea air and a full Bag - that\'s all a trainer needs!', n);
+    await J.say('Oh, a traveler! My husband runs the ferry. Take this, for the road.', n);
+    await J.give('superpotion'); J.set('portGift');
+  });
+  on('oldSalt', {}, (J, n) => J.say(J.flag('rex_back') ? ['You took back the meteorite from those crooks? Rex was right about you.', 'They say the ferry will sail to Voltara City soon. Electric town, that one - all sparks and lights.'] : ['Rex and I sailed together, back when we were young. Stubborn as a Wailord, that man.', 'He\'s at the museum now. Someone stole the Coral Meteorite last night, they say.'], n));
+  // ---- the museum
+  on('exhibitShip', {}, J => J.say('A model of the S.S. Coralis, the first ship to sail from Valoria to Voltara City.'));
+  on('exhibitFossil', {}, J => J.say('Fossils from the sea cliffs: shells, claws, and one very old Omanyte.'));
+  on('exhibitStatue', {}, J => J.say('A stone Lapras, carved by the first people of Port Coralis.'));
+  on('emptyCase', {}, J => J.say(J.flag('meteorite_back') ? 'THE CORAL METEORITE - It fell into the bay long ago. It glows faintly purple.' : 'THE CORAL METEORITE - ...The case is empty. The glass has been cut.'));
+  on('rexMuseum', { needs: ['!rex_back'], sets: ['museum'] }, async (J, n) => {
+    if (J.flag('kael')) return J.say('You got it back?! Give it to Curator Wells, quick!', n);
+    if (J.flag('museum')) return J.say('Seacliff Cave is north of town, up the cliff path. Hal knows you\'re coming. Hurry!', n);
+    await J.say(['Hm? You\'re a trainer. Got a badge from Luna, have you? Good.', 'Name\'s Rex - I run the gym here. Last night, someone cut open that case and took the Coral Meteorite.', 'A piece of the Valoria meteor. People in purple were seen running for Seacliff Cave.'], n);
+    await J.say('(People in purple... Team Eclipse! The same crew that was digging for a Meteor Shard in Whisperwood Forest.)');
+    await J.say(['Then they\'re collecting. My Pokémon are too big for those tide tunnels - but yours aren\'t.', 'I\'ll tell Hal to let you into the cave. Bring that meteorite home, and then come and challenge me. Deal?'], n);
+    J.set('museum'); J.refresh();
+  });
+  on('curator', { needs: ['kael'], sets: ['meteorite_back', 'rex_back'] }, async (J, n) => {
+    if (J.flag('meteorite_back')) return J.say('The meteorite is safe in its case again. Thank you, young one. The museum is in your debt.', n);
+    if (!J.has('meteorite')) return J.say(J.flag('museum') ? 'Please, if you find the meteorite... bring it back safely.' : 'I am Curator Wells. Last night... oh, I can hardly speak of it. Please, talk to Rex.', n);
+    await J.say(['The Coral Meteorite! You brought it back!', 'It hums... it never did that before. As if it\'s calling to something.'], n);
+    J.take('meteorite'); J.set('meteorite_back');
+    await J.say('Please, take this. It came from the bay, like the meteorite - I think it wants to go on a journey.', n);
+    await J.give('waterstone');
+    await J.say('Well done, kid. I\'ll see you at the gym - and I won\'t go easy!', 'rex');
+    await J.fade(() => { J.set('rex_back'); J.refresh(); });
+  });
+  // ---- Seacliff Cave: Admin Kael
+  on('kaelCave', { needs: ['museum', '!kael'], sets: ['kael'] }, async J => {
+    await J.say('The meteorite resonates with the shard from Whisperwood... Director Vex will be pleased.', 'kael');
+    await J.face('kael', 'down'); await J.face('grunt5', 'down');
+    await J.emote('kael', '!');
+    await J.say('Admin Kael, it\'s that kid again!', 'grunt5');
+    await J.say('So you\'re the one who embarrassed my grunts in Whisperwood. I\'m Kael, Admin of Team Eclipse. Let me show you what an Admin can do.', 'kael');
+    if (await J.battle('kael') !== 'win') return;
+    await J.say(['Hmph. A bond between trainer and Pokémon... Director Vex said that is what the stones answer to.', 'Take your rock back. We\'ll find the rest of the shards before you do. Team Eclipse - we\'re leaving!'], 'kael');
+    await J.fade(() => { J.set('kael'); J.refresh(); });
+    await J.give('meteorite');
+    await J.say('You got the Coral Meteorite back! Better take it to the museum.');
+  });
+  // ---- after Rex: the Tide Badge
+  on('rexWin', { sets: ['badge.tide', 'expshare'] }, async J => {
+    await J.say('A fine battle, captain! Here - the Tide Badge.', 'rex');
+    J.badge('tide');
+    await J.give('tm:water-pulse');
+    await J.say(['And take this Exp. Share. With it, the Pokémon that sit out a battle still learn from it.', 'Every member of your crew grows together. That\'s how you weather any storm!'], 'rex');
+    await J.give('expshare'); J.set('expshare');
+    await J.say(['Team Eclipse is after the meteor fragments - all of them. Keep your eyes open, {NAME}.', 'The ferry to Voltara City should sail again soon. Mila and the Spark Badge are waiting there!'], 'rex');
+    await J.chapter('Chapter 2 complete!', 'Next: Chapter 3 - Voltara City (coming soon)');
+  });
+  on('gymStatue2', {}, J => J.say(J.flag('badge.tide') ? 'CORALIS POKéMON GYM - LEADER: REX\nWinning trainers: {NAME}' : 'CORALIS POKéMON GYM - LEADER: REX\nWinning trainers this season: none yet!'));
 
   return { ITEMS, BADGES, STARTERS, TRAINERS, T, META };
 })();
