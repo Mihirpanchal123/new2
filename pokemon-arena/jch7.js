@@ -31,13 +31,13 @@
     // Frostvale Gym
     c7lena: { team: [['snover', 44], ['sealeo', 45]], pay: 24, theme: 'icecave', before: 'Mind your footing! The floor here is older than the town.', lose: 'I lost my edge...', after: 'Ivy barely speaks, but her Pokémon hear every word she doesn\'t say.' },
     c7kurt: { team: [['sneasel', 45], ['glalie', 46]], pay: 24, theme: 'icecave', before: 'You made it through the ice blocks? Then let\'s see you get past me!', lose: 'Cold. Stone cold.', after: 'Fire melts ice. Fighting and Steel break it. Rock crushes it. Ice has it rough!' },
-    c7mira: { team: [['snorunt', 44], ['sealeo', 45], ['glaceon', 46]], pay: 24, theme: 'icecave', before: 'The last trainer before Lady Ivy. I won\'t let the cold in!', lose: 'Frozen out...', after: 'Lady Ivy\'s family has watched the Skyspire for a hundred generations. Go on - she\'s waiting.' },
+    c7mira: { team: [['snorunt', 44], ['sealeo', 45], ['glaceon', 46]], pay: 24, theme: 'icecave', before: 'The last trainer before Lady Ivy. I won\'t let the cold in!', lose: 'Frozen out...', after: 'Lady Ivy\'s family has watched the Skyspire for a thousand years. Go on - she\'s waiting.' },
     c7ivy: { team: [['froslass', 46], ['abomasnow', 47], ['walrein', 48], ['lapras', 49]], pay: 110, theme: 'icecave', gym: 6, onWin: 'c7ivyWin', name: 'Leader Ivy', look: 'c7ivy',
       before: '...Six badges. Then the stones have noticed you. Show me how warm a bond can burn in the cold.', lose: '...Yes. The ice gives way to warmth like yours.', after: 'The Skyspire. Go.' },
     // the Skyspire: Team Eclipse
     c7grunt1: { team: [['golbat', 43], ['houndoom', 44]], pay: 40, theme: 'icecave', before: 'Nobody goes up! Director\'s orders!', lose: 'The Director\'s gonna freeze me out...', after: 'This tower\'s cold enough to crack teeth. Why couldn\'t the meteor want a beach?', look: 'grunt', name: 'Eclipse Grunt' },
     c7grunt2: { team: [['sneasel', 43], ['toxicroak', 44]], pay: 40, theme: 'icecave', before: 'You again?! Every Eclipse grunt in Valoria knows your face!', lose: 'And now I know your Pokémon, too. Ow.', after: 'Admin Rhea is upstairs. She hasn\'t forgotten Mt. Cinder.', look: 'grunt', name: 'Eclipse Grunt' },
-    c7grunt3: { team: [['sableye', 44], ['honchkrow', 45]], pay: 40, theme: 'icecave', before: 'All twelve shards... well, nearly. Enough for the Director. You\'re too late!', lose: 'Too late... for me, anyway.', after: 'The Director says the meteor will answer to power. Funny - it never answered to me.', look: 'grunt', name: 'Eclipse Grunt' },
+    c7grunt3: { team: [['sableye', 44], ['honchkrow', 45]], pay: 40, theme: 'icecave', before: 'Shards from every corner of Valoria! Enough for the Director. You\'re too late!', lose: 'Too late... for me, anyway.', after: 'The Director says the meteor will answer to power. Funny - it never answered to me.', look: 'grunt', name: 'Eclipse Grunt' },
     c7grunt4: { team: [['scrafty', 44], ['crobat', 45]], pay: 40, theme: 'icecave', before: 'The last guard on the stairs! The Director must not be disturbed!', lose: 'Disturbed. Very disturbed.', after: 'Go on up, then. Maybe somebody should stop this before the whole sky falls.', look: 'grunt', name: 'Eclipse Grunt' },
     c7rhea: { team: [['camerupt', 46], ['houndoom', 46], ['honchkrow', 47], ['magmortar', 48]], pay: 60, theme: 'icecave', onWin: 'c7rheaWin', name: 'Admin Rhea', look: 'rhea',
       before: 'You! The brat from Mt. Cinder! I\'ve been warming up for this rematch ever since!', lose: 'No... not again! Not here!' },
@@ -188,7 +188,7 @@
   on('c7traveler', {}, (J, n) => J.say(['Frostvale\'s just north. Mind the deep snow - wild Pokémon burrow in it.', 'Strange thing: last night the old tower above the town glowed purple. Like a bruise on the sky.'], n));
   on('c7arrive', { needs: ['!c7arrive'], sets: ['c7arrive'] }, async J => {
     await J.say(['The wind drops as the road levels out. Snowy roofs, chimney smoke... Frostvale.', 'Above the town, on the cliffs, a stone tower climbs into the clouds: the Skyspire.', 'For a heartbeat, a purple light flickers at its top - then it is gone.']);
-    await J.say('(Team Eclipse wanted to re-forge the meteor "at the Skyspire in the far north". This must be it.)');
+    await J.say('(Team Eclipse wanted to re-forge the meteor "in the frozen north". This must be it.)');
     J.set('c7arrive');
   });
   on('c7guardian', {}, (J, n) => J.say(J.flag('c7eclipse') ? ['The tower is quiet again. Lady Ivy says the sky owes you a debt.', 'Whatever slept in that stone chose its own way. Perhaps that is how it should be.']
@@ -244,7 +244,7 @@
     if (J.flag('c7deoxys')) return J.say('...Leave me be. There is nothing left up here for either of us.', 'vex');
     if (!J.flag('c7vex')) {
       if (!J.flag('c7vexMet')) {
-        await J.say(['Eleven shards, fused back into the stone they broke from. Can you hear it singing?', 'For a thousand years it slept in this tower while fools "guarded" it. Tonight, it wakes - and it will obey me.'], 'vex');
+        await J.say(['Every shard we could tear from this land, fused back into the stone they broke from. Can you hear it singing?', 'For a thousand years it slept in this tower while fools "guarded" it. Tonight, it wakes - and it will obey me.'], 'vex');
         await J.face('vex', 'down'); await J.emote('vex', '!');
         await J.say(['You. The child from Whisperwood, from the hidden lab... Rhea warned me you were persistent.', 'You and your precious bonds. Trainers who beg their Pokémon for loyalty, who share and wait and hope.', 'Power doesn\'t beg. With what sleeps in this meteor, I will eclipse every bond in Valoria - and no one will ever need to hope again.', 'Come, then. Let the stone watch you fall!'], 'vex');
         J.set('c7vexMet');
@@ -278,7 +278,7 @@
     J.set('ch8'); J.refresh();
     await J.chapter('Chapter 8', 'Champion of Valoria');
   });
-  on('c7meteor', {}, J => J.say(J.flag('c7deoxys') ? 'The meteor lies split in two, dark and quiet. Eleven dull grey shards are fused into its shell.' : J.flag('c7vex') ? 'The meteor is split open. Light pours out of it.' : 'A huge black stone, older than the tower. Purple shards are jammed into cracks all over it, humming. The air tastes of lightning.'));
+  on('c7meteor', {}, J => J.say(J.flag('c7deoxys') ? 'The meteor lies split in two, dark and quiet. Dull grey shards are fused into its shell.' : J.flag('c7vex') ? 'The meteor is split open. Light pours out of it.' : 'A huge black stone, older than the tower. Purple shards are jammed into cracks all over it, humming. The air tastes of lightning.'));
   on('c7machine', {}, J => J.say(J.flag('c7eclipse') ? 'Team Eclipse\'s machine. Its screens are dark. Someone has pulled every cable.' : 'A Team Eclipse machine. Cables run from it into the meteor. The screen reads: RESONANCE 97%... 98%...'));
   on('c7hazel', {}, (J, n) => J.say(['The meteor fragments were never batteries. They were... a message. Bond with your Pokémon, and the sky will answer.', 'Victory Road is east of Frostvale. The League is waiting for you, {NAME} - go and show them what a bond can do!'], n));
 

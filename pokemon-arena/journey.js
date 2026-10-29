@@ -17,6 +17,7 @@ const Journey = (() => {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const sp = s => DEX.species[s];
   const dname = s => sp(s).display;
+  const clip = (s, n) => s.length <= n ? s : s.slice(0, Math.max(s.lastIndexOf(' ', n - 3), n / 2)).replace(/[\s,;:-]+$/, '') + '...';
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
   const sfx = (k, ...a) => { try { AudioFX.SFX[k](...a); } catch (e) {} };
@@ -684,7 +685,7 @@ const Journey = (() => {
     try {
       result = await new Promise(res => {
         const meta = { journey: { wild, title: wild ? `A WILD ${dname(tr.team[0][0]).toUpperCase()} APPEARED!` : `${name.toUpperCase()} WANTS TO BATTLE!`, cmd: c => battleCmd(c), onEnd: res },
-          lines: [null, wild ? null : tr.before ? fill(tr.before).slice(0, 60) : null], endLines: wild ? null : [null, { win: tr.win || 'Hah!', lose: tr.lose || 'Oh no!' }] };
+          lines: [null, wild ? null : tr.before ? clip(fill(tr.before), 60) : null], endLines: wild ? null : [null, { win: tr.win || 'Hah!', lose: tr.lose || 'Oh no!' }] };
         startBattle([team.map(Prog.spec), foes], meta);
       });
     } finally {
@@ -766,14 +767,22 @@ const Journey = (() => {
       const balls = Object.keys(ITEMS).filter(k => ITEMS[k].pocket === 'balls' && bagN(k) > 0);
       if (!balls.length) { toast('You have no Poké Balls!'); return; }
       if (balls.length === 1) return throwBall(balls[0]);
-      return battleMenu('Throw which ball?', balls.map(k => ({ label: `${ITEMS[k].name} ×${bagN(k)}`, fn: () => throwBall(k) })));
+      return battleMenu('Throw which ball?', balls.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ×${bagN(k)}`, note: ITEMS[k].desc, fn: () => throwBall(k) })));
     }
-    if (c === 'bag') {
-      const meds = Object.keys(ITEMS).filter(k => ITEMS[k].pocket === 'medicine' && bagN(k) > 0 && !ITEMS[k].candy);
-      if (!meds.length) { toast('No medicine in your Bag!'); return; }
-      battleMenu('Use which item?', meds.map(k => ({ label: `${ITEMS[k].name} ×${bagN(k)}`, fn: () => battleMenu(`Use ${ITEMS[k].name} on...`, state.players[0].team.map((b, i) => ({ label: `${b.name} ${Math.ceil(Math.max(0, b.hp))}/${b.maxhp}${b.status ? ' ' + b.status.toUpperCase() : ''}`, fn: () => useInBattle(k, i) }))) })));
-    }
+    if (c === 'bag') battleBag();
   }
+  // the battle bag: pick a medicine, then who gets it (each with its HP; the ones it would do nothing for are dimmed)
+  function battleBag() {
+    const meds = Object.keys(ITEMS).filter(k => ITEMS[k].pocket === 'medicine' && bagN(k) > 0 && !ITEMS[k].candy);
+    if (!meds.length) { toast('No medicine in your Bag!'); return; }
+    const team = state.players[0].team;
+    battleMenu('Use which item?', meds.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ×${bagN(k)}`, note: ITEMS[k].desc,
+      fn: () => battleMenu(`Use ${ITEMS[k].name} on...`, team.map((b, i) => ({
+        icon: S.btl.team[i] ? `<img src="${sp(S.btl.team[i].species).sprite}" alt="">` : '',
+        label: b.name, note: `${Math.ceil(Math.max(0, b.hp))}/${b.maxhp} HP${b.hp <= 0 ? ' · fainted' : b.status ? ' · ' + b.status.toUpperCase() : ''}${state.players[0].active === i ? ' · in battle' : ''}`,
+        html: hpBar(Math.max(0, b.hp), b.maxhp), dim: !wouldHelp(ITEMS[k], b), fn: () => useInBattle(k, i) })), ITEMS[k].desc, battleBag) })));
+  }
+  const wouldHelp = (it, b) => it.revive ? b.hp <= 0 : b.hp > 0 && (it.heal && b.hp < b.maxhp || it.cure && !!b.status && it.cure.includes(b.status));
   async function throwBall(k) {
     hideBattleMenu();
     const R = Retro.journey, f = state.players[1].team[0], it = ITEMS[k];
@@ -802,14 +811,55 @@ const Journey = (() => {
     if (it.cure && m.status && it.cure.includes(m.status)) { m.status = null; did = true; }
     return did;
   }
-  function battleMenu(title, opts) {
+  // a pop-up list over the battle; Back (or Esc) returns to the list before it, or to the battle
+  function battleMenu(title, opts, sub, back) {
     PAUSED = true;
     const el = ui.bmenu;
-    el.innerHTML = `<div class="jb-box"><b>${esc(title)}</b>${opts.map((o, i) => `<button data-i="${i}">${esc(o.label)}</button>`).join('')}<button data-i="x" class="x">Back</button></div>`;
+    el.innerHTML = `<div class="jb-box"><b>${esc(title)}</b>${sub ? `<small class="jb-sub">${esc(sub)}</small>` : ''}${opts.map((o, i) => `<button data-i="${i}" class="${o.dim ? 'dim' : ''}">${o.icon || ''}<span>${esc(o.label)}${o.note ? `<small>${esc(o.note)}</small>` : ''}</span>${o.html || ''}</button>`).join('')}<button data-i="x" class="x">Back</button><small class="jkeys">↑↓ choose · Enter use · Esc back</small></div>`;
     el.classList.remove('hidden');
-    el.onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; if (b.dataset.i === 'x') return hideBattleMenu(); const o = opts[+b.dataset.i]; PAUSED = false; o.fn(); };
+    S.bback = back || null;
+    el.onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; sfx('lock'); if (b.dataset.i === 'x') return battleBack(); const o = opts[+b.dataset.i]; PAUSED = false; o.fn(); };
+    const first = el.querySelector('button:not(.dim)');
+    if (first) first.focus({ preventScroll: true });
   }
-  function hideBattleMenu() { if (!ui) return; ui.bmenu.classList.add('hidden'); if (S.battle) PAUSED = false; }
+  function battleBack() { const b = S.bback; hideBattleMenu(); if (b) b(); }
+  function hideBattleMenu() { if (!ui) return; ui.bmenu.classList.add('hidden'); S.bback = null; if (S.battle) PAUSED = false; }
+  // its keys: arrows move, Enter / Space / Z pick, a number picks that row, Esc / X / Backspace go back. Listened for
+  // before the arena's own keys, so Esc does not also pause the battle and 1-4 do not also pick a move.
+  function battleMenuKey(e) {
+    if (!active || !ui || ui.bmenu.classList.contains('hidden')) return;
+    const k = KEYMAP[e.code], el = ui.bmenu;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (k && k !== 'run') return navMove(el, k);
+    if (['Escape', 'KeyX', 'Backspace'].includes(e.code)) { sfx('lock'); return battleBack(); }
+    if (/^Digit[1-9]$/.test(e.code)) { const b = el.querySelector(`button[data-i="${+e.code.slice(5) - 1}"]`); if (b) b.click(); return; }
+    if (['Enter', 'Space', 'KeyZ', 'KeyE'].includes(e.code)) { const f = el.contains(document.activeElement) && document.activeElement.tagName === 'BUTTON' ? document.activeElement : el.querySelector('button'); if (f) f.click(); }
+  }
+  // move the keyboard cursor to the nearest button in that direction (by where the buttons sit on screen, so it works
+  // for lists, rows and grids alike); the ✕ in a panel's title bar is left to Esc
+  const navButtons = box => [...box.querySelectorAll('button:not([disabled])')].filter(b => b.offsetParent && !b.closest('.jp-head'));
+  function navMove(box, dir) {
+    const all = navButtons(box);
+    if (!all.length) return false;
+    const cur = all.includes(document.activeElement) ? document.activeElement : null;
+    let best = null;
+    if (!cur) best = all[0];
+    else {
+      const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, [dx, dy] = DIRS[dir];
+      let bd = Infinity;
+      for (const b of all) {
+        if (b === cur) continue;
+        const q = b.getBoundingClientRect(), x = q.left + q.width / 2 - cx, y = q.top + q.height / 2 - cy;
+        const along = x * dx + y * dy, across = Math.abs(x * dy - y * dx);
+        if (along < 4) continue;
+        const d = along + across * 2;
+        if (d < bd) { bd = d; best = b; }
+      }
+    }
+    if (!best) return false;
+    best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
 
   // =====================================================================
   //  Menus: start menu, party, bag, Pokédex, trainer card, shop, PC
@@ -821,35 +871,96 @@ const Journey = (() => {
     renderPanel(kind, data);
   }
   function closeMenu() { S.menu = null; ui.panel.classList.add('hidden'); ui.panel.innerHTML = ''; if (S.menuDone) { const d = S.menuDone; S.menuDone = null; d(); } }
+  // ---- little pixel icons for items and the menu (12x12 grids drawn as svg: k outline, w white, h shine, a / b colours)
+  const ICON = {
+    ball: ['....kkkk....', '..kkaaaakk..', '.kahaaaaaak.', '.kbhaaaaabk.', 'kaaaakkaaaak', 'kkkkkwwkkkkk', 'kwwwkwwkwwwk', 'kwwwwkkwwwwk', '.kwwwwwwwwk.', '.kwwwwwwwwk.', '..kkwwwwkk..', '....kkkk....'],
+    bottle: ['....kkkk....', '....kbbk....', '....kkkk....', '...kwwwwk...', '..kwwwwwwk..', '.kaaaaaaaak.', '.kahaaaaaak.', '.kahaaaaaak.', '.kaaaaaaaak.', '.kaaaaaaaak.', '..kaaaaaak..', '...kkkkkk...'],
+    gem: ['............', '.....kk.....', '....kaak....', '...kahaak...', '..kahaaaak..', '.kahaaaaaak.', '.kaaaaaaaak.', '..kaaaaaak..', '...kaaaak...', '....kaak....', '.....kk.....', '............'],
+    berry: ['.....bb.....', '....kbbk....', '..kkaaaakk..', '.kahhaaaaak.', '.kahaaaaaak.', 'kaaaaaaaaaak', 'kaaaaaaaaaak', 'kaaaaaaaaaak', '.kaaaaaaaak.', '.kaaaaaaaak.', '..kkaaaakk..', '....kkkk....'],
+    disc: ['....kkkk....', '..kkaaaakk..', '.kaahhaaaak.', '.kahaaaaaak.', 'kaaaakkaaaak', 'kaaakwwkaaak', 'kaaakwwkaaak', 'kaaaakkaaaak', '.kaaaaaaaak.', '.kaaaaaaaak.', '..kkaaaakk..', '....kkkk....'],
+    key: ['............', '............', '............', '.kkkk.......', 'kaaaak......', 'kak.kakkkkk.', 'kak.kaaaaaak', 'kaaaakkakkak', '.kkkk.kk.kk.', '............', '............', '............'],
+    dex: ['............', '.kkkkkkkkkk.', '.kaaaaaaaak.', '.kahwwkaaak.', '.kawwwwkaak.', '.kaawwkaaak.', '.kkkkkkkkkk.', '.kaaaaaaaak.', '.kakkkkkkak.', '.kaaaaaaaak.', '.kkkkkkkkkk.', '............'],
+    bag: ['............', '....kkkk....', '...k....k...', '.kkkkkkkkkk.', '.kaaaaaaaak.', '.kahaaaaaak.', '.kkkkbbkkkk.', '.kaaabbaaak.', '.kaaaaaaaak.', '.kaaaaaaaak.', '.kkkkkkkkkk.', '............'],
+    card: ['............', '............', 'kkkkkkkkkkkk', 'kaaaaaaaaaak', 'kawwkaaaaaak', 'kawwkabbbbak', 'kakkkaaaaaak', 'kaaaaabbbbak', 'kaaaaaaaaaak', 'kkkkkkkkkkkk', '............', '............'],
+    save: ['............', '.kkkkkkkkk..', '.kawwwwkakk.', '.kawwwwkaak.', '.kaaaaaaaak.', '.kaaaaaaaak.', '.kawwwwwwak.', '.kawkkkkwak.', '.kawwwwwwak.', '.kkkkkkkkkk.', '............', '............'],
+    door: ['..kkkkkkkk..', '..kaaaaaak..', '..kahaaaak..', '..kahaaaak..', '..kahaaaak..', '..kaaaabak..', '..kaaaabak..', '..kahaaaak..', '..kahaaaak..', '..kaaaaaak..', '..kaaaaaak..', '.kkkkkkkkkk.']
+  };
+  const ICOL = { k: '#1b1530', w: '#fff', h: 'rgba(255,255,255,.7)' }, icons = {};
+  function pix(shape, a, b = a) {
+    const id = shape + a + b;
+    if (icons[id]) return icons[id];
+    let r = '';
+    ICON[shape].forEach((row, y) => { for (let x = 0; x < row.length;) { const c = row[x]; let n = 1; while (row[x + n] === c) n++; if (c !== '.') r += `<rect x="${x}" y="${y}" width="${n}" height="1.02" fill="${c === 'a' ? a : c === 'b' ? b : ICOL[c]}"/>`; x += n; } });
+    return icons[id] = `<svg class="jico" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
+  }
+  const STONE = { 'Fire Stone': '#f07030', 'Water Stone': '#3c90e0', 'Thunder Stone': '#f0d048', 'Leaf Stone': '#48b048', 'Moon Stone': '#8a80a8', 'Link Stone': '#60c0c0' };
+  const CURE = { psn: '#58c048', tox: '#58c048', par: '#f0d048', slp: '#60a8f0', brn: '#f08048', frz: '#88d8f0' };
+  function itemIcon(k) {
+    const it = ITEMS[k] || {};
+    if (it.ball) return pix('ball', it.col || '#e83838', it.band || it.col || '#e83838');
+    if (it.tm) return pix('disc', TYPE_COLORS[(MOVES[it.tm] || {}).type] || '#9aa0b0');
+    if (it.evo) return pix('gem', STONE[it.evo] || '#9aa0b0');
+    if (it.revive) return pix('gem', it.revive >= 1 ? '#f0a020' : '#f0d048');
+    if (it.candy) return pix('berry', '#60a8f0', '#fff');
+    if (/Berry/.test(it.name || '')) return pix('berry', '#3c78d0', '#3aa858');
+    if (it.heal) return pix('bottle', it.heal >= 120 ? '#e8a020' : it.heal >= 60 ? '#e05080' : '#a050d8', '#9aa0b0');
+    if (it.cure) return pix('bottle', it.cure.length > 2 ? '#f0e060' : CURE[it.cure[0]] || '#58c048', '#9aa0b0');
+    if (it.repel) return pix('bottle', '#58b0a0', '#1b1530');
+    if (k === 'shard') return pix('gem', '#a050e0');
+    if (k === 'meteorite') return pix('gem', '#8a6a50');
+    if (k === 'pokedex') return pix('dex', '#e04848');
+    return pix('key', '#e0b040');
+  }
+  const POCKETS = { items: 'Items', medicine: 'Medicine', balls: 'Balls', tms: 'TMs', key: 'Key Items' };
+  const EMPTY = { items: 'No items yet.', medicine: 'No medicine. Poké Marts sell Potions.', balls: 'No Poké Balls. Poké Marts sell them!', tms: 'No TMs yet. Gym Leaders give them out.', key: 'No key items.' };
+  const usable = it => !!(it.repel || it.heal || it.cure || it.revive || it.candy || it.evo || it.tm);
+  const bagIn = p => Object.keys(ITEMS).filter(k => G.bag[k] > 0 && ITEMS[k].pocket === p);
   const hpBar = (hp, max) => { const k = Math.max(0, hp / max); return `<div class="jhp"><i style="width:${(k * 100).toFixed(0)}%;background:${k > 0.5 ? '#3ddc68' : k > 0.2 ? '#f5c518' : '#ef4444'}"></i></div>`; };
   const typeChips = s => sp(s).types.map(t => `<span class="jt" style="background:${TYPE_COLORS[t]}">${t}</span>`).join('');
-  function monRow(m, i, extra = '') {
+  function monRow(m, i, extra = '', cls = '') {
     const max = Prog.hpMax(m.species, m.level);
-    return `<button class="jmon ${m.hp <= 0 ? 'down' : ''}" data-m="${i}"><img src="${sp(m.species).sprite}" alt=""><div><b>${esc(Prog.nameOf(m))}</b> <small>Lv ${m.level}</small> ${m.status ? `<span class="jst">${m.status.toUpperCase()}</span>` : ''}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP</small></div>${extra}</button>`;
+    return `<button class="jmon ${m.hp <= 0 ? 'down' : ''} ${cls}" data-m="${i}"><img src="${sp(m.species).sprite}" alt=""><div><b>${esc(Prog.nameOf(m))}</b> <small>Lv ${m.level}</small>${typeChips(m.species)} ${m.hp <= 0 ? '<span class="jst fnt">FNT</span>' : m.status ? `<span class="jst">${m.status.toUpperCase()}</span>` : ''}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP</small></div>${extra}</button>`;
   }
+  const money = () => `<span class="jmoney">¥${G.money.toLocaleString('en-US')}</span>`;
+  // what a party member shows next to it when you pick who gets an item
+  function useTag(it, m) {
+    if (canUse(it, m)) return '<em class="ok">ABLE</em>';
+    if (it.tm) return `<em>${m.moves.includes(it.tm) ? 'LEARNED' : 'UNABLE'}</em>`;
+    if (it.evo) return '<em>UNABLE</em>';
+    return `<em>${m.hp <= 0 && !it.revive ? 'FAINTED' : 'NO EFFECT'}</em>`;
+  }
+  // a panel's identity for keeping the keyboard cursor on "the same" button when it is drawn again
+  const btnKey = b => ['a', 'i', 'p', 'q', 'm'].map(k => b.dataset[k] || '').join('|');
   function renderPanel(kind, data) {
     const el = ui.panel;
-    const head = (t, back = 'menu') => `<div class="jp-head"><b>${t}</b><button data-a="${back}">✕</button></div>`;
+    const was = el.contains(document.activeElement) && document.activeElement.tagName === 'BUTTON' ? btnKey(document.activeElement) : null;
+    const head = (t, back = 'menu') => `<div class="jp-head"><b>${t}</b><button data-a="${back}" title="Back (Esc)">✕</button></div>`;
     if (kind === 'menu') {
-      el.innerHTML = `<div class="jp jp-menu">${[['party', 'POKéMON', G.party.length > 0], ['dex', 'POKéDEX', flag('dex')], ['bag', 'BAG', true], ['card', G.name.toUpperCase(), true], ['save', 'SAVE', true], ['exit', 'EXIT', true], ['close', 'CLOSE', true]].filter(x => x[2]).map(([a, t]) => `<button data-a="${a}">${t}</button>`).join('')}</div>`;
+      const h = Math.floor(G.time / 3600), mi = String(Math.floor(G.time / 60) % 60).padStart(2, '0'), kinds = Object.keys(G.bag).filter(k => ITEMS[k] && G.bag[k] > 0).length;
+      const rows = [['party', 'POKéMON', `${G.party.length} in your party`, pix('ball', '#e83838'), G.party.length > 0], ['dex', 'POKéDEX', `${Object.keys(G.dex.caught).length} caught · ${Object.keys(G.dex.seen).length} seen`, pix('dex', '#e04848'), flag('dex')],
+        ['bag', 'BAG', `${kinds} kind${kinds === 1 ? '' : 's'} of item`, pix('bag', '#d8803a', '#f0d048'), true], ['card', G.name.toUpperCase(), 'Trainer card · badges', pix('card', '#f0c060', '#1b1530'), true],
+        ['save', 'SAVE', 'Write down your progress', pix('save', '#3c78d0'), true], ['exit', 'EXIT', 'Save and go to the title', pix('door', '#b06a38', '#f0d048'), true], ['close', 'CLOSE', '', '<i class="jico"></i>', true]];
+      el.innerHTML = `<div class="jp jp-menu"><div class="jm-top"><b>${esc(G.name)}</b>${money()}<span class="jm-badges">${BADGES.map(b => `<i class="${G.badges.includes(b.id) ? 'got' : ''}" style="--c:${b.col}" title="${esc(b.name)}"></i>`).join('')}</span><small>${h}:${mi}</small></div>
+        ${rows.filter(x => x[4]).map(([a, t, sub, ic]) => `<button data-a="${a}">${ic}<span><b>${t}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`).join('')}<small class="jkeys">↑↓ choose · Enter open · Esc close</small></div>`;
     } else if (kind === 'party') {
       el.innerHTML = `<div class="jp">${head('POKéMON')}<div class="jparty">${G.party.map((m, i) => `<div class="jpslot"><span class="jgrip" title="Drag to move"><i></i><i></i><i></i></span>${monRow(m, i, i === 0 ? '<em class="lead">LEAD</em>' : '')}</div>`).join('')}</div>${G.party.length > 1 ? '<div class="jhint">Drag a Pokémon up or down to change the order. The first one goes out first in battle.</div>' : ''}</div>`;
     } else if (kind === 'mon') {
       const m = G.party[data], s = sp(m.species), st = calcStats(s.base, m.level), max = Prog.hpMax(m.species, m.level);
-      const next = m.level < 100 ? Prog.xpAt(m.species, m.level + 1) - m.xp : 0;
-      el.innerHTML = `<div class="jp">${head(esc(Prog.nameOf(m)), 'party')}<div class="jsum"><img src="${s.sprite}" alt=""><div><b>${esc(s.display)}</b> Lv ${m.level} ${typeChips(m.species)}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP · ${next} XP to next level · Friendship ${'♥'.repeat(1 + Math.floor(m.friendship / 64))}</small></div></div>
+      const lo = Prog.xpAt(m.species, m.level), hi = m.level < 100 ? Prog.xpAt(m.species, m.level + 1) : lo, next = Math.max(0, hi - m.xp), xpK = hi > lo ? Math.max(0, Math.min(1, (m.xp - lo) / (hi - lo))) : 1;
+      el.innerHTML = `<div class="jp">${head(esc(Prog.nameOf(m)), 'party')}<div class="jsum"><img src="${s.sprite}" alt=""><div><b>${esc(s.display)}</b> Lv ${m.level} ${typeChips(m.species)}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP</small><div class="jhp jxp"><i style="width:${(xpK * 100).toFixed(0)}%"></i></div><small>${m.level < 100 ? `${next} XP to Lv ${m.level + 1}` : 'Max level'} · Friendship <span class="jheart">${'♥'.repeat(1 + Math.floor(m.friendship / 64))}</span></small></div></div>
         <div class="jstats">${[['ATK', st.atk], ['DEF', st.def], ['SP.ATK', st.spa], ['SP.DEF', st.spd], ['SPEED', st.spe]].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')}</div>
         <div class="jmoves">${m.moves.map((id, i) => `<div style="--c:${TYPE_COLORS[MOVES[id].type]}"><b>${esc(MOVES[id].name)}</b><small>${MOVES[id].type} · ${MOVES[id].cat} · ${MOVES[id].power || '-'} pow · PP ${m.pp[i]}/${MOVES[id].pp}</small></div>`).join('')}</div>
         <div class="jrow">${data > 0 ? `<button data-a="lead" data-m="${data}">Put first</button>` : ''}<small>Met: ${esc(m.met || 'Valoria')} · ${esc(ITEMS[m.ball] ? ITEMS[m.ball].name : 'Poké Ball')}</small></div></div>`;
     } else if (kind === 'bag') {
-      const pocket = data || 'items', P0 = { items: 'Items', medicine: 'Medicine', balls: 'Poké Balls', tms: 'TMs', key: 'Key Items' };
-      const list = Object.keys(G.bag).filter(k => ITEMS[k].pocket === pocket);
-      el.innerHTML = `<div class="jp">${head('BAG')}<div class="jtabs">${Object.entries(P0).map(([k, t]) => `<button data-a="pocket" data-p="${k}" class="${k === pocket ? 'on' : ''}">${t}</button>`).join('')}</div>
-        ${list.length ? list.map(k => `<button class="jitem" data-a="item" data-i="${k}"><b>${esc(ITEMS[k].name)}</b><span>×${G.bag[k]}</span><small>${esc(ITEMS[k].desc)}</small></button>`).join('') : '<div class="jempty">Nothing here yet.</div>'}
-        <div class="jrow"><small>Money: ¥${G.money}</small></div></div>`;
+      // the pocket you last looked in opens again
+      const pocket = S.pocket = data || S.pocket || 'items', list = bagIn(pocket);
+      el.innerHTML = `<div class="jp jp-bag">${head(pix('bag', '#d8803a', '#f0d048') + 'BAG')}<div class="jtabs jtabs-bag">${Object.entries(POCKETS).map(([k, t]) => { const n = bagIn(k).length; return `<button data-a="pocket" data-p="${k}" class="${k === pocket ? 'on' : ''}">${t}${n ? `<em>${n}</em>` : ''}</button>`; }).join('')}</div>
+        <div class="jlist">${list.length ? list.map(k => { const it = ITEMS[k]; return `<button class="jitem${usable(it) ? '' : ' passive'}" data-a="item" data-i="${k}">${itemIcon(k)}<b>${esc(it.name)}</b><span>×${G.bag[k]}</span><small>${esc(it.desc)}</small></button>`; }).join('') : `<div class="jempty">${EMPTY[pocket]}</div>`}</div>
+        <div class="jfoot">${money()}<small class="jkeys">←→ pocket · Enter use · Esc back</small></div></div>`;
     } else if (kind === 'useOn') {
       const it = ITEMS[data];
-      el.innerHTML = `<div class="jp">${head('Use ' + esc(it.name) + ' on...', 'bag')}${G.party.map((m, i) => monRow(m, i, canUse(it, m) ? '<em class="ok">ABLE</em>' : '<em>-</em>')).join('')}</div>`;
+      el.innerHTML = `<div class="jp">${head('Use on which Pokémon?', 'bag')}<div class="juse-it">${itemIcon(data)}<div><b>${esc(it.name)}</b> <small class="jn">×${bagN(data)}</small><small>${esc(it.desc)}</small></div></div>
+        ${G.party.map((m, i) => monRow(m, i, useTag(it, m), canUse(it, m) ? '' : 'no')).join('')}</div>`;
       el.dataset.item = data;
     } else if (kind === 'dex') {
       const seen = Object.keys(G.dex.seen).length, caught = Object.keys(G.dex.caught).length;
@@ -861,9 +972,10 @@ const Journey = (() => {
     } else if (kind === 'shop') {
       const stock = S.map.stock || ['poke', 'potion'];
       const mode = data || 'buy';
-      const list = mode === 'buy' ? stock : Object.keys(G.bag).filter(k => ITEMS[k].price > 0);
-      el.innerHTML = `<div class="jp">${head('POKé MART · ¥' + G.money, 'close')}<div class="jtabs"><button data-a="shopmode" data-p="buy" class="${mode === 'buy' ? 'on' : ''}">Buy</button><button data-a="shopmode" data-p="sell" class="${mode === 'sell' ? 'on' : ''}">Sell</button></div>
-        ${list.length ? list.map(k => { const pr = mode === 'buy' ? ITEMS[k].price : Math.floor(ITEMS[k].price / 2); return `<div class="jshop"><div><b>${esc(ITEMS[k].name)}</b> <small>${mode === 'sell' ? 'You have ' + bagN(k) : esc(ITEMS[k].desc)}</small></div><span>¥${pr}</span>${[1, 5, 10].map(q => `<button data-a="${mode}" data-i="${k}" data-q="${q}" ${mode === 'buy' ? (G.money < pr * q ? 'disabled' : '') : (bagN(k) < q ? 'disabled' : '')}>×${q}</button>`).join('')}</div>`; }).join('') : '<div class="jempty">Nothing to sell.</div>'}</div>`;
+      const list = mode === 'buy' ? stock : Object.keys(ITEMS).filter(k => bagN(k) > 0 && ITEMS[k].price > 0);
+      el.innerHTML = `<div class="jp jp-shop">${head('POKé MART ' + money(), 'close')}<div class="jtabs"><button data-a="shopmode" data-p="buy" class="${mode === 'buy' ? 'on' : ''}">Buy</button><button data-a="shopmode" data-p="sell" class="${mode === 'sell' ? 'on' : ''}">Sell</button></div>
+        ${list.length ? list.map(k => { const pr = mode === 'buy' ? ITEMS[k].price : Math.floor(ITEMS[k].price / 2); return `<div class="jshop">${itemIcon(k)}<div><b>${esc(ITEMS[k].name)}</b> <small>${mode === 'sell' ? '' : esc(ITEMS[k].desc) + ' · '}In bag: ${bagN(k)}</small></div><span class="jprice">¥${pr}</span>${[1, 5, 10].map(q => `<button data-a="${mode}" data-i="${k}" data-q="${q}" title="${mode === 'buy' ? 'Buy' : 'Sell'} ${q} for ¥${pr * q}" ${mode === 'buy' ? (G.money < pr * q ? 'disabled' : '') : (bagN(k) < q ? 'disabled' : '')}>×${q}</button>`).join('')}</div>`; }).join('') : '<div class="jempty">Nothing to sell.</div>'}
+        <div class="jfoot"><small>${mode === 'buy' ? 'Prices are per item.' : 'Items sell for half their price.'}</small><small class="jkeys">Enter ${mode} · Esc leave</small></div></div>`;
     } else if (kind === 'pc') {
       el.innerHTML = `<div class="jp jp-wide">${head('POKéMON STORAGE', 'close')}<div class="jpc"><div><b>Party (${G.party.length}/6)</b>${G.party.map((m, i) => monRow(m, i, '<em>Deposit</em>').replace('data-m=', 'data-a="dep" data-m=')).join('')}</div>
         <div><b>Box (${G.box.length})</b>${G.box.length ? G.box.map((m, i) => monRow(m, i, '<em>Withdraw</em>').replace('data-m=', 'data-a="wd" data-m=')).join('') : '<div class="jempty">The box is empty.</div>'}</div></div></div>`;
@@ -872,6 +984,27 @@ const Journey = (() => {
       el.innerHTML = `<div class="jp jp-wide">${head('CHOOSE YOUR PARTNER', 'none')}<div class="jtabs">${STARTERS.map(([n], i) => `<button data-a="region" data-p="${i}" class="${i === r ? 'on' : ''}">${n}</button>`).join('')}</div>
         <div class="jstart">${trio.map(s => `<button data-a="pickStarter" data-i="${s}"><img src="${sp(s).sprite}" alt=""><b>${esc(dname(s))}</b>${typeChips(s)}</button>`).join('')}</div><div class="jrow"><small>${region} starters. Pick any region's trio!</small></div></div>`;
     }
+    // by keyboard, the cursor stays on the same button (or goes to the first thing worth picking)
+    if (S.kb) {
+      const all = navButtons(el), f = (was && all.find(b => btnKey(b) === was)) || all.find(b => b.matches('.jmon:not(.no)')) || all.find(b => b.matches('.jitem, .jmon, .jp-menu > button, .jstart button, .jshop button')) || all[0];
+      if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'nearest' }); }
+    }
+  }
+  // Esc / X on a panel: one screen back (a summary to the party, choosing who gets an item to the bag, a list to the
+  // menu); from the menu, the shop or the PC, close it
+  const BACK = { mon: 'party', useOn: 'bag', party: 'menu', bag: 'menu', dex: 'menu', card: 'menu' };
+  function menuBack() {
+    if (S.menu === 'starter') return;
+    sfx('lock');
+    const to = BACK[S.menu];
+    if (to) renderPanel(S.menu = to); else closeMenu();
+  }
+  function pocketStep(d) {
+    const keys = Object.keys(POCKETS), i = keys.indexOf(S.pocket || 'items');
+    sfx('lock');
+    renderPanel('bag', keys[(i + d + keys.length) % keys.length]);
+    const f = ui.panel.querySelector('.jitem') || ui.panel.querySelector('.jtabs .on');
+    if (f) f.focus({ preventScroll: true });
   }
   // the party list: drag a Pokémon up or down to reorder it (mouse: anywhere on its row; touch: by its grip, so the
   // list still scrolls). The others slide aside to show where it will land; a plain tap still opens its summary.
@@ -927,7 +1060,7 @@ const Journey = (() => {
     if (a === 'party') return renderPanel(S.menu = 'party');
     if (a === 'bag') return renderPanel(S.menu = 'bag');
     if (k === 'party' && b.dataset.m != null) return renderPanel(S.menu = 'mon', +b.dataset.m);
-    if (a === 'lead') { const i = +b.dataset.m; G.party.unshift(G.party.splice(i, 1)[0]); return renderPanel(S.menu = 'party'); }
+    if (a === 'lead') { const i = +b.dataset.m; G.party.unshift(G.party.splice(i, 1)[0]); save(); return renderPanel(S.menu = 'party'); }
     if (a === 'pocket') return renderPanel('bag', b.dataset.p);
     if (a === 'item') {
       const it = ITEMS[b.dataset.i];
@@ -1053,10 +1186,28 @@ const Journey = (() => {
       return;
     }
     if (S.evoStop && (e.code === 'KeyX' || e.code === 'Escape' || e.code === 'Backspace')) { S.evoStop(); return; }
-    if (S.menu) { if (e.code === 'Escape' || e.code === 'KeyM') { if (S.menu === 'starter') return; S.menu === 'menu' || S.menu === 'shop' || S.menu === 'pc' ? closeMenu() : renderPanel(S.menu = 'menu'); } return; }
+    // a panel: arrows move the cursor (left / right turn the bag's pockets), Enter / Space / Z pick, Esc / X go back a
+    // screen, M closes the menu
+    if (S.menu) {
+      S.kb = true;
+      if (e.code === 'KeyM') { e.preventDefault(); if (S.menu !== 'starter') { sfx('lock'); closeMenu(); } return; }
+      if (['Escape', 'KeyX', 'Backspace'].includes(e.code)) { e.preventDefault(); menuBack(); return; }
+      if (k && k !== 'run') {
+        e.preventDefault();
+        if (S.menu === 'bag' && (k === 'left' || k === 'right')) return pocketStep(k === 'left' ? -1 : 1);
+        if (!navMove(ui.panel, k) && (k === 'up' || k === 'down')) { const p = ui.panel.querySelector('.jp'); if (p) p.scrollBy(0, DIRS[k][1] * 120); }
+        return;
+      }
+      if (['Enter', 'Space', 'KeyZ', 'KeyE'].includes(e.code)) {
+        e.preventDefault();
+        const f = document.activeElement;
+        if (f && f.tagName === 'BUTTON' && ui.panel.contains(f)) f.click(); else navMove(ui.panel, 'down');
+      }
+      return;
+    }
     if (k) { S.keys.add(k); e.preventDefault(); return; }
     if (['Enter', 'Space', 'KeyE', 'KeyZ'].includes(e.code)) { e.preventDefault(); interact(); return; }
-    if ((e.code === 'Escape' || e.code === 'KeyM') && !S.event) { openMenu('menu'); e.preventDefault(); }
+    if ((e.code === 'Escape' || e.code === 'KeyM') && !S.event) { S.kb = true; openMenu('menu'); e.preventDefault(); }
   }
   function onKeyUp(e) { const k = KEYMAP[e.code]; if (k) S.keys.delete(k); }
   // touch: a stick on the left, A / B on the right, a menu button
@@ -1093,8 +1244,10 @@ const Journey = (() => {
     ui = { dialog: $q('.jdialog'), panel: $q('.jpanel'), evo: $q('.jevo'), fade: $q('.jfade'), banner: $q('.jbanner'), chapter: $q('.jchapter'), touch: $q('.jtouch'), bmenu: bm };
     ui.panel.addEventListener('click', panelClick);
     ui.panel.addEventListener('pointerdown', partyDrag);
+    ui.panel.addEventListener('pointerdown', () => { S.kb = false; }, true);
+    addEventListener('keydown', battleMenuKey, true);
     ui.dialog.addEventListener('click', e => { if (!e.target.closest('button')) advance(); });
-    $q('.jmenu-btn').onclick = () => { if (S.menu) closeMenu(); else if (!S.event) openMenu('menu'); };
+    $q('.jmenu-btn').onclick = () => { S.kb = false; if (S.menu) closeMenu(); else if (!S.event) openMenu('menu'); };
     bindTouch();
     addEventListener('keydown', onKey);
     addEventListener('keyup', onKeyUp);

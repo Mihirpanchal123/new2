@@ -1,6 +1,7 @@
 // Chapter 6, played by the bot (tools/test-play.mjs runs this; see the Chapter 2 scenario there for the style)
 export default async function (t) {
   const { talk, goto, trigger, grass, beat, beatAt, expect, policy, boost, G } = t;
+  const s0 = await G('G.bag.shard || 0');                 // shards carried in from the chapter before (0 when this chapter runs on its own)
   await boost(52);
   await policy(`P.answers = [['Heal your', 0]]; P.potion = 2`);
   // ---- Route 6 (from the Mistral side; never west into Mistral)
@@ -76,7 +77,7 @@ export default async function (t) {
   await talk('the drill, switched off', 'ironmine3', [10, 2]);
   await talk('Miner Sal (after)', 'ironmine3', 'minerD');
   await talk('hidden item: Meteor Shard deep in the east tunnel', 'ironmine3', [27, 10], { on: true });
-  await expect('the Meteor Shard', `G.bag.shard === 1`);
+  await expect('the Meteor Shard', `G.bag.shard === ${s0 + 1}`);
   // ---- back in town: the miners are home
   await talk('a freed miner by the mine', 'ironridge', 'miner1');
   await talk('a freed miner on the main street', 'ironridge', 'miner2');

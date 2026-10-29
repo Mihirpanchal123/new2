@@ -36,7 +36,7 @@
   // ---- trainers: Victory Road (50-53), the Elite Four (52-56), the Champion (56-60)
   Object.assign(TRAINERS, {
     c8vera: { team: [['ninetales', 50], ['starmie', 50], ['ampharos', 51]], pay: 22, theme: 'volcano', before: 'Seven badges, huh? So do I. Only one of us is getting out of this cave on top!', lose: 'Seven badges... and still not enough.', after: 'Everyone on Victory Road has seven badges. Not everyone has what it takes for the eighth step.' },
-    c8koji: { team: [['hitmonlee', 50], ['hitmonchan', 50], ['machamp', 51]], pay: 22, theme: 'volcano', before: 'HIYAA! I train in the dark so my fists see what my eyes cannot!', lose: 'My fists... saw nothing coming.', after: 'Bram of the Elite Four is my master\'s master. Bring Psychic, Flying or Fairy moves - and courage.' },
+    c8koji: { team: [['hitmonlee', 50], ['hitmonchan', 50], ['machamp', 51]], pay: 22, theme: 'volcano', before: 'HIYAA! I train in the dark so my fists see what my eyes cannot!', lose: 'My fists... saw nothing coming.', after: 'Bram of the Elite Four is my master\'s master. Psychic, Flying or Fairy for his fighters, Water or Grass for his rocks - and courage.' },
     c8dorian: { team: [['aggron', 51], ['skarmory', 51], ['rhydon', 52]], pay: 24, theme: 'volcano', before: 'I\'ve walked this road thirty years and never reached the top. Maybe today I\'ll stop you instead!', lose: 'Thirty-one years, then.', after: 'Hidden things glow in this cave. Look in the corners - the old meteor scattered its pieces even down here.' },
     c8rowan: { team: [['scizor', 51], ['gyarados', 52], ['gliscor', 52]], pay: 22, theme: 'volcano', before: 'The League is right above us. Let\'s see if you deserve the daylight!', lose: 'Right. Daylight\'s yours.', after: 'There\'s a girl in a blue cap waiting near the exit. She\'s been pacing for hours.' },
     c8wen: { team: [['dragonair', 51], ['gabite', 52], ['altaria', 53]], pay: 24, theme: 'volcano', before: 'Dragons sleep in the deepest caves. Wake mine - if you dare!', lose: 'Their roar... went quiet.', after: 'Talon of the Elite Four raised dragons from eggs. Ice and Fairy moves - and Dragon moves, if you\'re brave.' },
@@ -256,7 +256,7 @@
     J.set('champion');
     await J.say(['The meteor\'s stones answer to the bond between a trainer and their Pokémon. Today all of Valoria saw yours.', 'Go home for a while, Champion. Someone there will want to hear all about it.'], 'aurelia');
     await J.travel('willowbrook', 12, 9, 'down');
-    await J.say(['Back in Willowbrook, the town square is just as you left it on that first morning.', 'Mom is waiting at the door, and Professor Hazel has already called twice. Sora\'s Staraptor circles overhead.', 'The journey that began with one Pokémon from Hazel\'s lab is complete... but Valoria is wide, and there is always another road.']);
+    await J.say(['Back in Willowbrook, the town square is just as you left it on that first morning.', 'Mom is waiting at the door, and the lights are on in Professor Hazel\'s lab. Sora\'s Staraptor circles overhead.', 'The journey that began with one Pokémon from Hazel\'s lab is complete... but Valoria is wide, and there is always another road.']);
     await J.chapter('The End', 'Thank you for playing!');
   }
   on('c8champion', { sets: ['c8champ', 'champion', 'c8hofTeam'] }, async (J, n) => {

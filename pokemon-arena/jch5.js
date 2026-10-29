@@ -303,7 +303,7 @@
     await J.say('So that is how it ends. I am glad I could not see it - it was better to watch. The Mind Badge is yours.', 'ezra');
     J.badge('mind');
     await J.give('tm:psychic');
-    await J.say(['That TM holds Psychic: the purest strength of the mind. Teach it to a Pokémon that trusts you.', 'Vex went north, toward the Skyspire. The road there runs east first - Route 6, to the mining city of Ferrum.', 'Nova leads the gym there. Steel, all the way through. Keep your bond close, {NAME}. It is the one thing Vex cannot forge.'], 'ezra');
+    await J.say(['That TM holds Psychic: the purest strength of the mind. Teach it to a Pokémon that trusts you.', 'Vex went north, toward the Skyspire. The road there runs east first - Route 6, to the mining city of Ironridge.', 'Nova leads the gym there. Steel, all the way through. Keep your bond close, {NAME}. It is the one thing Vex cannot forge.'], 'ezra');
     await J.chapter('Chapter 5 complete!', 'Next: Chapter 6 - Iron Will');
     J.set('ch6'); J.refresh();
     await J.chapter('Chapter 6', 'Iron Will');

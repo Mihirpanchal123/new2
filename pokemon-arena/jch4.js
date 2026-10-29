@@ -218,7 +218,7 @@
     await J.say('Then beat me, grandpa! Oh wait - your Pokémon are already worn out from my grunts.', 'rhea');
     await J.face('rhea', 'down'); await J.face('grunt4', 'down'); await J.face('taro', 'down');
     await J.emote('rhea', '!');
-    await J.say(['Who let a kid up here?! ...Hold on. Purple sneakers, annoying face...', 'You\'re the brat Kael keeps whining about! I\'m Rhea - the newest Admin of Team Eclipse, and I don\'t do patience.'], 'rhea');
+    await J.say(['Who let a kid up here?! ...Hold on. That annoying face...', 'You\'re the brat Kael keeps whining about! I\'m Rhea - the newest Admin of Team Eclipse, and I don\'t do patience.'], 'rhea');
     if (await J.battle('c4rhea') !== 'win') return;
     await J.say(['No, no, NO! My grunts, my drill, my perfect record - all wrecked by a kid!', 'Fine! Keep your smelly mountain. But Director Vex will hear about this - and then you\'ll be sorry!', 'Team Eclipse, we\'re out of here!'], 'rhea');
     await J.fade(() => { J.set('c4rhea'); J.hideNpc('rhea'); J.hideNpc('grunt4'); });
@@ -233,7 +233,7 @@
     J.badge('ember');
     await J.give('tm:flamethrower');
     await J.say(['That TM holds Flamethrower. Strong and steady - like a good forge fire.', 'And {NAME}... Eclipse is after the meteor everywhere. That Rhea won\'t be the last of them.'], 'taro');
-    await J.say('The mist on Route 5 is lifting - the road north is open again. Ezra and the Mind Badge are somewhere in that fog. Go on, kid!', 'taro');
+    await J.say('The road north to Route 5 is open again - mind the mist, it never really lifts. Ezra and the Mind Badge are somewhere in that fog. Go on, kid!', 'taro');
     await J.chapter('Chapter 4 complete!', 'Next: Chapter 5 - Mind over Mist');
     J.set('ch5'); J.refresh();
     await J.chapter('Chapter 5', 'Mind over Mist');

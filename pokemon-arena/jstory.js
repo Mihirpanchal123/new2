@@ -56,10 +56,10 @@ const JStory = (() => {
   const TRAINERS = {
     r1tim: { team: [['pidgey', 3], ['starly', 4]], pay: 16, theme: 'forest', before: 'Hey! You just got your first Pokémon, right? My shorts say I\'m ready! Battle!', lose: 'My shorts... they failed me.', after: 'I\'m gonna train in the grass until my Pidgey is huge!' },
     r1mia: { team: [['caterpie', 4], ['weedle', 4]], pay: 16, theme: 'forest', before: 'Oh! A new trainer! Let\'s see whose Pokémon are cuter!', lose: 'Okay, okay... yours are cute too.', after: 'Bug Pokémon grow up fast. Caterpie becomes a Butterfree in no time!' },
-    wwRick: { team: [['weedle', 6], ['kakuna', 7]], pay: 12, theme: 'forest', before: 'Shh! You\'ll scare the bugs! ...Fine, you\'ll scare MY bugs! Battle!', lose: 'My net... has a hole in it.', after: 'There are people in black clothes deeper in the forest. They don\'t look like bug catchers.' },
+    wwRick: { team: [['weedle', 6], ['kakuna', 7]], pay: 12, theme: 'forest', before: 'Shh! You\'ll scare the bugs! ...Fine, you\'ll scare MY bugs! Battle!', lose: 'My net... has a hole in it.', after: 'There are people in purple clothes deeper in the forest. They don\'t look like bug catchers.' },
     wwLily: { team: [['caterpie', 6], ['metapod', 7], ['venipede', 7]], pay: 12, theme: 'forest', before: 'This path is my bug-hunting ground! Pay the toll - in battle!', lose: 'Bzzt... you win.', after: 'Luna, the gym leader, ran north toward the old tree. She looked worried.' },
     grunt1: { team: [['zubat', 7], ['meowth', 8]], pay: 40, theme: 'forest', before: 'Kid stuff! Team Eclipse doesn\'t lose to rookies!', lose: 'What?! The Director will hear about this...', look: 'grunt', name: 'Eclipse Grunt' },
-    grunt2: { team: [['venipede', 8], ['sandile', 9]], pay: 40, theme: 'forest', before: 'You beat my partner? Then I\'ll crush you myself!', lose: 'No way... retreat! RETREAT!', look: 'grunt', name: 'Eclipse Grunt' },
+    grunt2: { team: [['scraggy', 8], ['sandile', 9]], pay: 40, theme: 'forest', before: 'You beat my partner? Then I\'ll crush you myself!', lose: 'No way... retreat! RETREAT!', look: 'grunt', name: 'Eclipse Grunt' },
     g1fern: { team: [['oddish', 9], ['bellsprout', 10]], pay: 24, theme: 'stadium', before: 'Smell the flowers... they\'re the last thing you\'ll notice before you lose!', lose: 'My bouquet... wilted.', after: 'Luna\'s Pokémon can heal themselves by draining HP. End it fast!' },
     g1ivo: { team: [['shroomish', 11]], pay: 20, theme: 'stadium', before: 'You found your way through the vines? Not past me!', lose: 'Ugh, the vines were my only trick.', after: 'Fire, Flying, Bug, Poison and Ice moves hit Grass types hard.' },
     g1tess: { team: [['bellsprout', 10], ['oddish', 11]], pay: 24, theme: 'stadium', before: 'One more step and you\'re in Luna\'s garden. Prove you belong!', lose: 'Bloom where you\'re planted... I guess I\'m planted here.', after: 'Go on. She\'s been looking forward to this.' },
@@ -106,7 +106,7 @@ const JStory = (() => {
     await J.heal(true);
     await J.say('Your Pokémon look full of energy! Take care out there.', n);
   });
-  on('tv', {}, J => J.say(J.pick(['It\'s a quiz show. "Which Pokémon evolves with a Moon Stone?" ...The audience is stumped.', 'A movie: a boy and his Pikachu walk toward the sunset. You feel ready for adventure.', 'Weather report: sunny all over Valoria, with a chance of wild Pidgey.', 'A news flash: "Strange people in black seen near Whisperwood Forest..."'])));
+  on('tv', {}, J => J.say(J.pick(['It\'s a quiz show. "Which Pokémon evolves with a Moon Stone?" ...The audience is stumped.', 'A movie: a boy and his Pikachu walk toward the sunset. You feel ready for adventure.', 'Weather report: sunny in the south, snow in the far north, and a chance of wild Pidgey.', J.flag('luna_back') ? 'A news flash: "Team Eclipse sightings reported across Valoria. Trainers are urged to be careful..."' : 'A news flash: "Strange people in purple seen near Whisperwood Forest..."'])));
   on('myPc', {}, J => J.say('It\'s your PC. There\'s an email from Mom: "Don\'t forget to change your underwear every day!" ...Moving on.'));
   on('labPc', {}, J => J.say('The screen is full of notes about Mega Evolution: "Bond resonance... meteor fragments... the Skyspire?"'));
   on('ballstand', {}, J => J.say(J.flag('starter') ? 'The table is empty. Three new trainers set out from here today.' : 'Three Poké Balls rest on the table. Talk to the Professor first!'));
@@ -122,6 +122,8 @@ const JStory = (() => {
   on('hazel', { sets: ['starter', 'rival1', 'dex'] }, async (J, n) => {
     if (J.flag('dex')) {
       if (!J.badges()) return J.say('Head north on Route 1 to Verdant Town. Luna, the gym leader there, is a fine first challenge!', n);
+      if (J.flag('champion')) return J.say('The Champion of Valoria, standing in my lab! I always knew that first morning was the start of something.', n);
+      if (J.badges() > 1) return J.say(`${J.badges()} badges! And your Pokémon trust you more every time I see you. That trust is the seed of Mega Evolution, you know.`, n);
       return J.say('A badge already! And your Pokémon trust you - I can see it. That trust is the seed of Mega Evolution, you know.', n);
     }
     await J.say(['Ah, {NAME}! There you are. Welcome to my lab!', 'I study the bond between people and Pokémon - and the Mega Evolution it can awaken.', 'But every great bond starts with a first partner. On the table are three Pokémon.', 'I\'ve got trios from every region, so take your time. Choose the one that speaks to you!'], n);
@@ -185,7 +187,7 @@ const JStory = (() => {
     if (have > 0) {
       const done = (J.get('shardsGiven') || 0) + have;
       J.take('shard', have); J.set('shardsGiven', done);
-      await J.say(`A Meteor Shard! And it\'s humming... Splendid! That makes ${done} of 12.`, n);
+      await J.say(`${have > 1 ? have + ' Meteor Shards' : 'A Meteor Shard'}! And ${have > 1 ? 'they\'re' : 'it\'s'} humming... Splendid! That makes ${done} of 12.`, n);
       await J.give('rarecandy', have); J.money(1000 * have);
       await J.say(done >= 12 ? 'All twelve! The sky over the Skyspire will remember this...' : 'Keep your eyes open. Some say a shard rests in every corner of Valoria.', n);
       return;
@@ -201,7 +203,7 @@ const JStory = (() => {
   });
   on('clerk', {}, async (J, n) => { await J.say('Welcome! How may I help you?', n); await J.shop(); });
   on('boxPc', {}, J => J.pc());
-  on('gymStatue', {}, J => J.say(J.flag('badge.leaf') ? 'VERDANT POKéMON GYM - LEADER: LUNA\nWinning trainers: {NAME}' : 'VERDANT POKéMON GYM - LEADER: LUNA\nWinning trainers: SORA... the ink is still wet!'));
+  on('gymStatue', {}, J => J.say(J.flag('badge.leaf') ? 'VERDANT POKéMON GYM - LEADER: LUNA\nWinning trainers: SORA, {NAME}' : 'VERDANT POKéMON GYM - LEADER: LUNA\nWinning trainers: SORA... the ink is still wet!'));
   on('cutTree', {}, async (J, ctx) => {
     if (!J.has('ridepager')) return J.say('This small tree looks like it could be cut down...');
     const a = await J.ask('This tree looks like it can be cut down! Call Scyther with the Ride Pager?', ['Yes', 'No']);
@@ -209,14 +211,22 @@ const JStory = (() => {
     await J.cut(ctx);
   });
   // ---- Whisperwood: Team Eclipse at the ancient tree
-  on('eclipseForest', { needs: ['!luna_back'], sets: ['luna_back', 'shard1'], battles: ['grunt1', 'grunt2'] }, async J => {
-    await J.say('Hand over the shard buried under this tree, lady! Team Eclipse needs every last fragment!', 'grunt1');
-    await J.say('This tree has stood for a thousand years. You\'ll dig it up over my wilted petals! ...But my team is exhausted.', 'luna');
-    await J.face('luna', 'down'); await J.face('grunt1', 'down'); await J.face('grunt2', 'down');
-    await J.emote('grunt1', '!');
-    await J.say('Who\'s this? A kid? Get lost - this is Team Eclipse business!', 'grunt1');
-    if (await J.battle('grunt1') !== 'win') return;
-    await J.say('You\'re next, kid!', 'grunt2');
+  // (the first grunt stays beaten: lose to the second and only the second is waiting when you come back)
+  on('eclipseForest', { needs: ['!luna_back'], sets: ['luna_back', 'shard1', 'treeGrunt1'], battles: ['grunt1', 'grunt2'] }, async J => {
+    if (!J.flag('treeGrunt1')) {
+      await J.say('Hand over the shard buried under this tree, lady! Team Eclipse needs every last fragment!', 'grunt1');
+      await J.say('This tree has stood for a thousand years. You\'ll dig it up over my wilted petals! ...But my team is exhausted.', 'luna');
+      await J.face('luna', 'down'); await J.face('grunt1', 'down'); await J.face('grunt2', 'down');
+      await J.emote('grunt1', '!');
+      await J.say('Who\'s this? A kid? Get lost - this is Team Eclipse business!', 'grunt1');
+      if (await J.battle('grunt1') !== 'win') return;
+      J.set('treeGrunt1');
+      await J.say('You\'re next, kid!', 'grunt2');
+    } else {
+      await J.face('luna', 'down'); await J.face('grunt1', 'down'); await J.face('grunt2', 'down');
+      await J.emote('grunt2', '!');
+      await J.say('You again? My partner may have gone soft, but I haven\'t!', 'grunt2');
+    }
     if (await J.battle('grunt2') !== 'win') return;
     await J.say('Tch! Director Vex won\'t be happy. Team Eclipse, fall back!', 'grunt2');
     await J.fade(() => { J.set('gruntsFled'); J.hideNpc('grunt1'); J.hideNpc('grunt2'); });
@@ -244,8 +254,8 @@ const JStory = (() => {
   // ---- Sora's second battle, near the end of Route 2
   on('soraRoute2', { needs: ['!rival2'], sets: ['rival2'] }, async J => {
     await J.emote('sora', '!');
-    await J.say(['{NAME}! There you are! I got to Port Coralis first - and look who evolved!', 'Hey, the gym leader there wasn\'t even in. Something\'s up in town... but first: battle me! Let\'s see who\'s grown more!'], 'sora');
     const rs = J.get('rivalStarter') || 'eevee';
+    await J.say(['{NAME}! There you are! I got to Port Coralis first' + (J.grown(rs, 17) !== rs ? ' - and look who evolved!' : ' - and my partner\'s been training nonstop!'), 'Hey, the gym leader there wasn\'t even in. Something\'s up in town... but first: battle me! Let\'s see who\'s grown more!'], 'sora');
     await J.battle({ id: 'rival2', name: 'Sora', look: 'sora', team: [['staravia', 15], [J.grown(rs, 17), 17]], pay: 40, theme: 'forest', canLose: true, before: 'No holding back this time!', lose: 'No way! Again?!', win: 'Ha! Told you I\'d train like crazy!' });
     await J.say(J.lastWin() ? ['Man, you\'re strong... I won\'t lose to you at the gym, though!', 'People in town are talking about a break-in at the museum. Go see!'] : ['Don\'t sweat it - that was a close one!', 'People in town are talking about a break-in at the museum. Go see!'], 'sora');
     await J.walk('sora', ['right', 3]);
@@ -273,7 +283,7 @@ const JStory = (() => {
   });
   on('oldSalt', {}, (J, n) => J.say(J.flag('rex_back') ? ['You took back the meteorite from those crooks? Rex was right about you.', 'They say the ferry will sail to Voltara City soon. Electric town, that one - all sparks and lights.'] : ['Rex and I sailed together, back when we were young. Stubborn as a Wailord, that man.', 'He\'s at the museum now. Someone stole the Coral Meteorite last night, they say.'], n));
   // ---- the museum
-  on('exhibitShip', {}, J => J.say('A model of the S.S. Coralis, the first ship to sail from Valoria to Voltara City.'));
+  on('exhibitShip', {}, J => J.say('A model of the S.S. Coralis, the first ship to sail from Port Coralis to Voltara City.'));
   on('exhibitFossil', {}, J => J.say('Fossils from the sea cliffs: shells, claws, and one very old Omanyte.'));
   on('exhibitStatue', {}, J => J.say('A stone Lapras, carved by the first people of Port Coralis.'));
   on('emptyCase', {}, J => J.say(J.flag('meteorite_back') ? 'THE CORAL METEORITE - It fell into the bay long ago. It glows faintly purple.' : 'THE CORAL METEORITE - ...The case is empty. The glass has been cut.'));
@@ -297,7 +307,7 @@ const JStory = (() => {
   });
   // ---- Seacliff Cave: Admin Kael
   on('kaelCave', { needs: ['museum', '!kael'], sets: ['kael'] }, async J => {
-    await J.say('The meteorite resonates with the shard from Whisperwood... Director Vex will be pleased.', 'kael');
+    await J.say('The meteorite resonates with the shards we\'ve gathered... Director Vex will be pleased.', 'kael');
     await J.face('kael', 'down'); await J.face('grunt5', 'down');
     await J.emote('kael', '!');
     await J.say('Admin Kael, it\'s that kid again!', 'grunt5');

@@ -1,6 +1,7 @@
 // Chapter 5, played by the bot (tools/test-play.mjs runs this; see the Chapter 2 scenario there for the style)
 export default async function (t) {
   const { talk, goto, trigger, grass, beat, beatAt, expect, policy, boost, G, ev } = t;
+  const s0 = await G('G.bag.shard || 0');                 // shards carried in from the chapter before (0 when this chapter runs on its own)
   // the chapter starts at the top of Mt. Cinder's road and never goes back south: keep the path planner from wandering
   // into Chapter 4's maps (and on to edges of maps not written yet) - in the page, for this run only
   await ev(`(() => { delete JMaps.M.route5.edges.s; return true; })()`);
@@ -19,7 +20,7 @@ export default async function (t) {
   await talk('item: Ultra Balls in the north meadow', 'route5', [11, 12]);
   await beat('Picnicker June', 'route5', 'june', 'tr.route5.june', 39);
   await talk('item: Meteor Shard in the clearing', 'route5', [4, 3]);
-  await expect('the Meteor Shard', `G.bag.shard === 1`);
+  await expect('the Meteor Shard', `G.bag.shard === ${s0 + 1}`);
   await talk('hidden item: Full Heal by the pond', 'route5', [20, 6], { on: true });
   await talk('the Mistral sign', 'route5', [12, 2]);
   // ---- Mistral City: the gym is shut, the observatory locked
@@ -54,7 +55,7 @@ export default async function (t) {
   await beat('Eclipse Grunt by the stairs', 'eclipselab', 'grunt1', 'tr.eclipselab.grunt1', 39);
   await talk('item: Super Potion', 'eclipselab', [1, 13]);
   await talk('hidden item: Meteor Shard in the sealed room (a pad away)', 'eclipselab', [19, 13], { on: true });
-  await expect('both shards', `G.bag.shard === 2`);
+  await expect('both shards', `G.bag.shard === ${s0 + 2}`);
   await talk('item: Ultra Ball in the sealed room', 'eclipselab', [20, 11]);
   await beat('the Eclipse Scientist', 'eclipselab', 'sci', 'tr.eclipselab.sci', 39);
   await talk('a humming machine', 'eclipselab', [10, 4]);

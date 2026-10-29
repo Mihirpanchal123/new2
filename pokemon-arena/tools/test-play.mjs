@@ -72,9 +72,19 @@ ws.onmessage = e => {
   if (m.method === 'Page.javascriptDialogOpening') send('Page.handleJavaScriptDialog', { accept: true });
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
 };
-const send = (method, params = {}) => new Promise(r => { const i = ++msgId; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+let failed = false;
+// every request gets an answer within 30 s or the run fails (a lost reply would otherwise leave the run waiting for ever)
+const send = (method, params = {}) => new Promise((r, j) => {
+  const i = ++msgId, t = setTimeout(() => { pending.delete(i); j(new Error(`no reply from the browser to ${method} in 30 s`)); }, 30000);
+  pending.set(i, m => { clearTimeout(t); r(m); });
+  ws.send(JSON.stringify({ id: i, method, params }));
+});
+ws.onclose = () => { for (const [, r] of pending) r({ result: { exceptionDetails: { text: 'the browser connection closed' } } }); pending.clear(); };
 async function ev(expr) {
-  const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
+  let r;
+  // no reply: fail the run with the usual report (while already failing, let the report skip what it cannot read)
+  try { r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); }
+  catch (e) { if (failed) throw e; return die(e.message); }
   if (r.result && r.result.exceptionDetails) throw new Error('page: ' + (r.result.exceptionDetails.exception ? r.result.exceptionDetails.exception.description : r.result.exceptionDetails.text).split('\n')[0]);
   return r.result.result.value;
 }
@@ -296,7 +306,10 @@ function botMain(seed) {
     if (now - mapT < 350) { hold([]); return null; }                    // a new map fading in
     const at = targets.find(t => t.map === here.map && t.x === here.tx && t.y === here.ty);
     const c = center(here.tx, here.ty);
-    if (at && Math.abs(here.x - c.x) < 2.5 && Math.abs(here.y - c.y) < 2.5) { hold([]); return at; }
+    // arrived: anywhere near the middle will do. Turning to face a person next to you walks you up to 3 px toward
+    // them before you bump (up to 8 px upward: the feet sit low in the tile): demanding the exact middle after that turns you back
+    // away to re-centre, and the bot would turn back and forth for ever
+    if (at && Math.abs(here.x - c.x) < 4 && Math.abs(here.y - c.y) < 9) { hold([]); return at; }
     if (at) { steer(c, here); return null; }
     // plan from this tile (again after every step: people walk about)
     if (path && path.length && now - stepT > 2500) {                    // no progress: something is in the way
@@ -341,6 +354,8 @@ function botMain(seed) {
       hold([]); idleT = 0;
       stepT = now; path = null;                                         // time in a battle or a talk is not time stuck; plan afresh after it
       if ((g.type === 'talk' || g.type === 'press') && g.pressed) g.started = true;
+      // the trainer we are walking up to saw us first and started the battle: that is the talk
+      if (g.type === 'talk' && g.npc && s.battle && !g.started) { const n = M[g.map].npcs.find(n => n.id === g.npc); if (n && n.name && PLAYER[1] === n.name) g.started = true; }
       if (g.type === 'trigger' && g.armed) g.started = true;
       if (g.type === 'grass' && s.battle) g.started = true;
       return;
@@ -390,7 +405,6 @@ function botMain(seed) {
 // ---------------------------------------------------------------------
 //  Running goals, with the watchdog
 // ---------------------------------------------------------------------
-let failed = false;
 async function screenshot() {
   const r = await send('Page.captureScreenshot', { format: 'png' });
   const file = path.join(os.tmpdir(), `journey-play-fail-${Date.now()}.png`);
@@ -705,7 +719,10 @@ if (runs('story2')) {
   await beat('Leader Rex', 'gym2', 'rex', 'badge.tide', 24);
   await expect('the Tide Badge, TM Water Pulse and the Exp. Share', `G.badges.includes('tide') && G.bag['tm:water-pulse'] && G.bag.expshare && G.flags.expshare`);
   await talk('the gym statue', 'gym2', [5, 14]);
+  // the ferry sails once Chapter 3 is written: say "Not yet" here (Chapter 3 starts by taking it, from the port)
+  await policy(`P.answers = [['cast off', 1], ['Heal your', 0]]`);
   await talk('the ferryman (Chapter 3 is next)', 'port', 'ferry');
+  await expect('to still be in Port Coralis', `S.map.id === 'port'`);
   // the Exp. Share: a Pokémon that sits a battle out still gets Exp. Points
   // (fainted ones get nothing, as in the main games: heal first)
   if (await G('G.party.length') > 1) {

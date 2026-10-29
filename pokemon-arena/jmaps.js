@@ -270,7 +270,7 @@ const JMaps = (() => {
         { b: 'gym', x: 21, y: 12, to: 'gym2', variant: 1, needs: ['rex_back'], locked: 'gym2Locked' },
         { b: 'house', x: 4, y: 12, to: 'phouse', variant: 3 }, { b: 'house2', x: 10, y: 12, to: 'fhouse' }],
       signs: [{ x: 14, y: 11, text: 'PORT CORALIS\nWhere the sea meets the sky.' }, { x: 19, y: 7, text: 'CORALIS MARITIME MUSEUM\nShips, fossils and a star from the sky.' },
-        { x: 20, y: 17, text: 'CORALIS GYM - Leader: REX\nThe captain of crashing waves.' }, { x: 23, y: 20, text: 'FERRY PIER\nVoltara City - service suspended.' }],
+        { x: 20, y: 17, text: 'CORALIS GYM - Leader: REX\nThe captain of crashing waves.' }, { x: 23, y: 20, text: 'FERRY PIER\nFerries to Voltara City. Ask the ferryman about sailings.' }],
       edges: { w: { to: 'route2', dy: 6 }, n: { to: 'seacliff', dx: -6, needs: ['museum'] } },
       items: [{ x: 31, y: 19, item: 'potion', n: 2, hidden: true }],
       npcs: [{ id: 'guard', x: 16, y: 1, dir: 'down', look: L.sailor, name: 'Sailor Hal', talk: 'caveGuard', show: ['!museum'] },

@@ -1,6 +1,7 @@
 // Chapter 3, played by the bot (tools/test-play.mjs runs this; see the Chapter 2 scenario there for the style)
 export default async function (t) {
   const { talk, goto, trigger, grass, beat, expect, policy, boost, G, stamp } = t;
+  const s0 = await G('G.bag.shard || 0');                 // shards carried in from the chapter before (0 when this chapter runs on its own)
   await boost(33);
   await policy(`P.answers = [['Heal your', 0]]; P.potion = 1; P.wild = 'run'`);
 
@@ -47,7 +48,7 @@ export default async function (t) {
   await expect('the tree cut', `G.flags['cut.route3.3.32']`);
   await talk('item: Ultra Balls behind the tree', 'route3', [1, 31]);
   await talk('hidden item: a Meteor Shard in the nook', 'route3', [2, 33], { on: true });
-  await expect('the first shard', `G.bag.shard === 1`);
+  await expect('the first shard', `G.bag.shard === ${s0 + 1}`);
   await beat('Picnicker Sue', 'route3', 'sue', 'tr.route3.sue', 33);
   await goto('north: Sora is waiting', 'route3', 18, 21);
   await expect('the third battle with Sora', `G.flags.rival3`);
@@ -83,7 +84,7 @@ export default async function (t) {
   }
   await expect('Kael beaten', `G.flags.c3kael && G.flags.c3gruntE`);
   await talk('item: the dropped Meteor Shard', 'powerplant2', [15, 1]);
-  await expect('the second shard', `G.bag.shard === 2`);
+  await expect('the second shard', `G.bag.shard === ${s0 + 2}`);
   await talk('the empty Engine', 'powerplant2', [8, 1]);
   await talk('Mila: full power!', 'powerplant2', 'mila');
   await expect('the power back and the gym open', `G.flags.mila_back`);

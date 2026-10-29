@@ -1,6 +1,7 @@
 // Chapter 4, played by the bot (tools/test-play.mjs runs this; see the Chapter 2 scenario there for the style)
 export default async function (t) {
   const { talk, goto, trigger, grass, beat, beatAt, expect, policy, boost, G, ev } = t;
+  const s0 = await G('G.bag.shard || 0');                 // shards carried in from the chapter before (0 when this chapter runs on its own)
   // until Chapter 3 (Voltara) is written, the bot's path planner trips over route4's west edge to a missing map:
   // drop that edge in the page for this run only (nothing changes once voltara exists)
   await ev(`(() => { if (!JMaps.M.voltara) delete JMaps.M.route4.edges.w; return true; })()`);
@@ -20,7 +21,7 @@ export default async function (t) {
   await talk('hidden item: Full Heal in the ash', 'route4', [25, 13], { on: true });
   await beat('Camper Dex', 'route4', 'dex', 'tr.route4.dex', 36);
   await talk('item: Meteor Shard by the lava', 'route4', [41, 21]);
-  await expect('the Meteor Shard', `G.bag.shard === 1`);
+  await expect('the Meteor Shard', `G.bag.shard === ${s0 + 1}`);
   await talk('the Cinder Town sign on the ridge', 'route4', [41, 4]);
   // ---- Cinder Town
   await goto('on to Cinder Town', 'cinder', 2, 18);
@@ -57,7 +58,7 @@ export default async function (t) {
   await grass('wild Pokémon on the cave floor', 'mtcinder', [[8, 14], [12, 13], [9, 20], [11, 14]], 'run');
   await talk('hidden item: Super Potion', 'mtcinder', [7, 13], { on: true });
   await talk('hidden item: Meteor Shard in the side room', 'mtcinder', [4, 5], { on: true });
-  await expect('both shards', `G.bag.shard === 2`);
+  await expect('both shards', `G.bag.shard === ${s0 + 2}`);
   await talk('item: Revive', 'mtcinder', [12, 4]);
   await beat('Eclipse Grunt in the hot chamber', 'mtcinder', 'grunt2', 'tr.mtcinder.grunt2', 36);
   await talk('item: Ultra Balls', 'mtcinder', [26, 20]);
