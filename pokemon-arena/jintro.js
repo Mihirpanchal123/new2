@@ -673,5 +673,7 @@ const JIntro = (() => {
     raf = requestAnimationFrame(frame);
     return done;
   }
-  return { play, get playing() { return !!root; }, _skip: () => finish(), _advance: () => advance(), _scene: () => sc && sc.id };
+  // _jump(id): cut straight to a scene (tools/make-trailer.mjs); the film's own score stops unless that scene starts one
+  const jump = id => { const i = SCENES.findIndex(s => s.id === id); if (!root || !sc || i < 0) return false; if (!SCENES[i].music) Score.stop(); enter(i); return true; };
+  return { play, get playing() { return !!root; }, _skip: () => finish(), _advance: () => advance(), _scene: () => sc && sc.id, _jump: jump };
 })();
