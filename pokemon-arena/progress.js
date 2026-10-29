@@ -45,7 +45,9 @@ const Prog = (() => {
     const v = (b * foeLevel / 5) * Math.pow((2 * foeLevel + 10) / (foeLevel + myLevel + 10), 2.5) + 1;
     return Math.max(1, Math.floor(v * (trainer ? 1.5 : 1)));
   }
-  // what a member evolves into now. ctx = { why: 'level' | 'item', item, night }
+  // where the evolutions that need a special place happen in Valoria (by map id prefix)
+  const EVO_PLACES = { leafeon: ['whisperwood'], glaceon: ['frostvale', 'route7', 'skyspire'], crabominable: ['frostvale', 'route7', 'skyspire'], magnezone: ['powerplant', 'voltara', 'ironridge', 'ironmine'] };
+  // what a member evolves into now. ctx = { why: 'level' | 'item', item, night, place (the map it levels up on) }
   function evoTarget(m, ctx = {}) {
     for (const to of sp(m.species).evolvesTo) {
       const e = sp(to); if (!e) continue;
@@ -66,6 +68,14 @@ const Prog = (() => {
       }
       if (/\(night\)/.test(how) && !ctx.night) continue;
       if (/\(day\)/.test(how) && ctx.night) continue;
+      // a special place or a known move: when we know where it levelled up (ctx.place), only there / only once it knows
+      // such a move (an Eevee would otherwise turn into Leafeon on any level up, and never wait for a stone)
+      if (ctx.place != null) {
+        if (how === 'Special location') { if (m.level >= (e.minLevel || 1) && (EVO_PLACES[to] || []).some(p => ctx.place.startsWith(p))) return to; continue; }
+        const knows = /^Knows (\w+) move$/.exec(how);
+        // (and, as in the main games, a strong bond: Eevee learns a Fairy move on its own)
+        if (knows) { if (m.friendship >= 160 && (m.moves || []).some(id => DEX.moves[id] && DEX.moves[id].type === knows[1])) return to; continue; }
+      }
       // anything else (a special place, a known move...) evolves at the level the data gives it
       if (m.level >= (e.minLevel || 100)) return to;
     }

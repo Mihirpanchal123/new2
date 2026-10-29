@@ -764,6 +764,9 @@ $('setFlashes').onchange = e => { prefs.flashes = e.target.checked; savePrefs();
 $('setCutins').onchange = e => { prefs.cutins = e.target.checked; savePrefs(); };
 $('setSudden').onchange = e => { prefs.suddenDeath = +e.target.value; savePrefs(); };
 $('setShorts').onchange = e => { prefs.shorts = e.target.checked; applyShorts(prefs.shorts); savePrefs(); };
+// Journey only: money and usable items never run out (journey.js tops them up)
+$('setJourneyInf').checked = !!prefs.journeyInfinite;
+$('setJourneyInf').onchange = e => { prefs.journeyInfinite = e.target.checked; savePrefs(); toast(e.target.checked ? 'Journey: unlimited money & items ON' : 'Journey: unlimited money & items OFF (you keep what you have)', 2500); };
 $('setChannel').oninput = e => { prefs.channel = e.target.value.trim(); Broadcast.opts.channel = prefs.channel; savePrefs(); };
 $('setLength').onchange = e => { settings.hpMult = +e.target.value; };
 $('setPool').onchange = e => { settings.pool = e.target.value; };

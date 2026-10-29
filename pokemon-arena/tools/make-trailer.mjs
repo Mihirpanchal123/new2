@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { remux } from './remux-mp4.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const a = process.argv.find(x => x.startsWith('--' + k)); return a ? (a.includes('=') ? a.split('=')[1] : true) : d; };
@@ -286,6 +287,8 @@ function director(opt) {
     }, 450);
   }
   const waitFor = async (fn, ms = 8000) => { const end = performance.now() + ms; while (performance.now() < end) { if (fn()) return true; await W8(60); } return false; };
+  // start a battle and wait until it is really on screen (a new move row, and the battle clock running)
+  async function battleOn(start) { const old = document.getElementById('rrow0'); start(); await waitFor(() => { const r = document.getElementById('rrow0'); return r && r !== old && S().battle && (!Retro._debug || Retro._debug().T > 0.15); }, 15000); await W8(150); }
   async function endBattle() { fight(false); await drain(); heal(); }
   // to a map, on the nearest open tile to (x, y)
   async function warp(id, x, y, dir = 'down') {
@@ -312,7 +315,7 @@ function director(opt) {
     const tracks = [...scr.getVideoTracks(), ...(aud ? aud.stream.getAudioTracks() : [])];
     const types = opt.webm ? ['video/webm;codecs=vp9,opus', 'video/webm'] : ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus'];
     const mime = types.find(t => MediaRecorder.isTypeSupported(t));
-    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 7_000_000, audioBitsPerSecond: 192_000 });
+    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 6_000_000, videoKeyFrameIntervalDuration: 1000, audioBitsPerSecond: 192_000 });
     const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
     const stopped = new Promise(r => rec.onstop = r);
     log(`recording ${scr.getVideoTracks()[0].getSettings().width}x${scr.getVideoTracks()[0].getSettings().height} as ${mime}${aud ? ' with sound' : ' (no sound)'}`);
@@ -371,15 +374,16 @@ function director(opt) {
     caption('CATCH WILD POKéMON', 'OVER 1,000 SPECIES IN THE POKéDEX', 'br');
     { const st = chStart(2); await warp('route1', 10, 30, 'up'); }
     const keepBag = Object.assign({}, G().bag); G().bag = { master: 1, potion: 3 };
-    Journey._wild('eevee', 12); await waitFor(() => document.querySelector('#rrow0 [data-c=ball]'), 9000); cover(false); mark('catching');
+    await battleOn(() => Journey._wild('eevee', 12)); cover(false); mark('catching');
     await W8(1900);
-    $('#rrow0 [data-c=ball]').click();
+    // throw (again, if the battle was not taking commands yet) until the ball is in the air
+    for (let i = 0; i < 20 && !(S().btl && S().btl.throwing) && !S().dialog; i++) { const bb = $('#rrow0 [data-c=ball]'); if (bb) bb.click(); await W8(300); }
     await waitFor(() => S().dialog, 9000); await W8(1700);
     cover(true); await W8(350); caption(null); await drain(); G().bag = keepBag; heal();
     // a gym leader
     caption('BATTLE TRAINERS & GYM LEADERS', 'REAL-TIME ANIMATED BATTLES', 'br');
     await warp('voltara', 17, 14, 'up');
-    Journey._battle('mila'); await waitFor(() => document.getElementById('rrow0'), 9000); cover(false); mark('gym battle'); fight(true);
+    await battleOn(() => Journey._battle('mila')); cover(false); mark('gym battle'); fight(true);
     await W8(8200);
     cover(true); await W8(350); caption(null); await endBattle();
     // evolving, through the Bag
@@ -408,7 +412,7 @@ function director(opt) {
     showCard('MEGA EVOLVE'); Score.boom(); flash();
     G().party[0].mega = 'charizard-mega-x'; heal();
     await warp('champion', 6, 8, 'up');
-    Journey._battle('c8aurelia'); await waitFor(() => document.getElementById('rrow0'), 9000);
+    await battleOn(() => Journey._battle('c8aurelia'));
     await W8(900); hideCard(); cover(false); mark('Mega battle vs the Champion'); fight(true);
     caption('CHAMPION AURELIA', 'THE FINAL CHALLENGE', 'br');
     await W8(3200); caption(null); await W8(6000);
@@ -417,7 +421,7 @@ function director(opt) {
     caption('FACE LEGENDARY POKéMON', '', 'br');
     await warp('skyspire3', 10, 8, 'up');
     G().party.unshift(G().party.splice(1, 1)[0]); heal();
-    Journey._battle({ wild: true, team: [['deoxys', 60]], theme: 'icecave' }); await waitFor(() => document.getElementById('rrow0'), 9000); cover(false); mark('legendary'); fight(true);
+    await battleOn(() => Journey._battle({ wild: true, team: [['deoxys', 60]], theme: 'icecave' })); cover(false); mark('legendary'); fight(true);
     await W8(5200);
     cover(true); await W8(350); caption(null); await endBattle();
     // the menus
@@ -460,6 +464,9 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 const fd = fs.openSync(out, 'w'), STEP = 4 << 20;
 for (let i = 0; i < res.size; i += STEP) fs.writeSync(fd, Buffer.from(await ev(`__trailer.slice(${i}, ${STEP})`), 'base64'));
 fs.closeSync(fd);
+// the recorder writes a streaming (fragmented) MP4: no duration, no index, so players cannot seek in it and some apps
+// will not take it. Rewrite it as an ordinary MP4 (the same video and sound, not re-encoded)
+if (ext === '.mp4') { const r = remux(fs.readFileSync(out)); if (r) { fs.writeFileSync(out, r.buf); console.log(`${stamp()}  made seekable: ${r.seconds.toFixed(1)} s · ${r.tracks.map(t => `${t.kind === 'vide' ? 'video' : 'audio'} ${t.samples} frames${t.kind === 'vide' ? ` (${t.keyframes} keyframes)` : ''}`).join(' · ')}`); } }
 if (problems.length) console.log('page problems:\n  ' + problems.slice(0, 8).join('\n  '));
 console.log(`${stamp()}  saved ${path.relative(process.cwd(), out)} · ${res.secs.toFixed(1)} s · ${(res.size / 1048576).toFixed(1)} MB · ${res.mime}`);
 await quit(0);

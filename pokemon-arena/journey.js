@@ -44,6 +44,7 @@ const Journey = (() => {
   }
   function save(quiet = true) {
     if (!G) return;
+    topUp();
     G.map = S.map ? S.map.id : G.map;
     if (S.player) { G.x = Math.round(S.player.x); G.y = Math.round(S.player.y); G.dir = S.player.dir; }
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); if (!quiet) toast('Game saved!'); } catch (e) { toast('Could not save (storage full?)'); }
@@ -52,7 +53,20 @@ const Journey = (() => {
   const conds = list => !list || list.every(c => c[0] === '!' ? !G.flags[c.slice(1)] : !!G.flags[c]);
   const bagN = id => G.bag[id] || 0;
   function addItem(id, n = 1) { G.bag[id] = bagN(id) + n; }
-  function takeItem(id, n = 1) { G.bag[id] = Math.max(0, bagN(id) - n); if (!G.bag[id]) delete G.bag[id]; }
+  function takeItem(id, n = 1) { G.bag[id] = Math.max(0, bagN(id) - n); if (!G.bag[id]) delete G.bag[id]; topUp(); }
+  // Settings > "Journey: unlimited money & items" (prefs.journeyInfinite, game.js): the money and every item you can use
+  // or spend (Rare Candies, evolution stones, balls, medicine, Repels; every TM) stay topped up. Key items are left alone:
+  // the story counts some of them (Meteor Shards for Orrin)
+  const INF_MONEY = 999999, INF_N = 99;
+  const infinite = () => typeof prefs === 'object' && !!prefs.journeyInfinite;
+  const endless = id => infinite() && ITEMS[id] && ITEMS[id].pocket !== 'key' && !ITEMS[id].tm;
+  function topUp() {
+    if (!G || !infinite()) return;
+    G.money = Math.max(G.money, INF_MONEY);
+    for (const [k, it] of Object.entries(ITEMS)) if (it.pocket !== 'key') G.bag[k] = it.tm ? Math.max(1, G.bag[k] || 0) : Math.max(INF_N, G.bag[k] || 0);
+  }
+  // how many you have, as the Bag shows it (∞ when it never runs out)
+  const qty = id => endless(id) ? '∞' : '×' + bagN(id);
 
   // =====================================================================
   //  Maps: load, solidity, links
@@ -604,7 +618,7 @@ const Journey = (() => {
       await say(`${Prog.nameOf(m)} grew to Lv. ${m.level}!`, { name: '', face: sp(m.species).sprite });
       for (const id of Prog.movesAt(m.species, m.level)) await learnMove(m, id);
     }
-    if (grew) { const to = Prog.evoTarget(m, { why: 'level' }); if (to) await evolve(m, to); }
+    if (grew) { const to = Prog.evoTarget(m, { why: 'level', place: S.map ? S.map.id : '' }); if (to) await evolve(m, to); }
   }
   async function learnMove(m, id) {
     if (m.moves.includes(id) || !MOVES[id]) return;
@@ -767,7 +781,7 @@ const Journey = (() => {
       const balls = Object.keys(ITEMS).filter(k => ITEMS[k].pocket === 'balls' && bagN(k) > 0);
       if (!balls.length) { toast('You have no Poké Balls!'); return; }
       if (balls.length === 1) return throwBall(balls[0]);
-      return battleMenu('Throw which ball?', balls.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ×${bagN(k)}`, note: ITEMS[k].desc, fn: () => throwBall(k) })));
+      return battleMenu('Throw which ball?', balls.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ${qty(k)}`, note: ITEMS[k].desc, fn: () => throwBall(k) })));
     }
     if (c === 'bag') battleBag();
   }
@@ -776,7 +790,7 @@ const Journey = (() => {
     const meds = Object.keys(ITEMS).filter(k => ITEMS[k].pocket === 'medicine' && bagN(k) > 0 && !ITEMS[k].candy);
     if (!meds.length) { toast('No medicine in your Bag!'); return; }
     const team = state.players[0].team;
-    battleMenu('Use which item?', meds.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ×${bagN(k)}`, note: ITEMS[k].desc,
+    battleMenu('Use which item?', meds.map(k => ({ icon: itemIcon(k), label: `${ITEMS[k].name} ${qty(k)}`, note: ITEMS[k].desc,
       fn: () => battleMenu(`Use ${ITEMS[k].name} on...`, team.map((b, i) => ({
         icon: S.btl.team[i] ? `<img src="${sp(S.btl.team[i].species).sprite}" alt="">` : '',
         label: b.name, note: `${Math.ceil(Math.max(0, b.hp))}/${b.maxhp} HP${b.hp <= 0 ? ' · fainted' : b.status ? ' · ' + b.status.toUpperCase() : ''}${state.players[0].active === i ? ' · in battle' : ''}`,
@@ -933,6 +947,7 @@ const Journey = (() => {
   const btnKey = b => ['a', 'i', 'p', 'q', 'm'].map(k => b.dataset[k] || '').join('|');
   function renderPanel(kind, data) {
     const el = ui.panel;
+    topUp();
     const was = el.contains(document.activeElement) && document.activeElement.tagName === 'BUTTON' ? btnKey(document.activeElement) : null;
     const head = (t, back = 'menu') => `<div class="jp-head"><b>${t}</b><button data-a="${back}" title="Back (Esc)">✕</button></div>`;
     if (kind === 'menu') {
@@ -955,11 +970,11 @@ const Journey = (() => {
       // the pocket you last looked in opens again
       const pocket = S.pocket = data || S.pocket || 'items', list = bagIn(pocket);
       el.innerHTML = `<div class="jp jp-bag">${head(pix('bag', '#d8803a', '#f0d048') + 'BAG')}<div class="jtabs jtabs-bag">${Object.entries(POCKETS).map(([k, t]) => { const n = bagIn(k).length; return `<button data-a="pocket" data-p="${k}" class="${k === pocket ? 'on' : ''}">${t}${n ? `<em>${n}</em>` : ''}</button>`; }).join('')}</div>
-        <div class="jlist">${list.length ? list.map(k => { const it = ITEMS[k]; return `<button class="jitem${usable(it) ? '' : ' passive'}" data-a="item" data-i="${k}">${itemIcon(k)}<b>${esc(it.name)}</b><span>×${G.bag[k]}</span><small>${esc(it.desc)}</small></button>`; }).join('') : `<div class="jempty">${EMPTY[pocket]}</div>`}</div>
+        <div class="jlist">${list.length ? list.map(k => { const it = ITEMS[k]; return `<button class="jitem${usable(it) ? '' : ' passive'}" data-a="item" data-i="${k}">${itemIcon(k)}<b>${esc(it.name)}</b><span>${qty(k)}</span><small>${esc(it.desc)}</small></button>`; }).join('') : `<div class="jempty">${EMPTY[pocket]}</div>`}</div>
         <div class="jfoot">${money()}<small class="jkeys">←→ pocket · Enter use · Esc back</small></div></div>`;
     } else if (kind === 'useOn') {
       const it = ITEMS[data];
-      el.innerHTML = `<div class="jp">${head('Use on which Pokémon?', 'bag')}<div class="juse-it">${itemIcon(data)}<div><b>${esc(it.name)}</b> <small class="jn">×${bagN(data)}</small><small>${esc(it.desc)}</small></div></div>
+      el.innerHTML = `<div class="jp">${head('Use on which Pokémon?', 'bag')}<div class="juse-it">${itemIcon(data)}<div><b>${esc(it.name)}</b> <small class="jn">${qty(data)}</small><small>${esc(it.desc)}</small></div></div>
         ${G.party.map((m, i) => monRow(m, i, useTag(it, m), canUse(it, m) ? '' : 'no')).join('')}</div>`;
       el.dataset.item = data;
     } else if (kind === 'dex') {
@@ -974,7 +989,7 @@ const Journey = (() => {
       const mode = data || 'buy';
       const list = mode === 'buy' ? stock : Object.keys(ITEMS).filter(k => bagN(k) > 0 && ITEMS[k].price > 0);
       el.innerHTML = `<div class="jp jp-shop">${head('POKé MART ' + money(), 'close')}<div class="jtabs"><button data-a="shopmode" data-p="buy" class="${mode === 'buy' ? 'on' : ''}">Buy</button><button data-a="shopmode" data-p="sell" class="${mode === 'sell' ? 'on' : ''}">Sell</button></div>
-        ${list.length ? list.map(k => { const pr = mode === 'buy' ? ITEMS[k].price : Math.floor(ITEMS[k].price / 2); return `<div class="jshop">${itemIcon(k)}<div><b>${esc(ITEMS[k].name)}</b> <small>${mode === 'sell' ? '' : esc(ITEMS[k].desc) + ' · '}In bag: ${bagN(k)}</small></div><span class="jprice">¥${pr}</span>${[1, 5, 10].map(q => `<button data-a="${mode}" data-i="${k}" data-q="${q}" title="${mode === 'buy' ? 'Buy' : 'Sell'} ${q} for ¥${pr * q}" ${mode === 'buy' ? (G.money < pr * q ? 'disabled' : '') : (bagN(k) < q ? 'disabled' : '')}>×${q}</button>`).join('')}</div>`; }).join('') : '<div class="jempty">Nothing to sell.</div>'}
+        ${list.length ? list.map(k => { const pr = mode === 'buy' ? ITEMS[k].price : Math.floor(ITEMS[k].price / 2); return `<div class="jshop">${itemIcon(k)}<div><b>${esc(ITEMS[k].name)}</b> <small>${mode === 'sell' ? '' : esc(ITEMS[k].desc) + ' · '}In bag: ${endless(k) ? '∞' : bagN(k)}</small></div><span class="jprice">¥${pr}</span>${[1, 5, 10].map(q => `<button data-a="${mode}" data-i="${k}" data-q="${q}" title="${mode === 'buy' ? 'Buy' : 'Sell'} ${q} for ¥${pr * q}" ${mode === 'buy' ? (G.money < pr * q ? 'disabled' : '') : (bagN(k) < q ? 'disabled' : '')}>×${q}</button>`).join('')}</div>`; }).join('') : '<div class="jempty">Nothing to sell.</div>'}
         <div class="jfoot"><small>${mode === 'buy' ? 'Prices are per item.' : 'Items sell for half their price.'}</small><small class="jkeys">Enter ${mode} · Esc leave</small></div></div>`;
     } else if (kind === 'pc') {
       el.innerHTML = `<div class="jp jp-wide">${head('POKéMON STORAGE', 'close')}<div class="jpc"><div><b>Party (${G.party.length}/6)</b>${G.party.map((m, i) => monRow(m, i, '<em>Deposit</em>').replace('data-m=', 'data-a="dep" data-m=')).join('')}</div>
@@ -1266,6 +1281,7 @@ const Journey = (() => {
   function start(g) {
     build();
     G = g;
+    topUp();
     active = true;
     document.body.classList.add('journey');
     if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touchUI');
