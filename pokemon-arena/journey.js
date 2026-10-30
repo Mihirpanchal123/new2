@@ -1,15 +1,23 @@
 'use strict';
 // =====================================================================
-//  JOURNEY - the trainer's adventure across Valoria: walk the region's
-//  towns, routes and houses (jmaps.js), talk to its people and follow its
-//  story (jstory.js), catch wild Pokémon in the tall grass, battle
-//  trainers and gym leaders with the animated battle engine (retro.js),
-//  and grow your team (progress.js). Pixel art: jart.js.
+//  JOURNEY - the trainer's adventure: walk a region's towns, routes and
+//  houses (the world's maps), talk to its people and follow its story,
+//  catch wild Pokémon in the tall grass, battle trainers and gym leaders
+//  with the animated battle engine (retro.js), and grow your team
+//  (progress.js). Pixel art: jart.js. Two worlds: Valoria (Journey 1:
+//  jmaps.js, jstory.js, jch*.js) and Meridia (Journey II: m2maps.js,
+//  m2story.js, mch*.js), each with its own save.
 // =====================================================================
 const Journey = (() => {
-  const SAVE_KEY = 'pokemon-arena-journey-v1';
   const TS = 16, WALK = 72, RUN = 128;
-  const { ITEMS, BADGES, STARTERS, TRAINERS, T: TALK, META } = JStory;
+  // the worlds: maps, story, save slot, title and the rival's name. film: the opening film (jintro.js) is Valoria's
+  const WORLDS = {
+    valoria: () => ({ id: 'valoria', key: 'pokemon-arena-journey-v1', maps: JMaps, story: JStory, title: 'POKéMON JOURNEY', sub: 'The Eclipse of Valoria', rival: 'Sora', region: 'Valoria', start: { map: 'home2f', x: 2, y: 3 }, film: true }),
+    meridia: () => ({ id: 'meridia', key: 'pokemon-arena-journey2-v1', maps: MMaps, story: MStory, title: 'POKéMON JOURNEY II', sub: 'The Lost Days of Meridia', rival: 'Juno', region: 'Meridia', start: MStory.START, film: false })
+  };
+  let W, ITEMS, BADGES, STARTERS, TRAINERS, TALK, META;
+  function useWorld(id) { W = (WORLDS[id] || WORLDS.valoria)(); ({ ITEMS, BADGES, STARTERS, TRAINERS, T: TALK, META } = W.story); }
+  useWorld('valoria');
   let G = null;                                        // the saved game
   const S = { map: null, solid: null, ground: [], npcs: [], player: null, keys: new Set(), event: false, menu: null, battle: false, warpLock: null, zoneLock: null, stepAcc: 0, frStep: 0, t: 0, lastT: 0, banner: null, hop: null, raf: 0, dialog: null, lastWin: false, emotes: [] };
   let active = false, root = null, cv = null, ctx = null, ui = null, scale = 3;
@@ -26,13 +34,13 @@ const Journey = (() => {
   //  The saved game
   // =====================================================================
   function newGame(name, outfit) {
-    return { v: 1, name: name || 'Ash', outfit: outfit || 'red', map: 'home2f', x: 2 * TS + 8, y: 3 * TS + 13, dir: 'down', party: [], box: [], bag: {}, money: 3000,
+    return { v: 1, name: name || 'Ash', outfit: outfit || 'red', map: W.start.map, x: W.start.x * TS + 8, y: W.start.y * TS + 13, dir: 'down', party: [], box: [], bag: {}, money: 3000,
       flags: {}, dex: { seen: {}, caught: {} }, badges: [], time: 0, lastCenter: null, steps: 0, repel: 0, created: Date.now() };
   }
-  function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && s.v === 1 && validate(s) ? s : null; } catch (e) { return null; } }
+  function readSave() { try { const s = JSON.parse(localStorage.getItem(W.key) || 'null'); return s && s.v === 1 && validate(s) ? s : null; } catch (e) { return null; } }
   // keep only what still makes sense (a map, Pokémon and moves that exist)
   function validate(s) {
-    if (!JMaps.M[s.map] || typeof s.name !== 'string') return false;
+    if (!W.maps.M[s.map] || typeof s.name !== 'string') return false;
     const okMon = m => m && sp(m.species) && Array.isArray(m.moves) && m.moves.every(id => MOVES[id]) && m.level >= 1 && m.level <= 100;
     s.party = (s.party || []).filter(okMon); s.box = (s.box || []).filter(okMon);
     for (const m of [...s.party, ...s.box]) { m.pp = m.moves.map((id, i) => Math.min(MOVES[id].pp, (m.pp || [])[i] ?? MOVES[id].pp)); m.hp = Math.max(0, Math.min(Prog.hpMax(m.species, m.level), m.hp ?? 0)); m.friendship = m.friendship ?? 70; }
@@ -46,8 +54,8 @@ const Journey = (() => {
     if (!G) return;
     topUp();
     G.map = S.map ? S.map.id : G.map;
-    if (S.player) { G.x = Math.round(S.player.x); G.y = Math.round(S.player.y); G.dir = S.player.dir; }
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); if (!quiet) toast('Game saved!'); } catch (e) { toast('Could not save (storage full?)'); }
+    if (S.player) { G.x = Math.round(S.player.x); G.y = Math.round(S.player.y); G.dir = S.player.dir; G.surf = !!S.surf; }
+    try { localStorage.setItem(W.key, JSON.stringify(G)); if (!quiet) toast('Game saved!'); } catch (e) { toast('Could not save (storage full?)'); }
   }
   const flag = k => !!G.flags[k];
   const conds = list => !list || list.every(c => c[0] === '!' ? !G.flags[c.slice(1)] : !!G.flags[c]);
@@ -71,9 +79,9 @@ const Journey = (() => {
   // =====================================================================
   //  Maps: load, solidity, links
   // =====================================================================
-  const lookOf = l => typeof l === 'string' ? (JMaps.L[l] || OUTFITS[l] || OUTFITS.red) : l;
+  const lookOf = l => typeof l === 'string' ? (W.maps.L[l] || OUTFITS[l] || OUTFITS.red) : l;
   function loadMap(id, x, y, dir) {
-    const m = JMaps.M[id];
+    const m = W.maps.M[id];
     S.map = m;
     G.map = id;
     // the ground, painted once per map (two frames: water ripples, flowers sway)
@@ -81,6 +89,8 @@ const Journey = (() => {
     S.npcs = m.npcs.map(n => ({ ...n, look: lookOf(n.look), px: n.x * TS + 8, py: n.y * TS + 13, homeX: n.x, homeY: n.y, tx: n.x, ty: n.y, step: 0, walkT: 0, moving: null, nextT: 1 + Math.random() * 3 }));
     for (const n of S.npcs) n.frames = JArt.person(n.look);
     S.player = { x, y, dir: dir || 'down', step: 0, walkT: 0, moving: false, frames: JArt.person(lookOf(G.outfit)) };
+    S.surf = !!S.surf && kindAt(...tileOf(x, y)) === 'water';
+    if (m.fly) { G.visited = G.visited || []; if (!G.visited.includes(id)) G.visited.push(id); }
     S.warpLock = tileKey(...tileOf(x, y)); S.zoneLock = S.warpLock;
     refresh();
     palReset();
@@ -89,7 +99,7 @@ const Journey = (() => {
   }
   function refresh() {
     const m = S.map;
-    S.solid = JMaps.solidGrid(m, G.flags);
+    S.solid = W.maps.solidGrid(m, G.flags);
     for (const n of S.npcs) n.hidden = !conds(n.show) || !!G.flags['gone.' + m.id + '.' + n.id];
   }
   const tileOf = (x, y) => [Math.floor(x / TS), Math.floor((y - 3) / TS)];
@@ -101,7 +111,7 @@ const Journey = (() => {
   function blockedTile(tx, ty, who) {
     const m = S.map;
     if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return !edgeFor(tx, ty);
-    if (S.solid[ty][tx]) return true;
+    if (S.solid[ty][tx] && !(who === 'player' && S.surf && kindAt(tx, ty) === 'water')) return true;
     if (who !== 'npc' && npcAtTile(tx, ty)) return true;
     if (who === 'npc' && (S.player && tileKey(...tileOf(S.player.x, S.player.y)) === tileKey(tx, ty))) return true;
     return false;
@@ -169,10 +179,11 @@ const Journey = (() => {
     for (const it of m.items) if (!it.hidden && !G.flags['it.' + m.id + '.' + it.x + '.' + it.y]) list.push({ y: it.y * TS + 12, img: it.item === 'shard' ? JArt.shard() : JArt.ballItem(), x: it.x * TS + 3, abs: it.y * TS + 4 });
     for (const n of S.npcs) if (!n.hidden) list.push({ y: n.py, person: n });
     list.push({ y: p.y + 0.5, person: p, me: true });
-    if (pal.actor && palMon()) list.push({ y: pal.y, pal: true });
+    if (pal.actor && palMon() && !S.surf) list.push({ y: pal.y, pal: true });
     list.sort((a, b) => a.y - b.y);
     for (const o of list) {
       if (o.pal) drawPal();
+      else if (o.me && S.surf) drawSurfer(o.person);
       else if (o.person) drawPerson(o.person);
       else ctx.drawImage(o.img, o.x, o.abs != null ? o.abs : o.y - o.img.height + 1 + (o.dy || 0));
     }
@@ -181,6 +192,11 @@ const Journey = (() => {
     // emotes ("!")
     for (const e of S.emotes) { const o = e.who; ctx.fillStyle = '#ffffff'; ctx.fillRect(o.px - 4 || 0, o.py - 34, 9, 10); ctx.fillStyle = '#202028'; ctx.fillRect(o.px - 4, o.py - 34, 9, 1); ctx.fillRect(o.px - 4, o.py - 25, 9, 1); ctx.fillRect(o.px - 4, o.py - 34, 1, 10); ctx.fillRect(o.px + 4, o.py - 34, 1, 10); ctx.fillStyle = '#e04848'; ctx.fillRect(o.px, o.py - 32, 1, 4); ctx.fillRect(o.px, o.py - 27, 1, 1); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // the Echo (Journey II): a twin map, or every outdoor map during the Long Night, drained of colour
+    if (m.echoOf || (m.kind !== 'inside' && G.flags.longnight && !G.flags.dawn)) {
+      ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(120,140,200,.16)'; ctx.fillRect(0, 0, cv.width, cv.height);
+    }
     if (m.dark) { const gr = ctx.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.25, cv.width / 2, cv.height / 2, cv.height * 0.85); const tint = m.kind === 'cave' ? '14,10,24' : '10,30,10'; gr.addColorStop(0, `rgba(${tint},0)`); gr.addColorStop(1, `rgba(${tint},${m.dark * 2})`); ctx.fillStyle = gr; ctx.fillRect(0, 0, cv.width, cv.height); }
   }
   let BIG = null;
@@ -200,6 +216,42 @@ const Journey = (() => {
     ctx.drawImage(img, x - 8, y - 21);
     const [tx, ty] = tileOf(o.px ?? o.x, o.py ?? o.y);
     if (kindAt(tx, ty) === 'tall' && !o.hopZ) ctx.drawImage(JArt.tallFront(), tx * TS, ty * TS);
+  }
+
+  // ---- Journey II: Surf. You ride a Lapras on the water: its sprite under you, your top half above it
+  const surfer = { actor: null, loading: false };
+  function stepSurfer(dt) {
+    if (!S.surf) return;
+    if (!surfer.actor && !surfer.loading && typeof PixelMons !== 'undefined') { surfer.loading = true; PixelMons.create('lapras').then(a => { surfer.actor = a; }).catch(() => {}); }
+    const p = S.player, [dx, dy] = DIRS[p.dir] || [0, 1];
+    if (surfer.actor) surfer.actor.drive(dt, { moving: true, vx: dx * 60, vy: dy * 60 + (dx ? 0 : 0.01), face: dx || 1 });
+  }
+  function drawSurfer(p) {
+    const x = Math.round(p.x), y = Math.round(p.y), bob = Math.round(Math.sin(S.t * 3) * 1.4);
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(x - 10, y + 1, 20, 1); ctx.fillRect(x - 7, y + 3, 14, 1);
+    if (surfer.actor) { const A = surfer.actor.anim, k = A.bh > 24 ? 24 / A.bh : 1; ctx.drawImage(A.frames[0].img, Math.round(x - A.foot[0] * k), Math.round(y + 3 + bob - A.foot[1] * k), Math.round(A.w * k), Math.round(A.h * k)); }
+    else { ctx.fillStyle = '#5aa8e0'; ctx.fillRect(x - 9, y - 9 + bob, 18, 10); ctx.fillStyle = '#e8dcb0'; ctx.fillRect(x - 6, y - 12 + bob, 12, 5); }
+    const img = personFrame(p); ctx.drawImage(img, 0, 0, img.width, 15, x - 8, y - 28 + bob, img.width, 15);
+  }
+  async function startSurf(fx, fy) {
+    await runScript(async J => {
+      if (await J.ask('The water is deep and calm. Ride Lapras across it?', ['Yes', 'No']) !== 0) return;
+      await J.say('Lapras, SURF!', { name: 'Ride Pager' });
+      sfx('whoosh'); S.surf = true; palReset();
+      await J.playerWalk(S.player.dir, 1);
+    });
+  }
+
+  // ---- Journey II: the Echo. Facing a shrine (A) moves you between a map and its grey twin, on the same spot
+  function echoShift() {
+    const m = S.map, to = m.echo || m.echoOf;
+    if (!flag('echo') || !to || !W.maps.M[to]) return runScript(J => J.say('An old stone lantern. A pale flame flickers inside it, though nothing feeds it.'));
+    return passage(async () => {
+      const p = S.player;
+      sfx('whoosh');
+      await fade(() => loadMap(to, p.x, p.y, p.dir));
+      save();
+    });
   }
 
   // ---- the partner: the first Pokémon in the party that can still battle walks behind you. It follows your exact
@@ -340,11 +392,12 @@ const Journey = (() => {
     const [tx, ty] = tileOf(p.x, p.y), key = tileKey(tx, ty);
     // off the map: on to the next one
     if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return crossEdge(tx, ty);
+    if (S.surf && kindAt(tx, ty) !== 'water') { S.surf = false; palReset(); }
     if (S.warpLock && S.warpLock !== key) S.warpLock = null;
     if (S.zoneLock && S.zoneLock !== key) S.zoneLock = null;
     // doors (walking up into one), mats (walking down), stairs
     if (!S.warpLock) {
-      for (const b of m.buildings) for (const d of JMaps.doorsOf(b)) if (d.x === tx && d.y === ty && iy < 0) return enterBuilding(b);
+      for (const b of m.buildings) if (!b.deco) for (const d of W.maps.doorsOf(b)) if (d.x === tx && d.y === ty && iy < 0) return enterBuilding(b);
       if (chAt(tx, ty) === 'm' && iy > 0 && m.outside) return exitBuilding();
       for (const w of m.warps) if (w.x === tx && w.y === ty) return warpTo(w.to, w.tx, w.ty, w.dir);
     }
@@ -359,7 +412,7 @@ const Journey = (() => {
         if (G.repel > 0 && --G.repel === 0) toast('The Repel wore off.');
         if (G.steps % 128 === 0) for (const mon of G.party) mon.friendship = Math.min(255, mon.friendship + 1);
         // wild Pokémon: in tall grass, anywhere on a cave floor, and in deep snow
-        const enc = m.encounters && { tall: m.encounters.tall, cave: m.encounters.cave, snow: m.encounters.snow }[kindAt(tx, ty)];
+        const enc = m.encounters && (S.surf ? m.encounters.water : { tall: m.encounters.tall, cave: m.encounters.cave, snow: m.encounters.snow }[kindAt(tx, ty)]);
         if (enc && Math.random() < enc.rate) { const w = rollWild(enc); if (w) return wildBattle(w); }
       }
     }
@@ -376,7 +429,7 @@ const Journey = (() => {
   function crossEdge(tx, ty) {
     const e = edgeFor(tx, ty), p = S.player;
     if (!e) return;
-    const to = JMaps.M[e.to];
+    const to = W.maps.M[e.to];
     let x = p.x, y = p.y;
     if (e.side === 'n') { x = p.x + (e.dx || 0) * TS; y = to.h * TS - 4; }
     if (e.side === 's') { x = p.x + (e.dx || 0) * TS; y = 13; }
@@ -397,7 +450,7 @@ const Journey = (() => {
     return passage(async () => {
       const p = S.player;
       if (!conds(b.needs)) { await runEvent(b.locked); p.y += 6; S.warpLock = tileKey(...tileOf(p.x, p.y)); return; }
-      const to = JMaps.M[b.to];
+      const to = W.maps.M[b.to];
       sfx('lock');
       await fade(() => loadMap(b.to, to.arrive.x * TS + 8, to.arrive.y * TS + 13, 'up'));
       if (to.isCenter) G.lastCenter = { map: to.id };
@@ -406,7 +459,7 @@ const Journey = (() => {
   }
   function exitBuilding() {
     return passage(async () => {
-      const m = S.map, out = JMaps.M[m.outside], b = out.buildings.find(bb => bb.to === m.id), d = JMaps.doorsOf(b)[0];
+      const m = S.map, out = W.maps.M[m.outside], b = out.buildings.find(bb => bb.to === m.id), d = W.maps.doorsOf(b)[0];
       sfx('lock');
       await fade(() => loadMap(out.id, d.x * TS + (JArt.BUILD[b.b].door.length > 1 ? 16 : 8), (d.y + 1) * TS + 13, 'down'));
       save();
@@ -453,12 +506,16 @@ const Journey = (() => {
     if (S.event) return false;
     const [ptx, pty] = tileOf(S.player.x, S.player.y);
     for (const n of S.npcs) {
-      if (n.hidden || !n.trainer || G.flags[trFlag(n)] || n.moving) continue;
-      const [dx, dy] = DIRS[n.dir], sight = TRAINERS[n.trainer].sight || 4;
+      const guard = !!n.watch && !n.trainer;
+      if (n.hidden || n.moving || (!guard && (!n.trainer || G.flags[trFlag(n)]))) continue;
+      const [dx, dy] = DIRS[n.dir], sight = n.sight || (n.trainer && TRAINERS[n.trainer].sight) || 4;
       for (let k = 1; k <= sight; k++) {
         const tx = n.tx + dx * k, ty = n.ty + dy * k;
         if (S.solid[ty] == null || S.solid[ty][tx] || kindAt(tx, ty) == null) break;
-        if (tx === ptx && ty === pty) { runTrainer(n, true); return true; }
+        if (tx === ptx && ty === pty) {
+          if (guard) { S.player.moving = false; runScript(async J => { J.emote(n, '!'); sfx('beep', true); await J.wait(600); await TALK[n.watch](J, n); }); return true; }
+          runTrainer(n, true); return true;
+        }
         if (npcAtTile(tx, ty, n)) break;
       }
     }
@@ -482,12 +539,15 @@ const Journey = (() => {
     if (it) return runScript(async J => { G.flags['it.' + m.id + '.' + it.x + '.' + it.y] = true; refresh(); await J.give(it.item, it.n || 1, true); });
     if (chAt(fx, fy) === 'X' && !G.flags['cut.' + m.id + '.' + fx + '.' + fy]) return runEvent('cutTree', { x: fx, y: fy });
     for (const f of m.furniture) { const F0 = JArt.FURN[f.k]; if (f.talk && fx >= f.x && fx < f.x + F0.w && fy >= f.y && fy < f.y + F0.h) return runEvent(f.talk); }
+    if (m.shrines && m.shrines.some(sh => sh.x === fx && sh.y === fy)) return echoShift();
+    if (!S.surf && flag('ride.surf') && kindAt(fx, fy) === 'water' && !npcAtTile(fx, fy)) return startSurf(fx, fy);
     if (palAhead()) return talkPal();
   }
   function talkTo(n) {
     if (!n.moving) n.dir = OPP[S.player.dir];
     if (n.trainer) return runTrainer(n, false);
     if (n.talk) return runEvent(n.talk, n);
+    if (n.watch) return runEvent(n.watch, n);
   }
   async function runTrainer(n, spotted) {
     const tr = TRAINERS[n.trainer];
@@ -524,7 +584,7 @@ const Journey = (() => {
   // =====================================================================
   //  The dialog box
   // =====================================================================
-  const fill = s => String(s).replace(/\{NAME\}/g, G.name).replace(/\{RIVAL\}/g, 'Sora');
+  const fill = s => String(s).replace(/\{NAME\}/g, G.name).replace(/\{RIVAL\}/g, W.rival);
   function whoOf(who) {
     if (!who) return null;
     if (typeof who === 'string') { const n = S.npcs.find(x => x.id === who); return n ? { name: n.name || '', face: n.frames.face } : { name: who }; }
@@ -766,7 +826,7 @@ const Journey = (() => {
     await say([`You are out of usable Pokémon!`, `You panicked and dropped ¥${lost}...`, '... ... ...']);
     for (const m of G.party) Prog.healFull(m);
     await fade(() => {
-      if (G.lastCenter && JMaps.M[G.lastCenter.map]) { const c = JMaps.M[G.lastCenter.map]; loadMap(c.id, c.arrive.x * TS + 8, (c.arrive.y - 2) * TS + 13, 'up'); }
+      if (G.lastCenter && W.maps.M[G.lastCenter.map]) { const c = W.maps.M[G.lastCenter.map]; loadMap(c.id, c.arrive.x * TS + 8, (c.arrive.y - 2) * TS + 13, 'up'); }
       else loadMap('home1f', 6 * TS + 8, 5 * TS + 13, 'right');
     });
     await say(S.map.isCenter ? 'Your Pokémon have been healed. Please be more careful out there!' : 'You hurried home. Mom nursed your Pokémon back to health.');
@@ -935,6 +995,8 @@ const Journey = (() => {
     const max = Prog.hpMax(m.species, m.level);
     return `<button class="jmon ${m.hp <= 0 ? 'down' : ''} ${cls}" data-m="${i}"><img src="${sp(m.species).sprite}" alt=""><div><b>${esc(Prog.nameOf(m))}</b> <small>Lv ${m.level}</small>${typeChips(m.species)} ${m.hp <= 0 ? '<span class="jst fnt">FNT</span>' : m.status ? `<span class="jst">${m.status.toUpperCase()}</span>` : ''}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP</small></div>${extra}</button>`;
   }
+  // the notebook's clues (Journey II): each clue shows once its flag is set
+  const clues = () => Object.entries(W.story.CLUES || {}).filter(([k]) => flag(k)).map(([, t]) => t);
   const money = () => `<span class="jmoney">¥${G.money.toLocaleString('en-US')}</span>`;
   // what a party member shows next to it when you pick who gets an item
   function useTag(it, m) {
@@ -953,7 +1015,9 @@ const Journey = (() => {
     if (kind === 'menu') {
       const h = Math.floor(G.time / 3600), mi = String(Math.floor(G.time / 60) % 60).padStart(2, '0'), kinds = Object.keys(G.bag).filter(k => ITEMS[k] && G.bag[k] > 0).length;
       const rows = [['party', 'POKéMON', `${G.party.length} in your party`, pix('ball', '#e83838'), G.party.length > 0], ['dex', 'POKéDEX', `${Object.keys(G.dex.caught).length} caught · ${Object.keys(G.dex.seen).length} seen`, pix('dex', '#e04848'), flag('dex')],
-        ['bag', 'BAG', `${kinds} kind${kinds === 1 ? '' : 's'} of item`, pix('bag', '#d8803a', '#f0d048'), true], ['card', G.name.toUpperCase(), 'Trainer card · badges', pix('card', '#f0c060', '#1b1530'), true],
+        ['bag', 'BAG', `${kinds} kind${kinds === 1 ? '' : 's'} of item`, pix('bag', '#d8803a', '#f0d048'), true],
+        ['notebook', 'NOTEBOOK', `${clues().length} clue${clues().length === 1 ? '' : 's'}`, pix('key', '#8a6a3a', '#f0d048'), bagN('notebook') > 0],
+        ['fly', 'FLY', 'Corviknight carries you to a town', pix('gem', '#4a5a8a', '#c8d8f0'), flag('ride.fly') && S.map.kind !== 'inside' && !S.map.echoOf], ['card', G.name.toUpperCase(), 'Trainer card · badges', pix('card', '#f0c060', '#1b1530'), true],
         ['save', 'SAVE', 'Write down your progress', pix('save', '#3c78d0'), true], ['exit', 'EXIT', 'Save and go to the title', pix('door', '#b06a38', '#f0d048'), true], ['close', 'CLOSE', '', '<i class="jico"></i>', true]];
       el.innerHTML = `<div class="jp jp-menu"><div class="jm-top"><b>${esc(G.name)}</b>${money()}<span class="jm-badges">${BADGES.map(b => `<i class="${G.badges.includes(b.id) ? 'got' : ''}" style="--c:${b.col}" title="${esc(b.name)}"></i>`).join('')}</span><small>${h}:${mi}</small></div>
         ${rows.filter(x => x[4]).map(([a, t, sub, ic]) => `<button data-a="${a}">${ic}<span><b>${t}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`).join('')}<small class="jkeys">↑↓ choose · Enter open · Esc close</small></div>`;
@@ -965,7 +1029,7 @@ const Journey = (() => {
       el.innerHTML = `<div class="jp">${head(esc(Prog.nameOf(m)), 'party')}<div class="jsum"><img src="${s.sprite}" alt=""><div><b>${esc(s.display)}</b> Lv ${m.level} ${typeChips(m.species)}<br>${hpBar(m.hp, max)}<small>${m.hp}/${max} HP</small><div class="jhp jxp"><i style="width:${(xpK * 100).toFixed(0)}%"></i></div><small>${m.level < 100 ? `${next} XP to Lv ${m.level + 1}` : 'Max level'} · Friendship <span class="jheart">${'♥'.repeat(1 + Math.floor(m.friendship / 64))}</span></small></div></div>
         <div class="jstats">${[['ATK', st.atk], ['DEF', st.def], ['SP.ATK', st.spa], ['SP.DEF', st.spd], ['SPEED', st.spe]].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')}</div>
         <div class="jmoves">${m.moves.map((id, i) => `<div style="--c:${TYPE_COLORS[MOVES[id].type]}"><b>${esc(MOVES[id].name)}</b><small>${MOVES[id].type} · ${MOVES[id].cat} · ${MOVES[id].power || '-'} pow · PP ${m.pp[i]}/${MOVES[id].pp}</small></div>`).join('')}</div>
-        <div class="jrow">${data > 0 ? `<button data-a="lead" data-m="${data}">Put first</button>` : ''}<small>Met: ${esc(m.met || 'Valoria')} · ${esc(ITEMS[m.ball] ? ITEMS[m.ball].name : 'Poké Ball')}</small></div></div>`;
+        <div class="jrow">${data > 0 ? `<button data-a="lead" data-m="${data}">Put first</button>` : ''}<small>Met: ${esc(m.met || W.region)} · ${esc(ITEMS[m.ball] ? ITEMS[m.ball].name : 'Poké Ball')}</small></div></div>`;
     } else if (kind === 'bag') {
       // the pocket you last looked in opens again
       const pocket = S.pocket = data || S.pocket || 'items', list = bagIn(pocket);
@@ -980,6 +1044,12 @@ const Journey = (() => {
     } else if (kind === 'dex') {
       const seen = Object.keys(G.dex.seen).length, caught = Object.keys(G.dex.caught).length;
       el.innerHTML = `<div class="jp jp-wide">${head(`POKéDEX · Seen ${seen} · Caught ${caught}`)}<div class="jdex">${DEX.order.map(n => { const s = sp(n), c = G.dex.caught[n], se = G.dex.seen[n]; return `<div class="${c ? 'c' : se ? 's' : 'u'}" title="${se ? esc(s.display) : '???'}"><small>${String(s.id).padStart(4, '0')}</small>${se ? `<img loading="lazy" src="${s.sprite}" alt="">` : '<i>?</i>'}<span>${se ? esc(s.display) : '???'}</span>${c ? '<b>●</b>' : ''}</div>`; }).join('')}</div></div>`;
+    } else if (kind === 'notebook') {
+      const list = clues();
+      el.innerHTML = `<div class="jp">${head('NOTEBOOK')}<div class="jnotes">${list.length ? list.map(t => `<p>${esc(fill(t))}</p>`).join('') : '<p class="jhint">No clues yet. Talk to people and look around.</p>'}</div></div>`;
+    } else if (kind === 'fly') {
+      const towns = (G.visited || []).map(id => W.maps.M[id]).filter(t => t && t.fly);
+      el.innerHTML = `<div class="jp">${head('FLY')}<div class="jfly">${towns.map(t => `<button data-a="flyto" data-m="${t.id}"${t.id === S.map.id ? ' disabled' : ''}><b>${esc(t.name)}</b></button>`).join('')}</div><small class="jkeys">Where to?</small></div>`;
     } else if (kind === 'card') {
       const h = Math.floor(G.time / 3600), mi = Math.floor(G.time / 60) % 60;
       el.innerHTML = `<div class="jp">${head('TRAINER CARD')}<div class="jcard"><img src="${JArt.person(lookOf(G.outfit)).face}" alt=""><div><b>${esc(G.name)}</b><br>Money ¥${G.money}<br>Pokédex ${Object.keys(G.dex.caught).length} caught<br>Time ${h}:${String(mi).padStart(2, '0')}</div></div>
@@ -1074,6 +1144,11 @@ const Journey = (() => {
     }
     if (a === 'party') return renderPanel(S.menu = 'party');
     if (a === 'bag') return renderPanel(S.menu = 'bag');
+    if (a === 'flyto') {
+      const t = W.maps.M[b.dataset.m];
+      closeMenu();
+      return runScript(async J => { await J.say('Corviknight, FLY!', { name: 'Ride Pager' }); sfx('whoosh'); await J.travel(t.id, t.fly.x, t.fly.y, 'down'); });
+    }
     if (k === 'party' && b.dataset.m != null) return renderPanel(S.menu = 'mon', +b.dataset.m);
     if (a === 'lead') { const i = +b.dataset.m; G.party.unshift(G.party.splice(i, 1)[0]); save(); return renderPanel(S.menu = 'party'); }
     if (a === 'pocket') return renderPanel('bag', b.dataset.p);
@@ -1171,6 +1246,7 @@ const Journey = (() => {
     async chapter(title, sub) { showChapter(title, sub); await J.wait(3200); },
     // a ride somewhere else (the ferry, a train): fade out, arrive at (x, y) on map id
     travel: (id, x, y, dir = 'down') => fade(() => { loadMap(id, x * TS + 8, y * TS + 13, dir); save(); }),
+    warp: (id, x, y, dir = 'down') => fade(() => { loadMap(id, x * TS + 8, y * TS + 13, dir); save(); }),
     pc: () => new Promise(res => { S.menuDone = res; openMenu('pc', true); }),
     shop: () => new Promise(res => { S.menuDone = res; openMenu('shop', 'buy'); })
   };
@@ -1276,6 +1352,7 @@ const Journey = (() => {
     if (S.battle) return;
     step(dt);
     stepPal(dt);
+    stepSurfer(dt);
     draw();
   }
   function start(g) {
@@ -1289,6 +1366,7 @@ const Journey = (() => {
     root.classList.remove('hidden');
     ui.menuEl && ui.menuEl.remove();
     resize();
+    S.surf = !!G.surf;
     loadMap(G.map, G.x, G.y, G.dir);
     try { AudioFX.Music.start(0); } catch (e) {}
     S.lastT = 0; cancelAnimationFrame(S.raf); S.raf = requestAnimationFrame(loop);
@@ -1305,19 +1383,20 @@ const Journey = (() => {
     try { AudioFX.Music.stop(); } catch (e) {}
   }
   // the title screen: continue, or a new trainer (name + look)
-  function open() {
+  function open(world = 'valoria') {
+    if (!active) useWorld(world);
     build();
     const sv = readSave();
     const el = document.createElement('div');
     el.className = 'overlay jtitle';
     const looks = Object.keys(OUTFITS);
     let pick = 'red';
-    el.innerHTML = `<div class="jt-box"><h1 class="logo">POKéMON JOURNEY</h1><div class="jt-sub">The Eclipse of Valoria</div>
+    el.innerHTML = `<div class="jt-box"><h1 class="logo">${W.title}</h1><div class="jt-sub">${W.sub}</div>
       ${sv ? `<button class="btn" data-a="cont">▶ Continue - ${esc(sv.name)} · ${sv.badges.length} badge${sv.badges.length === 1 ? '' : 's'} · ${Object.keys(sv.dex.caught).length} caught · ${Math.floor(sv.time / 3600)}:${String(Math.floor(sv.time / 60) % 60).padStart(2, '0')}</button>` : ''}
       <div class="jt-new"><b>${sv ? 'New game' : 'Who are you?'}</b><input maxlength="10" placeholder="Your name" value="${sv ? '' : ''}">
       <div class="jt-looks">${looks.map(k => `<button data-l="${k}" class="${k === pick ? 'on' : ''}"><img src="${JArt.person(OUTFITS[k]).face}" alt=""><small>${OUTFITS[k].label}</small></button>`).join('')}</div>
       <button class="btn ${sv ? 'alt' : ''}" data-a="new">${sv ? 'Start over (erases your save)' : '★ Begin your journey'}</button></div>
-      <button class="btn alt" data-a="film">🎬 Watch the intro</button><button class="btn alt" data-a="back">Back</button></div>`;
+      ${W.film ? '<button class="btn alt" data-a="film">🎬 Watch the intro</button>' : ''}<button class="btn alt" data-a="back">Back</button></div>`;
     document.body.append(el);
     el.addEventListener('click', e => {
       const l = e.target.closest('[data-l]');
@@ -1332,18 +1411,19 @@ const Journey = (() => {
         // the opening film first; the story then skips the legend it already showed
         el.remove();
         const g = newGame(name, pick);
-        JIntro.play({ name, look: lookOf(pick) }).then(() => { g.flags.film = true; start(g); });
+        if (W.film) JIntro.play({ name, look: lookOf(pick) }).then(() => { g.flags.film = true; start(g); });
+        else start(g);
       }
     });
     setTimeout(() => { const i = el.querySelector('input'); if (i && !sv) i.focus(); }, 50);
   }
   return { open, leave, get active() { return active; }, save,
     // tests
-    _G: () => G, _S: () => S, _pal: () => pal, _J: J, _start: g => start(g || newGame('Test', 'red')), _newGame: newGame, _warp: (id, tx, ty, dir) => loadMap(id, tx * TS + 8, ty * TS + 13, dir || 'down'),
+    _world: id => { useWorld(id); return W.id; }, _W: () => W, _G: () => G, _S: () => S, _pal: () => pal, _J: J, _start: g => start(g || newGame('Test', 'red')), _newGame: newGame, _warp: (id, tx, ty, dir) => loadMap(id, tx * TS + 8, ty * TS + 13, dir || 'down'),
     // tests: the whole map drawn at scale k, as a data URL
     _mapShot(id, k = 2) {
       const keep = { cv, ctx, scale, map: S.map ? S.map.id : null, x: S.player && S.player.x, y: S.player && S.player.y };
-      const m = JMaps.M[id];
+      const m = W.maps.M[id];
       loadMap(id, m.w * TS / 2, m.h * TS / 2, 'down');
       const c = document.createElement('canvas'); c.width = m.w * TS * k; c.height = m.h * TS * k;
       cv = c; ctx = c.getContext('2d'); scale = k;

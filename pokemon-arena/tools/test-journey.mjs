@@ -2,7 +2,10 @@
 // ways, nothing stands in a wall, and - playing the story's flags forward from a new game - every map, person, item
 // and door can be reached and the chapter's goals are met, so the story can never get stuck.
 // The later chapters live in jch3.js, jch4.js... (loaded after jstory.js); each registers itself with JStory.chapter.
-// Exits with code 1 on any failure. Usage: node tools/test-journey.mjs [--chapter=N]
+// Journey II (Meridia: m2maps.js, m2story.js, mch2.js...) is checked with --world=meridia: the same rules, plus its
+// Echo Shrines (a shrine moves you to the twin map on the same tile), surfing (water opens with the flag ride.surf)
+// and guards (watch: an event).
+// Exits with code 1 on any failure. Usage: node tools/test-journey.mjs [--world=meridia] [--chapter=N] [--files=mch4.js,...]
 //   --chapter=N  check one chapter on its own: start where it starts, with the chapters before it done, and report only
 //                its own maps (a map of a chapter not written yet is a warning, not a failure)
 import fs from 'node:fs';
@@ -17,11 +20,19 @@ vm.createContext(ctx);
 let fails = 0, warns = 0;
 const fail = msg => { fails++; console.log('FAIL ' + msg); };
 const warn = msg => { warns++; console.log('warn ' + msg); };
+const WORLD = (process.argv.find(a => a.startsWith('--world=')) || '--world=valoria').split('=')[1];
+if (!['valoria', 'meridia'].includes(WORLD)) { console.log('unknown world ' + WORLD + ' (valoria or meridia)'); process.exit(1); }
 for (const f of ['data.js', 'jart.js', 'jmaps.js', 'jstory.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
-const CHFILES = fs.readdirSync(ROOT).filter(f => /^jch\d+\.js$/.test(f)).sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+const chFiles = pre => fs.readdirSync(ROOT).filter(f => new RegExp('^' + pre + '\\d+\\.js$').test(f)).sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+// (Meridia loads after all of Valoria, as in the game: it borrows Valoria's items and looks)
+// --files=mch4.js,mch5.js: load only these chapter files (the others' maps then count as "not written yet")
+const ONLYFILES = ((process.argv.find(a => a.startsWith('--files=')) || '').split('=')[1] || '').split(',').filter(Boolean);
+const mine2 = f => !ONLYFILES.length || ONLYFILES.includes(f);
+const CHFILES = WORLD === 'meridia' ? [...chFiles('jch'), 'm2maps.js', 'm2story.js', ...chFiles('mch').filter(mine2)] : chFiles('jch');
 for (const f of CHFILES) { try { vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f }); } catch (e) { fail(`${f} does not load: ${String(e.stack || e).split('\n').slice(0, 2).join(' | ')}`); } }
-const { JMaps, JStory, JArt, DEX } = vm.runInContext('({ JMaps, JStory, JArt, DEX: window.POKEDEX })', ctx);
+const { JMaps, JStory, JArt, DEX } = vm.runInContext(WORLD === 'meridia' ? '({ JMaps: MMaps, JStory: MStory, JArt, DEX: window.POKEDEX })' : '({ JMaps, JStory, JArt, DEX: window.POKEDEX })', ctx);
 const { M } = JMaps, { META, T, TRAINERS, ITEMS, CHAPTERS } = JStory;
+const NEWGAME = WORLD === 'meridia' ? JStory.START : { map: 'home2f', x: 2, y: 3 };
 const ONLY = +((process.argv.find(a => a.startsWith('--chapter=')) || '').split('=')[1]) || 0;
 if (ONLY && !CHAPTERS[ONLY]) { console.log(`no chapter ${ONLY} registered (JStory.chapter({ n: ${ONLY}, ... }))`); process.exit(1); }
 // which chapter a map belongs to (the first two chapters' maps carry no tag)
@@ -31,6 +42,7 @@ const missing = msg => ONLY ? warn(msg + ' (not written yet?)') : fail(msg);
 for (const c of Object.values(CHAPTERS)) { if (!M[c.start.map]) missing(`chapter ${c.n}: start map ${c.start.map} missing`); if (!c.goals || !c.goals.length) fail(`chapter ${c.n}: no goals`); }
 for (const [k, it] of Object.entries(ITEMS)) if (it.tm && !DEX.moves[it.tm]) fail(`item ${k}: TM move ${it.tm} does not exist`);
 const KNOWN = new Set([...Object.keys(JArt.KIND), 'X', 'S']);
+const water = (m, x, y) => m.rows[y] && m.rows[y][x] === '~';
 const inB = (m, x, y) => x >= 0 && y >= 0 && x < m.w && y < m.h;
 
 // ---- 1. every map on its own
@@ -44,6 +56,7 @@ for (const m of Object.values(M)) {
     const B = JArt.BUILD[b.b];
     if (!B) { fail(`${m.id}: unknown building ${b.b}`); continue; }
     if (!inB(m, b.x, b.y) || !inB(m, b.x + B.w - 1, b.y + B.h - 1)) fail(`${m.id}: building ${b.b} out of the map`);
+    if (b.deco) continue;                            // a decoration (an Echo twin's copy): no door, no inside
     const inside = M[b.to];
     if (!inside) { missing(`${m.id}: building leads to missing map ${b.to}`); continue; }
     if (inside.outside !== m.id) fail(`${b.to}: its outside should be ${m.id} (is ${inside.outside})`);
@@ -71,9 +84,18 @@ for (const m of Object.values(M)) {
     while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const k = (x + dx) + ',' + (y + dy); if (!seen.has(k) && open(x + dx, y + dy)) { seen.add(k); q.push([x + dx, y + dy]); } } }
     if (sides.every(k => seen.has(k))) fail(`${m.id}: the ${z.event} zone at ${z.x},${z.y} can be walked around`);
   }
+  if (m.echo) { const t = M[m.echo]; if (!t) missing(`${m.id}: Echo twin ${m.echo} missing`); else if (t.echoOf !== m.id) fail(`${m.echo}: its echoOf should be ${m.id}`); }
+  if (m.echoOf && !M[m.echoOf]) missing(`${m.id}: echoOf ${m.echoOf} missing`);
+  for (const sh of m.shrines || []) {
+    const t = M[m.echo || m.echoOf];
+    if (!m.echo && !m.echoOf) fail(`${m.id}: shrine at ${sh.x},${sh.y} but the map has no echo / echoOf`);
+    else if (t && !(t.shrines || []).some(o => o.x === sh.x && o.y === sh.y)) fail(`${t.id}: no shrine at ${sh.x},${sh.y} to match ${m.id}'s`);
+    if (t) { const TS2 = JMaps.solidGrid(t, {}); if (![[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !solid(sh.x + dx, sh.y + dy) && inB(t, sh.x + dx, sh.y + dy) && !TS2[sh.y + dy][sh.x + dx])) fail(`${m.id}: no tile beside the shrine at ${sh.x},${sh.y} is free on both sides`); }
+  }
   for (const n of m.npcs) {
     if (!inB(m, n.x, n.y) || S[n.y][n.x]) fail(`${m.id}: ${n.id} stands in a wall at ${n.x},${n.y}`);
-    if (!n.talk && !n.trainer) fail(`${m.id}: ${n.id} says nothing when you talk to them`);
+    if (!n.talk && !n.trainer && !n.watch) fail(`${m.id}: ${n.id} says nothing when you talk to them`);
+    if (n.watch && !T[n.watch]) fail(`${m.id}: ${n.id} watch ${n.watch} missing`);
     if (n.talk && !T[n.talk]) fail(`${m.id}: ${n.id} talk ${n.talk} missing`);
     if (n.trainer) {
       const tr = TRAINERS[n.trainer];
@@ -96,8 +118,8 @@ for (const m of Object.values(M)) {
     if ((e.dx || 0) !== -(be.dx || 0) || (e.dy || 0) !== -(be.dy || 0)) fail(`${m.id} <-> ${e.to}: offsets don't match`);
     const TS = JMaps.solidGrid(t, {});
     let open = 0;
-    if (side === 'n' || side === 's') for (let x = 0; x < m.w; x++) { const y = side === 'n' ? 0 : m.h - 1, ty = side === 'n' ? t.h - 1 : 0, tx = x + (e.dx || 0); if (!S[y][x] && inB(t, tx, ty) && !TS[ty][tx]) open++; else if (!S[y][x]) fail(`${m.id}: edge ${side} at x=${x} leads into a wall of ${e.to}`); }
-    else for (let y = 0; y < m.h; y++) { const x = side === 'w' ? 0 : m.w - 1, tx = side === 'w' ? t.w - 1 : 0, ty = y + (e.dy || 0); if (!S[y][x] && inB(t, tx, ty) && !TS[ty][tx]) open++; else if (!S[y][x]) fail(`${m.id}: edge ${side} at y=${y} leads into a wall of ${e.to}`); }
+    if (side === 'n' || side === 's') for (let x = 0; x < m.w; x++) { const y = side === 'n' ? 0 : m.h - 1, ty = side === 'n' ? t.h - 1 : 0, tx = x + (e.dx || 0); const a = !S[y][x], b = inB(t, tx, ty) && !TS[ty][tx], wet = water(m, x, y) && inB(t, tx, ty) && water(t, tx, ty); if (a && b || wet) open++; else if (a) fail(`${m.id}: edge ${side} at x=${x} leads into a wall of ${e.to}`); }
+    else for (let y = 0; y < m.h; y++) { const x = side === 'w' ? 0 : m.w - 1, tx = side === 'w' ? t.w - 1 : 0, ty = y + (e.dy || 0); const a = !S[y][x], b = inB(t, tx, ty) && !TS[ty][tx], wet = water(m, x, y) && inB(t, tx, ty) && water(t, tx, ty); if (a && b || wet) open++; else if (a) fail(`${m.id}: edge ${side} at y=${y} leads into a wall of ${e.to}`); }
     if (!open) fail(`${m.id}: edge ${side} has no open tile`);
   }
 }
@@ -105,7 +127,7 @@ for (const m of Object.values(M)) {
 // ---- 2. the story, played forward from a new game
 const flags = { };
 if (ONLY) for (const c of Object.values(CHAPTERS)) if (c.n < ONLY) for (const g of c.goals) flags[g] = true;
-const START = ONLY ? CHAPTERS[ONLY].start : { map: 'home2f', x: 2, y: 3 };
+const START = ONLY ? CHAPTERS[ONLY].start : NEWGAME;
 const rides = new Map();   // META travel: map -> needs, once the talk that offers the ride has happened
 const cond = list => !list || list.every(c => c[0] === '!' ? !flags[c.slice(1)] : !!flags[c]);
 const fired = new Set(), reachedMaps = new Set(), metNpc = new Set(), gotItem = new Set();
@@ -119,6 +141,7 @@ function reach() {
     const m = M[id], S = JMaps.solidGrid(m, flags).map(r => r.slice());
     for (const n of m.npcs) if (cond(n.show) && !flags['gone.' + id + '.' + n.id]) S[n.y][n.x] = true;
     if (flags['ride.cut']) m.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === 'X') S[y][x] = false; }));
+    if (flags['ride.surf']) m.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === '~' && !(m.props || []).some(p => p.x === x && p.y === y)) S[y][x] = false; }));
     for (const z of m.zones) if (z.block && cond(META[z.event] && META[z.event].needs)) for (let y = z.y; y < z.y + z.h; y++) for (let x = z.x; x < z.x + z.w; x++) S[y][x] = true;
     return S;
   })());
@@ -144,25 +167,27 @@ function reach() {
         if (inB(t, tx, ty) && !grid(e.to)[ty][tx]) queue.push([e.to, tx, ty]);
       }
     }
-    for (const b of m.buildings) for (const d of JMaps.doorsOf(b)) if (d.x === x && d.y === y && cond(b.needs) && M[b.to]) { const t = M[b.to]; queue.push([b.to, t.arrive.x, t.arrive.y]); }
+    for (const b of m.buildings) if (!b.deco) for (const d of JMaps.doorsOf(b)) if (d.x === x && d.y === y && cond(b.needs) && M[b.to]) { const t = M[b.to]; queue.push([b.to, t.arrive.x, t.arrive.y]); }
     if (m.rows[y][x] === 'm' && m.outside) { const o = M[m.outside], b = o.buildings.find(bb => bb.to === id), d = JMaps.doorsOf(b)[0]; queue.push([o.id, d.x, d.y + 1]); }
     for (const w of m.warps) if (Math.abs(w.x - x) + Math.abs(w.y - y) === 1 && M[w.to]) queue.push([w.to, w.tx, w.ty]);
+    if (flags.echo) for (const sh of m.shrines || []) { const to = m.echo || m.echoOf; if (Math.abs(sh.x - x) + Math.abs(sh.y - y) === 1 && M[to] && inB(M[to], x, y) && !grid(to)[y][x]) queue.push([to, x, y]); }
   }
   return seen;
 }
 const near = (seen, id, x, y, self = false) => { const s = seen.get(id); return !!s && (self && s.has(x + ',' + y) || [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 2], [0, -2]].some(([dx, dy]) => s.has((x + dx) + ',' + (y + dy)))); };
-for (let round = 0; round < 50; round++) {
+for (let round = 0; round < 300; round++) {
   const seen = reach();
   let changed = false;
   const before = { ...flags }, shown = list => !list || list.every(c => c[0] === '!' ? !before[c.slice(1)] : !!before[c]);
   const fire = (id, sets) => { if (fired.has(id)) return; fired.add(id); for (const s of sets || []) if (!flags[s]) { flags[s] = true; changed = true; } changed = true; };
-  if (!ONLY && !fired.has('intro')) fire('intro', META.intro.sets);
+  if ((!ONLY || CHAPTERS[ONLY].start === NEWGAME) && !fired.has('intro')) fire('intro', META.intro.sets);
   for (const [id, set] of seen) {
     reachedMaps.add(id);
     const m = M[id];
     for (const n of m.npcs) {
       if (!shown(n.show) || before['gone.' + id + '.' + n.id] || !near(seen, id, n.x, n.y, false)) continue;
       metNpc.add(id + '.' + n.id);
+      if (n.watch && !n.talk && cond(META[n.watch] && META[n.watch].needs)) fire(n.watch + '@' + id, (META[n.watch] || {}).sets);
       if (n.talk && cond(META[n.talk] && META[n.talk].needs)) {
         fire(n.talk + '@' + id, (META[n.talk] || {}).sets);
         for (const r of (META[n.talk] && META[n.talk].travel) || []) if (!rides.has(r.map)) { rides.set(r.map, r.needs); changed = true; }
@@ -180,8 +205,8 @@ for (const g of GOALS) if (!flags[g]) fail(`story: the flag '${g}' can never be 
 for (const m of Object.values(M)) if (mine(m) && !reachedMaps.has(m.id)) fail(`story: map ${m.id} can never be reached`);
 for (const m of Object.values(M)) {
   if (!mine(m)) continue;
-  for (const n of m.npcs) if ((n.talk || n.trainer) && !metNpc.has(m.id + '.' + n.id)) fail(`story: nobody can ever talk to ${m.id}.${n.id}`);
+  for (const n of m.npcs) if ((n.talk || n.trainer || n.watch) && !metNpc.has(m.id + '.' + n.id)) fail(`story: nobody can ever talk to ${m.id}.${n.id}`);
   for (const it of m.items) if (!gotItem.has(m.id + '.' + it.x + '.' + it.y)) fail(`story: item ${it.item} at ${m.id} ${it.x},${it.y} can never be picked up`);
 }
-console.log(`${ONLY ? 'chapter ' + ONLY + ' · ' : ''}maps: ${Object.values(M).filter(mine).length} · flags reached: ${Object.keys(flags).length} · events fired: ${fired.size} · ${fails ? fails + ' FAILURES' : 'all good'}${warns ? ` · ${warns} warnings` : ''}`);
+console.log(`${WORLD === 'meridia' ? 'Meridia · ' : ''}${ONLY ? 'chapter ' + ONLY + ' · ' : ''}maps: ${Object.values(M).filter(mine).length} · flags reached: ${Object.keys(flags).length} · events fired: ${fired.size} · ${fails ? fails + ' FAILURES' : 'all good'}${warns ? ` · ${warns} warnings` : ''}`);
 process.exit(fails ? 1 : 0);

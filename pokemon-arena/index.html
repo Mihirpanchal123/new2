@@ -959,6 +959,11 @@
   .jpslot.drag .jmon, .jpslot.drag .jgrip { background: #ffd84a; }
   .jmon em.lead { background: #ffd84a; border: 2px solid #1b1530; }
   .jhint { font-size: 14px; opacity: .65; margin-top: 2px; }
+  /* Journey II: the clue notebook and the Fly list */
+  .jnotes { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+  .jnotes p { margin: 0; padding: 8px 10px; background: #fff3d6; border-left: 4px solid #b08a3a; border-radius: 6px; font-size: 15px; line-height: 1.35; }
+  .jfly { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+  .jfly button[disabled] { opacity: .45; }
   .jhp { height: 8px; background: #3a3a48; border-radius: 4px; overflow: hidden; margin: 3px 0; } .jhp i { display: block; height: 100%; }
   .jst { background: #a855f7; color: #fff; padding: 0 5px; border-radius: 4px; font-size: 13px; }
   .jt { display: inline-block; color: #fff; font-size: 12px; padding: 1px 6px; border-radius: 6px; margin-left: 3px; text-shadow: 0 1px 0 rgba(0,0,0,.4); }
@@ -1142,6 +1147,7 @@
     <button class="btn alt" id="recordsBtn">📊 Records</button>
     <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
     <button class="btn alt" id="journeyBtn">⭐ Journey</button>
+    <button class="btn alt" id="journey2Btn" title="Journey II: The Lost Days of Meridia">🏮 Journey II</button>
     <button class="btn alt" id="advBtn" title="Open-world survival adventure with one Pokémon">🌲 Adventure</button>
     <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
     <button class="btn alt" id="randomBoth">Random Both Teams</button>
@@ -1154,6 +1160,6 @@
 
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
-<script type="module" src="boot.mjs" data-scripts="data.js,base.js,fps.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,jch3.js,jch4.js,jch5.js,jch6.js,jch7.js,jch8.js,jintro.js,journey.js"></script>
+<script type="module" src="boot.mjs" data-scripts="data.js,base.js,fps.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,jch3.js,jch4.js,jch5.js,jch6.js,jch7.js,jch8.js,m2maps.js,m2story.js,mch2.js,mch3.js,mch4.js,mch5.js,mch6.js,mch7.js,mch8.js,mch9.js,mch10.js,mch11.js,mch12.js,jintro.js,journey.js"></script>
 </body>
 </html>

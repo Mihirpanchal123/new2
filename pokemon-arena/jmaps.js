@@ -27,8 +27,29 @@ const JMaps = (() => {
     };
     return B;
   }
-  const M = {};
-  const def = m => { M[m.id] = { buildings: [], furniture: [], signs: [], npcs: [], items: [], warps: [], zones: [], edges: {}, props: [], ...m, w: m.rows[0].length, h: m.rows.length }; };
+  // the map kit: a table of maps and the helpers that fill it. Valoria uses one; Journey II's world (m2maps.js) makes
+  // its own with JMaps.kit(L). shrines (Journey II's Echo Shrines) stand on their tiles as props.
+  function kit(L) {
+    const M = {};
+    const def = m => {
+      M[m.id] = { buildings: [], furniture: [], signs: [], npcs: [], items: [], warps: [], zones: [], edges: {}, props: [], shrines: [], ...m, w: m.rows[0].length, h: m.rows.length };
+      for (const s of M[m.id].shrines) M[m.id].props.push({ k: 'shrine', x: s.x, y: s.y });
+    };
+    // generic insides: Pokémon Center, Poké Mart. o: anything more for the map (a chapter file passes { chapter: N })
+    function center(id, outside, o = {}) {
+      def({ ...o, id, name: 'Pokémon Center', kind: 'inside', outside, rows: grid(13, 9, '+').border('#').fill(1, 8, 11, 8, '+').put(6, 8, 'm').fill(5, 5, 7, 6, 'R').rows(), isCenter: true,
+        arrive: { x: 6, y: 7 },
+        furniture: [{ k: 'counter', x: 4, y: 3 }, { k: 'healer', x: 8, y: 2 }, { k: 'pc', x: 11, y: 1, talk: 'boxPc' }, { k: 'plant', x: 1, y: 1 }, { k: 'sofa', x: 1, y: 6 }, { k: 'plant', x: 11, y: 7 }, { k: 'shelf', x: 1, y: 3 }],
+        npcs: [{ id: 'nurse', x: 6, y: 2, dir: 'down', look: L.nurse, name: 'Nurse Bell', talk: 'nurse', counter: true }] });
+    }
+    function mart(id, outside, stock, o = {}) {
+      def({ ...o, id, name: 'Poké Mart', kind: 'inside', outside, stock, rows: grid(11, 8, '+').border('#').fill(1, 7, 9, 7, '+').put(5, 7, 'm').rows(),
+        arrive: { x: 5, y: 6 },
+        furniture: [{ k: 'counter', x: 1, y: 3 }, { k: 'martshelf', x: 6, y: 1 }, { k: 'martshelf', x: 6, y: 4 }, { k: 'plant', x: 9, y: 6 }],
+        npcs: [{ id: 'clerk', x: 2, y: 2, dir: 'down', look: L.clerk, name: 'Clerk', talk: 'clerk', counter: true }] });
+    }
+    return { M, def, center, mart };
+  }
 
   // ---- the people's looks (OUTFITS fields; journey.js draws them)
   const L = {
@@ -65,6 +86,7 @@ const JMaps = (() => {
     rhea: { hat: null, hair: 0xe04828, hairStyle: 'pigtails', top: 0x2a2a3a, sleeves: 'none', inner: 0xff8a3a, legs: 0x2a2a3a, legStyle: 'skirt', shoes: 0xa040e0, bag: null },
     curator: { hat: null, hair: 0x9a9aa4, hairStyle: 'short', top: 0x6a4a3a, sleeves: 'long', inner: 0xe8dcc0, legs: 0x4a3a2a, legStyle: 'pants', shoes: 0x2a1e14, bag: null, scarf: 0xc84848 }
   };
+  const { M, def, center, mart } = kit(L);
 
   // =====================================================================
   //  Willowbrook Town (you start here) - home, Sora's house, Hazel's lab
@@ -152,20 +174,6 @@ const JMaps = (() => {
       npcs: [{ id: 'worker', x: 28, y: 11, dir: 'left', look: L.worker, name: 'Worker', talk: 'worker', show: ['!ch2'] },
         { id: 'guide', x: 16, y: 21, dir: 'down', look: L.man, name: 'Gym Guide', talk: 'gymGuide' },
         { id: 'boy', x: 22, y: 12, dir: 'left', look: L.kid, wander: 3, talk: 'vBoy' }, { id: 'lady', x: 9, y: 13, dir: 'down', look: L.woman, wander: 2, talk: 'vLady' }] });
-  }
-  // ---- generic insides: Pokémon Center, Poké Mart
-  // o: anything more for the map (a chapter file passes { chapter: N })
-  function center(id, outside, o = {}) {
-    def({ ...o, id, name: 'Pokémon Center', kind: 'inside', outside, rows: grid(13, 9, '+').border('#').fill(1, 8, 11, 8, '+').put(6, 8, 'm').fill(5, 5, 7, 6, 'R').rows(), isCenter: true,
-      arrive: { x: 6, y: 7 },
-      furniture: [{ k: 'counter', x: 4, y: 3 }, { k: 'healer', x: 8, y: 2 }, { k: 'pc', x: 11, y: 1, talk: 'boxPc' }, { k: 'plant', x: 1, y: 1 }, { k: 'sofa', x: 1, y: 6 }, { k: 'plant', x: 11, y: 7 }, { k: 'shelf', x: 1, y: 3 }],
-      npcs: [{ id: 'nurse', x: 6, y: 2, dir: 'down', look: L.nurse, name: 'Nurse Bell', talk: 'nurse', counter: true }] });
-  }
-  function mart(id, outside, stock, o = {}) {
-    def({ ...o, id, name: 'Poké Mart', kind: 'inside', outside, stock, rows: grid(11, 8, '+').border('#').fill(1, 7, 9, 7, '+').put(5, 7, 'm').rows(),
-      arrive: { x: 5, y: 6 },
-      furniture: [{ k: 'counter', x: 1, y: 3 }, { k: 'martshelf', x: 6, y: 1 }, { k: 'martshelf', x: 6, y: 4 }, { k: 'plant', x: 9, y: 6 }],
-      npcs: [{ id: 'clerk', x: 2, y: 2, dir: 'down', look: L.clerk, name: 'Clerk', talk: 'clerk', counter: true }] });
   }
   center('center_verdant', 'verdant');
   mart('mart_verdant', 'verdant', ['poke', 'potion', 'antidote', 'parlyzheal', 'awakening', 'burnheal', 'repel']);
@@ -344,7 +352,7 @@ const JMaps = (() => {
   function solidGrid(m, flags = {}) {
     const S = m.rows.map(r => [...r].map(ch => JArt.SOLID.has(JArt.KIND[ch]) || ch === 'X' || ch === 'S'));
     const mark = (x, y, v = true) => { if (S[y] && x >= 0 && x < m.w) S[y][x] = v; };
-    for (const b of m.buildings) { const B0 = JArt.BUILD[b.b]; for (let y = 0; y < B0.h; y++) for (let x = 0; x < B0.w; x++) mark(b.x + x, b.y + y); for (const d of doorsOf(b)) mark(d.x, d.y, false); }
+    for (const b of m.buildings) { const B0 = JArt.BUILD[b.b]; for (let y = 0; y < B0.h; y++) for (let x = 0; x < B0.w; x++) mark(b.x + x, b.y + y); if (!b.deco) for (const d of doorsOf(b)) mark(d.x, d.y, false); }
     for (const f of m.furniture) { const F0 = JArt.FURN[f.k]; for (let y = 0; y < F0.h; y++) for (let x = 0; x < F0.w; x++) mark(f.x + x, f.y + y); }
     for (const s of m.signs) mark(s.x, s.y);
     for (const p of m.props) { const big = p.k === 'bigtree'; for (let y = 0; y < (big ? 3 : 1); y++) for (let x = 0; x < (big ? 3 : 1); x++) mark(p.x + x, p.y + y); }
@@ -353,5 +361,5 @@ const JMaps = (() => {
     return S;
   }
   // chapter files (jch3.js...) add their maps with def, center and mart
-  return { M, L, doorsOf, solidGrid, grid, def, center, mart };
+  return { M, L, doorsOf, solidGrid, grid, def, center, mart, kit };
 })();

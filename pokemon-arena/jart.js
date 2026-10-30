@@ -42,7 +42,9 @@ const JArt = (() => {
     '.': 'grass', ',': 'path', ':': 'sand', '~': 'water', ';': 'tall', '*': 'flowers', 'v': 'ledge', 'f': 'fence', 'T': 'tree', 'B': 'bush', 'r': 'rock', 'S': 'grass', 'p': 'pine',
     '#': 'wall', '_': 'wood', '+': 'tile', 'R': 'rug', 'm': 'mat', '<': 'stairsUp', '>': 'stairsDown', 'g': 'gymfloor', 'V': 'vine', 'k': 'void', 'c': 'cave', 'C': 'cavewall',
     // the later chapters: snowfields, ice, volcanic ash and lava, steel and psychic floors
-    'n': 'snow', 'i': 'ice', 'o': 'ash', 'L': 'lava', 'h': 'metal', 'P': 'psyfloor'
+    'n': 'snow', 'i': 'ice', 'o': 'ash', 'L': 'lava', 'h': 'metal', 'P': 'psyfloor',
+    // Journey II (Meridia): city cobbles, rail tracks, boardwalk planks
+    'u': 'cobble', '=': 'rail', 'b': 'plank'
   };
   const SOLID = new Set(['water', 'fence', 'tree', 'bush', 'rock', 'wall', 'vine', 'void', 'pine', 'cavewall', 'lava']);
   function grassAt(g, x0, y0, tx, ty) {
@@ -155,6 +157,31 @@ const JArt = (() => {
       }
       case 'metal': P(g, '#9aa4b0', x0, y0, TS, TS); P(g, '#7a8490', x0, y0, TS, 1); P(g, '#7a8490', x0, y0, 1, TS); P(g, '#b8c2cc', x0 + 1, y0 + 1, TS - 2, 1); for (const [rx, ry] of [[3, 3], [12, 3], [3, 12], [12, 12]]) P(g, '#6a7480', x0 + rx, y0 + ry, 1, 1); break;
       case 'psyfloor': P(g, '#7a5aa8', x0, y0, TS, TS); P(g, '#5e4488', x0, y0, TS, 1); P(g, '#5e4488', x0, y0, 1, TS); if ((tx + ty) % 2) { P(g, '#9a7ac8', x0 + 4, y0 + 4, 8, 8); P(g, '#c8a8f0', x0 + 7, y0 + 7, 2, 2); } break;
+      case 'cobble': {
+        P(g, '#a8a098', x0, y0, TS, TS);
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+          const sx = x0 + c * 8 + (r % 2 ? 4 : 0) - 4, sy = y0 + r * 4, h = hash(tx * 3 + c, ty * 4 + r, 3);
+          const col = h < 0.33 ? '#b8b0a6' : h < 0.66 ? '#9e968c' : '#aea69c';
+          const a = Math.max(x0, sx + 1), b = Math.min(x0 + TS, sx + 7);
+          if (b > a) { P(g, col, a, sy + 1, b - a, 2); P(g, '#d0c8be', a, sy + 1, Math.min(2, b - a), 1); }
+        }
+        for (let r = 0; r < 4; r++) P(g, '#7e766e', x0, y0 + r * 4, TS, 1);
+        break;
+      }
+      case 'rail': {
+        const vert = at(0, -1) === 'rail' || at(0, 1) === 'rail', horiz = at(-1, 0) === 'rail' || at(1, 0) === 'rail';
+        P(g, '#8a7a68', x0, y0, TS, TS); for (let i = 0; i < 6; i++) P(g, i % 2 ? '#7a6a58' : '#9a8a76', x0 + Math.floor(hash(tx, ty, i) * 15), y0 + Math.floor(hash(ty, tx, i) * 15), 2, 1);
+        if (horiz && !vert) { for (let x = 1; x < TS; x += 5) P(g, '#6a4a30', x0 + x, y0 + 2, 3, 12); P(g, '#c8ccd4', x0, y0 + 4, TS, 1); P(g, '#c8ccd4', x0, y0 + 11, TS, 1); P(g, '#7a7e88', x0, y0 + 5, TS, 1); P(g, '#7a7e88', x0, y0 + 12, TS, 1); }
+        else { for (let y = 1; y < TS; y += 5) P(g, '#6a4a30', x0 + 2, y0 + y, 12, 3); P(g, '#c8ccd4', x0 + 4, y0, 1, TS); P(g, '#c8ccd4', x0 + 11, y0, 1, TS); P(g, '#7a7e88', x0 + 5, y0, 1, TS); P(g, '#7a7e88', x0 + 12, y0, 1, TS); }
+        break;
+      }
+      case 'plank': {
+        P(g, '#b8885a', x0, y0, TS, TS);
+        for (let x = 0; x < TS; x += 4) { P(g, '#8a6038', x0 + x, y0, 1, TS); P(g, '#c89a6a', x0 + x + 1, y0, 1, TS); }
+        for (let x = 0; x < TS; x += 4) P(g, '#6a4a2a', x0 + x + 2, y0 + ((tx * 7 + x) % 12) + 2, 1, 1);
+        if (at(0, 1) === 'water') P(g, '#6a4a2a', x0, y0 + TS - 2, TS, 2);
+        break;
+      }
       default: grassAt(g, x0, y0, tx, ty);
     }
   }
@@ -211,6 +238,15 @@ const JArt = (() => {
   function lamp() {
     return once('lamp', () => { const c = cv(10, 30), g = c.getContext('2d'); P(g, '#3a3a48', 4, 6, 2, 22); P(g, '#2a2a34', 2, 27, 6, 2); P(g, '#3a3a48', 2, 1, 6, 6); P(g, '#ffe68a', 3, 2, 4, 4); return outline(c); });
   }
+  // an Echo Shrine: an old stone lantern with a pale blue flame (Journey II)
+  function shrine() {
+    return once('shrine', () => { const c = cv(14, 24), g = c.getContext('2d'); P(g, '#8a8a98', 3, 18, 8, 5); P(g, '#a8a8b8', 2, 16, 10, 3); P(g, '#9a9aaa', 4, 8, 6, 8); P(g, '#c8c8d8', 1, 5, 12, 3); P(g, '#7a7a8a', 2, 2, 10, 3);
+      P(g, '#a8d8ff', 5, 9, 4, 5); P(g, '#e8f6ff', 6, 10, 2, 3); P(g, '#6a6a7a', 6, 0, 2, 2); return outline(c); });
+  }
+  // a Lumen Company lantern: brass post, warm white glow (Journey II)
+  function lumenlamp() {
+    return once('lumenlamp', () => { const c = cv(12, 30), g = c.getContext('2d'); P(g, '#8a6a2a', 5, 8, 2, 20); P(g, '#6a4a1a', 3, 27, 6, 2); P(g, '#b08a3a', 2, 2, 8, 7); P(g, '#fff8e0', 3, 3, 6, 5); P(g, '#ffe68a', 4, 4, 4, 3); P(g, '#8a6a2a', 5, 0, 2, 2); return outline(c); });
+  }
   function shard() {
     return once('shard', () => { const c = cv(10, 12), g = c.getContext('2d'); P(g, '#7a4ad8', 3, 1, 4, 10); P(g, '#a07af0', 2, 3, 6, 6); P(g, '#e0d0ff', 4, 2, 1, 4); return outline(c); });
   }
@@ -221,7 +257,9 @@ const JArt = (() => {
   const BUILD = {
     house: { w: 5, h: 4, door: [[2, 3]] }, house2: { w: 5, h: 4, door: [[2, 3]] }, house3: { w: 5, h: 4, door: [[2, 3]] },
     lab: { w: 7, h: 5, door: [[3, 4]] }, center: { w: 6, h: 5, door: [[2, 4], [3, 4]] }, mart: { w: 5, h: 4, door: [[2, 3]] },
-    gym: { w: 8, h: 6, door: [[3, 5], [4, 5]] }, museum: { w: 8, h: 5, door: [[3, 4], [4, 4]] }
+    gym: { w: 8, h: 6, door: [[3, 5], [4, 5]] }, museum: { w: 8, h: 5, door: [[3, 4], [4, 4]] },
+    // Journey II: a Warden's lighthouse, the Lumen sky tower (and the Great Lantern), a railway station
+    lighthouse: { w: 5, h: 7, door: [[2, 6]] }, tower: { w: 8, h: 8, door: [[3, 7], [4, 7]] }, station: { w: 8, h: 5, door: [[3, 4], [4, 4]] }
   };
   function window2(g, x, y, w = 12, h = 10, lit) {
     P(g, '#5a4632', x - 1, y - 1, w + 2, h + 2); P(g, lit ? '#ffe8a0' : '#8cc8f0', x, y, w, h); P(g, lit ? '#fff4c8' : '#c8e8ff', x + 1, y + 1, 3, 2);
@@ -242,7 +280,7 @@ const JArt = (() => {
       const door = (dx, wide) => {
         const x = dx * TS + 2, y = H - 22, w = wide ? 28 : 12;
         P(g, '#3a2a1e', x - 1, y - 1, w + 2, 23);
-        if (kind === 'center' || kind === 'mart' || kind === 'gym' || kind === 'museum') { P(g, '#9ad8f8', x, y, w, 22); P(g, '#d8f4ff', x + 1, y + 1, 2, 18); if (wide) P(g, '#5a7a8a', x + w / 2 - 1, y, 2, 22); }
+        if (kind === 'center' || kind === 'mart' || kind === 'gym' || kind === 'museum' || kind === 'tower' || kind === 'station') { P(g, '#9ad8f8', x, y, w, 22); P(g, '#d8f4ff', x + 1, y + 1, 2, 18); if (wide) P(g, '#5a7a8a', x + w / 2 - 1, y, 2, 22); }
         else { P(g, '#a86a3a', x, y, w, 22); P(g, '#8a522a', x + 1, y + 2, w - 2, 1); P(g, '#8a522a', x + 1, y + 10, w - 2, 1); P(g, '#ffd84a', x + w - 3, y + 12, 1, 2); }
         P(g, '#9a9088', x - 2, H - 1, w + 4, 1);
       };
@@ -283,6 +321,32 @@ const JArt = (() => {
           ['...#....', '.#.#.#..', '..###...', '#######.', '..###...', '.#.#.#..', '...#....', '........'], ['........', '#..##..#', '##.##.##', '########', '########', '.######.', '.######.', '........']][variant % 8];
         ART.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '#') P(g, rc, cx - 4 + x, cy - 4 + y, 1, 1); }));
         P(g, shade(rc, 0.45), cx - 1, cy - 2, 2, 2);
+      } else if (kind === 'lighthouse') {
+        // a white tower with coloured bands, a gallery and the lamp room on top
+        const band = ['#3c78d0', '#7a8a9a', '#3c9a58', '#b07a3a', '#e878a8', '#7a58b8', '#4a68b0', '#d85030'][variant % 8];
+        const cx = W / 2, k0 = y => (y - 22) / (H - 24), hw = y => Math.round(11 + k0(y) * 10);
+        for (let y = 22; y < H - 1; y++) { P(g, '#f4f0e8', cx - hw(y), y, hw(y) * 2, 1); P(g, '#d4ccc0', cx + hw(y) - 4, y, 4, 1); }
+        for (const y0 of [36, 58, 80]) for (let y = y0; y < y0 + 8; y++) { P(g, band, cx - hw(y), y, hw(y) * 2, 1); P(g, shade(band, -0.25), cx + hw(y) - 4, y, 4, 1); }
+        P(g, '#3a3a48', cx - 16, 18, 32, 4); P(g, '#5a5a68', cx - 16, 18, 32, 1);
+        for (let x = cx - 15; x < cx + 15; x += 4) P(g, '#3a3a48', x, 12, 1, 6);
+        P(g, '#ffe68a', cx - 9, 6, 18, 12); P(g, '#fff6c8', cx - 6, 8, 6, 6); P(g, '#3a3a48', cx - 1, 6, 2, 12);
+        P(g, band, cx - 11, 2, 22, 5); P(g, shade(band, -0.3), cx - 11, 6, 22, 1); P(g, '#3a3a48', cx - 1, 0, 2, 3);
+        window2(g, cx - 4, 47, 8, 7, true); window2(g, cx - 4, 69, 8, 7);
+        door(2);
+      } else if (kind === 'tower') {
+        // glass and brass: the Lumen Company's sky tower (and, in Frostcrown, the Great Lantern)
+        P(g, '#5a5a6a', 4, 30, W - 8, H - 30); P(g, '#3a3a4a', W - 12, 30, 8, H - 30);
+        for (let y = 34; y < H - 28; y += 12) for (let x = 10; x < W - 14; x += 12) { P(g, '#7ab8e8', x, y, 8, 8); P(g, '#c8e8ff', x + 1, y + 1, 2, 3); P(g, '#ffe68a', x + 5, y + 5, 2, 2); }
+        P(g, '#b08a3a', 2, 28, W - 4, 4); P(g, '#d8b058', 2, 28, W - 4, 1);
+        P(g, '#5a5a6a', 16, 10, W - 32, 18); P(g, '#b08a3a', 14, 8, W - 28, 3);
+        P(g, '#ffe68a', W / 2 - 8, 12, 16, 12); P(g, '#fff6c8', W / 2 - 4, 14, 8, 6); P(g, '#b08a3a', W / 2 - 1, 0, 2, 9);
+        P(g, '#d8b058', 4, H - 26, W - 8, 2);
+        door(3, true);
+      } else if (kind === 'station') {
+        walls(30, '#e0c8a8', '#c4a884'); roof(g, W, H, '#5a6a7a', 32);
+        P(g, '#f4f0e8', W / 2 - 12, 4, 24, 14); P(g, '#3a3a48', W / 2 - 12, 4, 24, 1); P(g, '#3a3a48', W / 2, 7, 1, 6); P(g, '#3a3a48', W / 2, 11, 5, 1);
+        for (let x = 10; x < W - 8; x += 22) if (x < W / 2 - 18 || x > W / 2 + 10) window2(g, x, 44, 12, 12);
+        door(3, true);
       } else if (kind === 'museum') {
         walls(32, '#e8e0d0', '#ccc0a8'); roof(g, W, H, '#8a6a4a', 34);
         for (let x = 10; x < W - 8; x += 20) { P(g, '#f6f2ea', x, 38, 6, H - 40); P(g, '#c8c0b0', x + 5, 38, 1, H - 40); }
@@ -407,5 +471,5 @@ const JArt = (() => {
       return out;
     });
   }
-  return { TS, KIND, SOLID, BUILD, FURN, tile, tallFront, tree, pine, bush, rock, sign, ballItem, mailbox, lamp, shard, building, furniture, person, shade, hash };
+  return { TS, KIND, SOLID, BUILD, FURN, tile, tallFront, tree, pine, bush, rock, sign, ballItem, mailbox, lamp, shard, shrine, lumenlamp, building, furniture, person, shade, hash };
 })();

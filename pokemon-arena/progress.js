@@ -46,7 +46,8 @@ const Prog = (() => {
     return Math.max(1, Math.floor(v * (trainer ? 1.5 : 1)));
   }
   // where the evolutions that need a special place happen in Valoria (by map id prefix)
-  const EVO_PLACES = { leafeon: ['whisperwood'], glaceon: ['frostvale', 'route7', 'skyspire'], crabominable: ['frostvale', 'route7', 'skyspire'], magnezone: ['powerplant', 'voltara', 'ironridge', 'ironmine'] };
+  // (Valoria, then Meridia: Journey II)
+  const EVO_PLACES = { leafeon: ['whisperwood', 'wildheart', 'echo_wildheart'], glaceon: ['frostvale', 'route7', 'skyspire', 'frostpass', 'frostcrown', 'highwatch'], crabominable: ['frostvale', 'route7', 'skyspire', 'frostpass', 'frostcrown', 'highwatch'], magnezone: ['powerplant', 'voltara', 'ironridge', 'ironmine', 'railyard', 'brasslight'] };
   // what a member evolves into now. ctx = { why: 'level' | 'item', item, night, place (the map it levels up on) }
   function evoTarget(m, ctx = {}) {
     for (const to of sp(m.species).evolvesTo) {

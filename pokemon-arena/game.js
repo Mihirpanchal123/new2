@@ -516,6 +516,7 @@ $('thumbBtn').onclick = async () => {
 $('tourneyBtn').onclick = () => openTourneySetup();
 $('advBtn').onclick = () => Adventure.open();
 $('journeyBtn').onclick = () => Journey.open();
+$('journey2Btn').onclick = () => Journey.open('meridia');
 $('recordsBtn').onclick = () => openRecords();
 $('randomBattleBtn').onclick = () => { randomizeTeams(); startBattle(teams.map(t => t.map(s => ({ ...s }))), { format: settings.format }); };
 $('builderBtn').onclick = exitToBuilder;
