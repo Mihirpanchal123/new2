@@ -553,6 +553,8 @@ const Journey = (() => {
     const tr = TRAINERS[n.trainer];
     await runScript(async J => {
       if (G.flags[trFlag(n)]) return J.say(tr.after || '...', n);
+      let walked = 0;
+      const dir0 = n.dir;
       if (spotted) {
         S.player.moving = false;
         J.emote(n, '!'); sfx('beep', true);
@@ -560,12 +562,14 @@ const Journey = (() => {
         // walk up to the player
         const [ptx, pty] = tileOf(S.player.x, S.player.y);
         const k = Math.abs(ptx - n.tx) + Math.abs(pty - n.ty) - 1;
-        if (k > 0) await npcWalk(n, n.dir, k, 80);
+        if (k > 0) { await npcWalk(n, n.dir, k, 80); walked = k; }
         S.player.dir = OPP[n.dir];
       }
       await J.say(tr.before, n);
       const r = await J.battle(n.trainer, n);
       if (r === 'win') { G.flags[trFlag(n)] = true; if (tr.onWin) await TALK[tr.onWin](J, n); }
+      // back to their post afterwards: a trainer left standing where the battle was can block a one-tile corridor
+      if (walked && !n.hidden && S.npcs.includes(n)) { await npcWalk(n, OPP[dir0], walked, 80); n.dir = dir0; }
     });
   }
   async function runEvent(id, ctx) {
@@ -666,18 +670,21 @@ const Journey = (() => {
     if (G.party.length < 6) G.party.push(m); else G.box.push(m);
     return m;
   }
-  async function gainXp(m, n) {
+  // quiet: several levels at once (a handful of Rare Candies) - one "grew to" line at the end instead of one per level;
+  // the moves learned on the way are still offered level by level
+  async function gainXp(m, n, quiet) {
     m.xp += n;
     let grew = false;
+    const from = m.level;
     while (m.level < 100 && m.xp >= Prog.xpAt(m.species, m.level + 1)) {
       const before = Prog.hpMax(m.species, m.level);
       m.level++; grew = true;
       if (m.hp > 0) m.hp += Prog.hpMax(m.species, m.level) - before;
       m.friendship = Math.min(255, m.friendship + 2);
-      sfx('buff');
-      await say(`${Prog.nameOf(m)} grew to Lv. ${m.level}!`, { name: '', face: sp(m.species).sprite });
+      if (!quiet) { sfx('buff'); await say(`${Prog.nameOf(m)} grew to Lv. ${m.level}!`, { name: '', face: sp(m.species).sprite }); }
       for (const id of Prog.movesAt(m.species, m.level)) await learnMove(m, id);
     }
+    if (quiet && grew) { sfx('buff'); await say(`${Prog.nameOf(m)} grew from Lv. ${from} to Lv. ${m.level}!`, { name: '', face: sp(m.species).sprite }); }
     if (grew) { const to = Prog.evoTarget(m, { why: 'level', place: S.map ? S.map.id : '' }); if (to) await evolve(m, to); }
   }
   async function learnMove(m, id) {
@@ -1038,8 +1045,9 @@ const Journey = (() => {
         <div class="jfoot">${money()}<small class="jkeys">←→ pocket · Enter use · Esc back</small></div></div>`;
     } else if (kind === 'useOn') {
       const it = ITEMS[data];
+      const howMany = it.candy ? `<div class="jcandy"><span>How many?</span>${[1, 5, 10, 'max'].map(v => `<button data-a="candyN" data-q="${v}" class="${String(S.candyN || 1) === String(v) ? 'on' : ''}">${v === 'max' ? 'Max' : '×' + v}</button>`).join('')}</div>` : '';
       el.innerHTML = `<div class="jp">${head('Use on which Pokémon?', 'bag')}<div class="juse-it">${itemIcon(data)}<div><b>${esc(it.name)}</b> <small class="jn">${qty(data)}</small><small>${esc(it.desc)}</small></div></div>
-        ${G.party.map((m, i) => monRow(m, i, useTag(it, m), canUse(it, m) ? '' : 'no')).join('')}</div>`;
+        ${howMany}${G.party.map((m, i) => monRow(m, i, useTag(it, m), canUse(it, m) ? '' : 'no')).join('')}</div>`;
       el.dataset.item = data;
     } else if (kind === 'dex') {
       const seen = Object.keys(G.dex.seen).length, caught = Object.keys(G.dex.caught).length;
@@ -1158,12 +1166,23 @@ const Journey = (() => {
       if (it.heal || it.cure || it.revive || it.candy || it.evo || it.tm) return renderPanel(S.menu = 'useOn', b.dataset.i);
       toast(it.desc); return;
     }
+    if (a === 'candyN') { S.candyN = b.dataset.q === 'max' ? 'max' : +b.dataset.q; return renderPanel('useOn', ui.panel.dataset.item); }
     if (k === 'useOn' && b.dataset.m != null) {
       const id = ui.panel.dataset.item, it = ITEMS[id], m = G.party[+b.dataset.m];
       if (!canUse(it, m)) { toast('It won\'t have any effect.'); return; }
       closeMenu();
       await runScript(async () => {
-        if (it.candy) { takeItem(id); await say(`${Prog.nameOf(m)} ate the Rare Candy!`); await gainXp(m, Prog.xpAt(m.species, m.level + 1) - m.xp); return; }
+        if (it.candy) {
+          // as many as chosen (Max: up to Lv. 100), no more than there are; then back to the same list for more
+          const want = S.candyN === 'max' ? 100 - m.level : (S.candyN || 1);
+          const n = Math.max(1, Math.min(want, 100 - m.level, endless(id) ? Infinity : bagN(id)));
+          takeItem(id, n);
+          await say(n > 1 ? `${Prog.nameOf(m)} ate ${n} Rare Candies!` : `${Prog.nameOf(m)} ate the Rare Candy!`);
+          await gainXp(m, Prog.xpAt(m.species, m.level + n) - m.xp, n > 1);
+          save();
+          if (bagN(id) > 0) S.reopen = id;
+          return;
+        }
         if (it.evo) { takeItem(id); return evolve(m, Prog.evoTarget(m, { why: 'item', item: it.evo })); }
         if (it.tm) {
           if (m.moves.length < 4) { m.moves.push(it.tm); m.pp.push(MOVES[it.tm].pp); sfx('heal'); return say(`${Prog.nameOf(m)} learned ${MOVES[it.tm].name}!`); }
@@ -1172,6 +1191,7 @@ const Journey = (() => {
         takeItem(id); applyItem(it, m, false); sfx('heal');
         await say(`Used the ${it.name} on ${Prog.nameOf(m)}.`);
       });
+      if (S.reopen && active && !S.battle) { const r = S.reopen; S.reopen = null; openMenu('useOn', r); }
       return;
     }
     if (a === 'shopmode') return renderPanel('shop', b.dataset.p);
