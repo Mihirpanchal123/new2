@@ -2,6 +2,30 @@
 [build]
   publish = "."
 
+# The admin API (/api/site-config) is a Netlify Function; it keeps the settings in Netlify Blobs.
+# Set ADMIN_USER and ADMIN_PASS (and ADMIN_SECRET) in Site settings > Environment variables to change the login.
+[functions]
+  directory = "netlify/functions"
+
+# /admin: the admin page
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+# the server's own code is not for the browser (the site publishes this whole folder)
+[[redirects]]
+  from = "/server/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/netlify/*"
+  to = "/404"
+  status = 404
+  force = true
+
 # Sprites, cries and portraits rarely change: let the browser keep them for a week
 # instead of re-checking every file with Netlify on each load (its default).
 [[headers]]

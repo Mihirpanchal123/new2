@@ -71,6 +71,14 @@ A live frame-rate readout sits at the top of the screen in every mode (arena, to
 4. **Journey:** click **⭐ Journey** in the team builder, enter a name and pick a look, or **Continue**. A new game opens with a short pixel-art film (`jintro.js`), shot like a movie (letterbox bars with the narration as subtitles, a camera that pushes in, tracks and punches on impacts, slow motion, light rays and shockwaves): the meteor that shattered over Valoria, its shards becoming Mega Stones and Key Stones, a Mega Evolution, Rayquaza over the crater, Team Eclipse under the eclipse, then Professor Hazel's welcome, with its own music. It plays by itself; a tap / Space hurries it along and **Skip** / Esc ends it. **🎬 Watch the intro** on the title screen plays it again.
 5. **Adventure:** click **🌲 Adventure** in the team builder, pick a partner (and optionally a world seed), or **Continue** your saved adventure.
 
+## Admin (/admin)
+
+The game settings (default level, arena, speed, battle length, random pool, sudden death, replays, flashes, cut-ins, music and effects volume, mute, FPS, Shorts mode, Journey's unlimited money & items, channel name) are set for **every visitor** from the admin page at `/admin`, not in the builder. It also opens or closes each Journey world: a world set to **Coming soon** shows "Coming soon" on its button and does not open.
+
+- The login is checked on the server (`server/site-config-core.mjs` keeps only a hash of the password); the page never contains it. To change it, set `ADMIN_USER` and `ADMIN_PASS` (and optionally `ADMIN_SECRET`) in Netlify: Site settings → Environment variables.
+- On Netlify the settings are kept by a Netlify Function (`netlify/functions/site-config.mjs`, at `/api/site-config`) in Netlify Blobs; Netlify installs the `@netlify/blobs` package from `package.json` on deploy. Locally, `node serve.mjs` runs the same API and keeps the settings in `server/site-config.local.json`; open http://localhost:8080/admin.
+- Visitors get a change on their next page load. Without the API (the page opened as a file) the game uses its defaults.
+
 ## Record for upload
 Click **⏺ Record** (or press **R**), then pick **this tab** and tick "share tab audio" for the cries.
 Every battle is saved as its own video (`pokemon-battle-<date>.mp4`) in your Downloads folder. Press R again to stop.

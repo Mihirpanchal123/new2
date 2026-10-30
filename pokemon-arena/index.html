@@ -959,6 +959,10 @@
   .jpslot.drag .jmon, .jpslot.drag .jgrip { background: #ffd84a; }
   .jmon em.lead { background: #ffd84a; border: 2px solid #1b1530; }
   .jhint { font-size: 14px; opacity: .65; margin-top: 2px; }
+  /* the game settings moved to the admin page (/admin, siteconfig.js): their controls stay in the page, hidden */
+  #settingsToggle, #builder .topbar > label:not(.keep), #builder .broadcast-row { display: none !important; }
+  /* a Journey world the admin set to "coming soon" */
+  .btn.soonBtn { opacity: .6; filter: grayscale(.6); cursor: not-allowed; }
   /* Journey II: the clue notebook and the Fly list */
   .jnotes { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
   .jnotes p { margin: 0; padding: 8px 10px; background: #fff3d6; border-left: 4px solid #b08a3a; border-radius: 6px; font-size: 15px; line-height: 1.35; }
@@ -1160,6 +1164,6 @@
 
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
-<script type="module" src="boot.mjs" data-scripts="data.js,base.js,fps.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,jch3.js,jch4.js,jch5.js,jch6.js,jch7.js,jch8.js,m2maps.js,m2story.js,mch2.js,mch3.js,mch4.js,mch5.js,mch6.js,mch7.js,mch8.js,mch9.js,mch10.js,mch11.js,mch12.js,jintro.js,journey.js"></script>
+<script type="module" src="boot.mjs" data-scripts="data.js,base.js,fps.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,jch3.js,jch4.js,jch5.js,jch6.js,jch7.js,jch8.js,m2maps.js,m2story.js,mch2.js,mch3.js,mch4.js,mch5.js,mch6.js,mch7.js,mch8.js,mch9.js,mch10.js,mch11.js,mch12.js,jintro.js,journey.js,siteconfig.js"></script>
 </body>
 </html>
