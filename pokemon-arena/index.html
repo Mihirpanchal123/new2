@@ -961,8 +961,6 @@
   .jhint { font-size: 14px; opacity: .65; margin-top: 2px; }
   /* the game settings moved to the admin page (/admin, siteconfig.js): their controls stay in the page, hidden */
   #settingsToggle, #builder .topbar > label:not(.keep), #builder .broadcast-row { display: none !important; }
-  /* a Journey world the admin set to "coming soon" */
-  .btn.soonBtn { opacity: .6; filter: grayscale(.6); cursor: not-allowed; }
   /* Rare Candies: how many at a time */
   .jcandy { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; } .jcandy span { font-weight: 700; margin-right: 4px; }
   .jcandy button { min-width: 52px; padding: 6px 10px; } .jcandy button.on { background: #1b1530; color: #fff; }
@@ -1058,6 +1056,8 @@
   #retro.journey .rtimer { display: none; }
   .jtitle { display: flex; align-items: center; justify-content: center; z-index: 40; background: radial-gradient(circle at 50% 30%, #2d5a3a, #0f1a14); overflow: auto; }
   .jt-box { display: flex; flex-direction: column; gap: 12px; align-items: stretch; width: min(560px, calc(100% - 28px)); text-align: center; padding: 14px 0; }
+  .jt-soon { display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,.35); border: 3px dashed #ffd84a; border-radius: 14px; padding: 26px 16px; color: #fff; }
+  .jt-soon b { font-size: 30px; color: #ffd84a; } .jt-soon small { font-size: 16px; opacity: .85; }
   .jt-box .logo { margin: 0; font-size: 46px; } .jt-sub { color: #ffd84a; font-size: 20px; margin-top: -8px; }
   .jt-new { background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.2); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .jt-new input { font: inherit; font-size: 20px; padding: 8px 12px; border-radius: 10px; border: 2px solid #94a3b8; background: #0f172a; color: #fff; text-align: center; }

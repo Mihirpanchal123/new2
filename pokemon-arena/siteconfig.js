@@ -23,30 +23,39 @@ const SiteConfig = (() => {
     el.value = String(v);
     el.dispatchEvent(new Event(el.type === 'range' || el.type === 'text' ? 'input' : 'change'));
   }
-  // a world that is "coming soon": its button says so and opens nothing
-  function lockWorlds(journey) {
-    for (const [w, [id, name]] of Object.entries(WORLD_BTN)) {
+  // the Journey buttons ask for the latest config before opening (a lock set a moment ago counts); a title screen
+  // that is open when its world gets locked turns into "Coming soon" (journey.js open() shows that)
+  function hookWorlds() {
+    for (const [w, [id]] of Object.entries(WORLD_BTN)) {
       const b = document.getElementById(id);
-      if (!b) continue;
-      if (!b.dataset.label) { b.dataset.label = b.textContent; b._open = b.onclick; }
-      const soon = journey && journey[w] === 'soon';
-      b.classList.toggle('soonBtn', soon);
-      b.textContent = soon ? b.dataset.label + ' · Coming soon' : b.dataset.label;
-      b.title = soon ? name + ' is coming soon!' : b.title.replace(/ is coming soon!$/, '');
-      b.onclick = soon ? () => toast(`${name} is coming soon! 🚧`, 2500) : b._open;
+      if (!b || b._open) continue;
+      b._open = b.onclick;
+      b.onclick = async e => { b.disabled = true; try { await load(1500); } finally { b.disabled = false; } b._open(e); };
     }
+  }
+  const locked = w => !!(current && current.journey && current.journey[w] === 'soon');
+  function relock() {
+    const t = document.querySelector('.jtitle[data-world]');
+    if (t && locked(t.dataset.world) && !t.querySelector('.jt-soon') && typeof Journey === 'object') { t.remove(); Journey.open(t.dataset.world); }
   }
   function apply(cfg) {
     current = cfg || {};
     for (const [k, v] of Object.entries(current.game || {})) if (CONTROLS[k]) setControl(document.getElementById(CONTROLS[k]), v);
-    lockWorlds(current.journey);
+    relock();
   }
-  async function load() {
+  // ms: give up after this long (a slow network never holds the game)
+  async function load(ms = 8000) {
+    if (location.protocol === 'file:') return;
     try {
-      const r = await fetch('/api/site-config', { cache: 'no-store' });
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
+      const r = await fetch('/api/site-config', { cache: 'no-store', signal: ctl.signal });
+      clearTimeout(t);
       if (r.ok) apply(await r.json());
-    } catch (e) { /* no API here: the defaults stay */ }
+    } catch (e) { /* no API here (or too slow): what we had stays */ }
   }
-  if (location.protocol !== 'file:') load();
-  return { load, apply, get current() { return current; } };
+  hookWorlds();
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 15000);
+  addEventListener('focus', () => load());
+  return { load, apply, locked, get current() { return current; } };
 })();

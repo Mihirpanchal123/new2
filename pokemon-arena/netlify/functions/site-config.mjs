@@ -3,7 +3,8 @@ import { getStore } from '@netlify/blobs';
 import { handle } from '../../server/site-config-core.mjs';
 
 export default async req => {
-  const store = getStore('site-config');
+  // strong: a read always sees the last save (the default can lag up to a minute behind)
+  const store = getStore({ name: 'site-config', consistency: 'strong' });
   const body = req.method === 'POST' ? await req.text() : '';
   const r = await handle({ method: req.method, body }, process.env, {
     get: () => store.get('config', { type: 'json' }),

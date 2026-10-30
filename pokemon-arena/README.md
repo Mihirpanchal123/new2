@@ -73,11 +73,11 @@ A live frame-rate readout sits at the top of the screen in every mode (arena, to
 
 ## Admin (/admin)
 
-The game settings (default level, arena, speed, battle length, random pool, sudden death, replays, flashes, cut-ins, music and effects volume, mute, FPS, Shorts mode, Journey's unlimited money & items, channel name) are set for **every visitor** from the admin page at `/admin`, not in the builder. It also opens or closes each Journey world: a world set to **Coming soon** shows "Coming soon" on its button and does not open.
+The game settings (default level, arena, speed, battle length, random pool, sudden death, replays, flashes, cut-ins, music and effects volume, mute, FPS, Shorts mode, Journey's unlimited money & items, channel name) are set for **every visitor** from the admin page at `/admin`, not in the builder. It also opens or closes each Journey world: a world set to **Coming soon** still has its button, but its title screen shows "Coming soon" instead of the new-game form.
 
 - The login is checked on the server (`server/site-config-core.mjs` keeps only a hash of the password); the page never contains it. To change it, set `ADMIN_USER` and `ADMIN_PASS` (and optionally `ADMIN_SECRET`) in Netlify: Site settings → Environment variables.
 - On Netlify the settings are kept by a Netlify Function (`netlify/functions/site-config.mjs`, at `/api/site-config`) in Netlify Blobs; Netlify installs the `@netlify/blobs` package from `package.json` on deploy. Locally, `node serve.mjs` runs the same API and keeps the settings in `server/site-config.local.json`; open http://localhost:8080/admin.
-- Visitors get a change on their next page load. Without the API (the page opened as a file) the game uses its defaults.
+- Visitors get a change within a few seconds: the page checks again every 15 s, when it gets focus, and right before a Journey opens (so a lock counts at once). Without the API (the page opened as a file) the game uses its defaults.
 
 ## Record for upload
 Click **⏺ Record** (or press **R**), then pick **this tab** and tick "share tab audio" for the cries.

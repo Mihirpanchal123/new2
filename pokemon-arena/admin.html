@@ -51,7 +51,7 @@
   <!-- the panel -->
   <div id="panel" class="hidden">
     <div class="row" style="justify-content: space-between; margin-bottom: 14px;">
-      <div><h1>Pokémon Arena <b>Admin</b></h1><p class="sub" style="margin: 0;">Changes apply to every visitor on their next page load.</p></div>
+      <div><h1>Pokémon Arena <b>Admin</b></h1><p class="sub" style="margin: 0;">Changes reach every visitor within a few seconds.</p></div>
       <button class="ghost" id="logout" type="button">Log out</button>
     </div>
 
@@ -160,7 +160,7 @@
       const r = await api('POST', { token, config: read() });
       if (r.status === 401) { msg($('saveMsg'), r.j.error, 'bad'); setTimeout(logout, 1500); return; }
       if (!r.ok) return msg($('saveMsg'), r.j.error || 'Could not save', 'bad');
-      fill(r.j.config); msg($('saveMsg'), 'Saved. Visitors get it on their next page load.', 'ok');
+      fill(r.j.config); msg($('saveMsg'), 'Saved. Visitors get it within a few seconds.', 'ok');
     } catch (err) { msg($('saveMsg'), err.message, 'bad'); }
     finally { $('save').disabled = false; }
   };

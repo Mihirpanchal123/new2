@@ -392,7 +392,8 @@ const Journey = (() => {
     const [tx, ty] = tileOf(p.x, p.y), key = tileKey(tx, ty);
     // off the map: on to the next one
     if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return crossEdge(tx, ty);
-    if (S.surf && kindAt(tx, ty) !== 'water') { S.surf = false; palReset(); }
+    // off the water: land square on the tile (half over the water, the feet would be stuck on both sides)
+    if (S.surf && kindAt(tx, ty) !== 'water') { S.surf = false; p.x = tx * TS + 8; p.y = ty * TS + 13; palReset(); }
     if (S.warpLock && S.warpLock !== key) S.warpLock = null;
     if (S.zoneLock && S.zoneLock !== key) S.zoneLock = null;
     // doors (walking up into one), mats (walking down), stairs
@@ -1409,6 +1410,16 @@ const Journey = (() => {
     const sv = readSave();
     const el = document.createElement('div');
     el.className = 'overlay jtitle';
+    el.dataset.world = world;
+    // a world the admin set to "coming soon" (siteconfig.js): its title, and only that
+    if (typeof SiteConfig === 'object' && SiteConfig.locked(world)) {
+      el.innerHTML = `<div class="jt-box"><h1 class="logo">${W.title}</h1><div class="jt-sub">${W.sub}</div>
+        <div class="jt-soon"><b>🚧 Coming soon</b><small>This journey isn't open yet. Check back soon!</small></div>
+        <button class="btn alt" data-a="back">Back</button></div>`;
+      el.querySelector('[data-a=back]').onclick = () => el.remove();
+      document.body.append(el);
+      return;
+    }
     const looks = Object.keys(OUTFITS);
     let pick = 'red';
     el.innerHTML = `<div class="jt-box"><h1 class="logo">${W.title}</h1><div class="jt-sub">${W.sub}</div>
