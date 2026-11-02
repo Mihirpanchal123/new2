@@ -11,7 +11,6 @@ const SiteConfig = (() => {
   // config key -> the hidden control that already does the job
   const CONTROLS = { level: 'setLevel', theme: 'setTheme', speed: 'setSpeed', length: 'setLength', pool: 'setPool', sudden: 'setSudden', auto: 'setAuto', replays: 'setReplays',
     flashes: 'setFlashes', cutins: 'setCutins', music: 'setMusic', sfx: 'setSfx', mute: 'setMute', fps: 'setFps', shorts: 'setShorts', journeyInfinite: 'setJourneyInf', channel: 'setChannel' };
-  const WORLD_BTN = { valoria: ['journeyBtn', 'Journey'], meridia: ['journey2Btn', 'Journey II'] };
   let current = null;
 
   // set a control and fire its own handler, only when the value really changes
@@ -23,16 +22,8 @@ const SiteConfig = (() => {
     el.value = String(v);
     el.dispatchEvent(new Event(el.type === 'range' || el.type === 'text' ? 'input' : 'change'));
   }
-  // the Journey buttons ask for the latest config before opening (a lock set a moment ago counts); a title screen
-  // that is open when its world gets locked turns into "Coming soon" (journey.js open() shows that)
-  function hookWorlds() {
-    for (const [w, [id]] of Object.entries(WORLD_BTN)) {
-      const b = document.getElementById(id);
-      if (!b || b._open) continue;
-      b._open = b.onclick;
-      b.onclick = async e => { b.disabled = true; try { await load(1500); } finally { b.disabled = false; } b._open(e); };
-    }
-  }
+  // the Journey buttons (home.js) ask for the latest config before opening, behind the loading screen (a lock set a
+  // moment ago counts); a title screen that is open when its world gets locked turns into "Coming soon" (journey.js open())
   const locked = w => !!(current && current.journey && current.journey[w] === 'soon');
   function relock() {
     const t = document.querySelector('.jtitle[data-world]');
@@ -53,7 +44,6 @@ const SiteConfig = (() => {
       if (r.ok) apply(await r.json());
     } catch (e) { /* no API here (or too slow): what we had stays */ }
   }
-  hookWorlds();
   load();
   setInterval(() => { if (!document.hidden) load(); }, 15000);
   addEventListener('focus', () => load());

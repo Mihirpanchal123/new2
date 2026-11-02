@@ -1063,6 +1063,82 @@
   .jt-new input { font: inherit; font-size: 20px; padding: 8px 12px; border-radius: 10px; border: 2px solid #94a3b8; background: #0f172a; color: #fff; text-align: center; }
   .jt-looks { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; } .jt-looks button { background: #1e293b; border: 3px solid transparent; border-radius: 10px; padding: 6px 2px; cursor: pointer; color: #fff; font: inherit; } .jt-looks button.on { border-color: #ffd84a; } .jt-looks img { width: 100%; max-width: 64px; image-rendering: pixelated; display: block; margin: 0 auto 2px; }
   @media (max-width: 600px) { .jdialog { min-height: 76px; padding: 10px 12px; } .jd-text { font-size: 17px; } .jd-face { width: 48px; height: 42px; } .jp { font-size: 16px; } .jpc { grid-template-columns: 1fr; } .jstart img { height: 70px; } .jstats { grid-template-columns: repeat(3, 1fr); } .jbanner { font-size: 16px; } .jchapter b { font-size: 26px; } .jt-looks { grid-template-columns: repeat(3, 1fr); } .jtabs-bag button { font-size: 11px; flex-direction: column; } .jshop { grid-template-columns: 1fr auto auto auto auto; gap: 5px; } .jshop small, .jshop .jico { display: none; } .jfoot .jkeys { display: none; } }
+  /* Home: the first screen - Pokémon Journey or Pokémon Battle Royale, then their modes */
+  #home { z-index: 30; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0b1226; }
+  body.journey #home { display: none; }
+  .hm-bg { position: fixed; inset: 0; pointer-events: none; opacity: .06; animation: hmDrift 30s linear infinite;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23fff' stroke-width='5'%3E%3Ccircle cx='60' cy='60' r='34'/%3E%3Cpath d='M26 60h22M72 60h22'/%3E%3Ccircle cx='60' cy='60' r='11'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 120px 120px; }
+  @keyframes hmDrift { to { background-position: 120px 120px; } }
+  .hm-glow { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,.35), transparent 60%), radial-gradient(ellipse at 50% 100%, rgba(239,68,68,.22), transparent 55%); }
+  .hm-box { position: relative; width: min(920px, calc(100% - 32px)); padding: 28px 0; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .hm-logo { display: flex; align-items: center; gap: 14px; }
+  .hm-logo h1 { margin: 0; font: 400 clamp(34px, 7vw, 64px) / 1 'Tiny5', 'Segoe UI', sans-serif; color: #facc15; letter-spacing: 2px; text-shadow: 0 4px 0 #1d4ed8, 0 8px 0 #0b1226, 0 0 24px rgba(250,204,21,.35); }
+  .hm-ball, .ld-ball { position: relative; display: inline-block; flex: none; width: 46px; height: 46px; border-radius: 50%; border: 4px solid #111; background: linear-gradient(#ef4444 0 44%, #111 44% 56%, #f8fafc 56%); box-shadow: inset -6px -6px 0 rgba(0,0,0,.18); }
+  .hm-ball::after, .ld-ball::after { content: ""; position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: #f8fafc; border: 4px solid #111; }
+  .hm-ball { animation: hmSpin 6s ease-in-out infinite; }
+  @keyframes hmSpin { 0%, 80% { transform: rotate(0); } 86% { transform: rotate(-18deg); } 92% { transform: rotate(14deg); } 100% { transform: rotate(0); } }
+  .hm-step { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; animation: hmIn .28s ease-out; }
+  @keyframes hmIn { from { opacity: 0; transform: translateY(10px); } }
+  .hm-hint { margin: 0; color: #cbd5e1; font-size: 17px; }
+  .hm-head { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .hm-head h2 { margin: 0; flex: 1; text-align: center; font: 400 clamp(22px, 4vw, 32px) 'Tiny5', sans-serif; color: #fff; letter-spacing: 1px; padding-right: 92px; }
+  .hm-back { flex: none; width: 92px; padding: 8px 12px; border-radius: 10px; border: 2px solid #334155; background: #111a33; color: #e2e8f0; font: 700 15px 'Segoe UI', sans-serif; cursor: pointer; }
+  .hm-back:hover { background: #1e293b; border-color: #64748b; }
+  .hm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; width: 100%; }
+  .hm-card { --c: #3b82f6; --d: #1d4ed8; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 200px; padding: 20px 20px 18px; text-align: left; border-radius: 18px; border: 4px solid #111827; color: #fff; cursor: pointer;
+    background: linear-gradient(160deg, var(--c), var(--d)); box-shadow: 0 6px 0 #020617, inset 0 -8px 0 rgba(0,0,0,.18); transition: transform .12s, box-shadow .12s, filter .12s; font-family: 'Segoe UI', sans-serif; }
+  .hm-card:hover, .hm-card:focus-visible { transform: translateY(-4px); box-shadow: 0 10px 0 #020617, inset 0 -8px 0 rgba(0,0,0,.18), 0 0 0 3px #facc15; outline: none; filter: saturate(1.1); }
+  .hm-card:active { transform: translateY(2px); box-shadow: 0 3px 0 #020617, inset 0 -8px 0 rgba(0,0,0,.18); }
+  .hm-card:disabled { cursor: progress; filter: grayscale(.4); }
+  /* the art keeps to its own corner (--art wide); the words stay left of it */
+  .hm-card { --art: 130px; }
+  .hm-card:has(img + img) { --art: 190px; }
+  .hm-card b, .hm-card small, .hm-card i { position: relative; z-index: 1; max-width: calc(100% - var(--art)); }
+  .hm-card b { font: 400 clamp(22px, 3vw, 28px) / 1.1 'Tiny5', sans-serif; letter-spacing: .5px; text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+  .hm-card small { font-size: 15px; line-height: 1.35; color: rgba(255,255,255,.9); }
+  .hm-card i { margin-top: auto; font-style: normal; font-weight: 800; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; background: rgba(0,0,0,.3); padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+  .hm-card img { position: absolute; right: 12px; bottom: 12px; height: 112px; max-width: 120px; object-fit: contain; object-position: bottom; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,.35)); pointer-events: none; }
+  .hm-card img + img { right: 128px; height: 64px; max-width: 60px; }
+  .hm-card.c-journey { --c: #22c55e; --d: #166534; } .hm-card.c-battle { --c: #ef4444; --d: #991b1b; }
+  .hm-card.c-j1 { --c: #f59e0b; --d: #b45309; } .hm-card.c-j2 { --c: #8b5cf6; --d: #4c1d95; }
+  .hm-card.c-1v1 { --c: #3b82f6; --d: #1e3a8a; } .hm-card.c-royale { --c: #eab308; --d: #a16207; } .hm-card.c-brawl { --c: #ec4899; --d: #9d174d; }
+  .hm-big .hm-card { min-height: 250px; }
+  .hm-foot { color: #64748b; font-size: 13px; }
+  @media (max-width: 600px) {
+    .hm-box { gap: 16px; padding: 18px 0; } .hm-ball { width: 34px; height: 34px; border-width: 3px; } .hm-ball + h1 + .hm-ball { display: none; }
+    .hm-logo { gap: 10px; } .hm-logo h1 { font-size: 28px; }
+    .hm-cards { grid-template-columns: 1fr; gap: 12px; } .hm-card, .hm-big .hm-card { min-height: 150px; padding: 14px 16px; }
+    .hm-card { --art: 100px; } .hm-card:has(img + img) { --art: 120px; }
+    .hm-card img { height: 84px; max-width: 90px; right: 10px; bottom: 10px; } .hm-card img + img { right: 72px; bottom: 8px; height: 48px; max-width: 44px; }
+    .hm-card small { font-size: 14px; }
+    .hm-head h2 { padding-right: 0; text-align: right; } .hm-back { width: auto; }
+  }
+  #builder .footer #homeBtn { margin-right: auto; }
+
+  /* Loading screen: a Pokéball shakes while the game's files and a Journey's world load */
+  #loader { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(circle at 50% 40%, #1e293b, #020617 70%); color: #fff; font-family: 'Tiny5', 'Segoe UI', sans-serif; opacity: 1; transition: opacity .3s; }
+  #loader.out { opacity: 0; pointer-events: none; }
+  .ld-stage { position: relative; width: 220px; height: 120px; }
+  .ld-ball { position: absolute; left: 50%; bottom: 10px; width: 84px; height: 84px; margin-left: -42px; border-width: 6px; transform-origin: 50% 100%; animation: ldShake 1.6s ease-in-out infinite; }
+  .ld-ball::after { border-width: 6px; animation: ldBlink 1.6s steps(1) infinite; }
+  @keyframes ldShake { 0%, 50%, 100% { transform: rotate(0); } 10% { transform: rotate(-22deg); } 20% { transform: rotate(18deg); } 30% { transform: rotate(-10deg); } 40% { transform: rotate(6deg); } }
+  @keyframes ldBlink { 0%, 49% { background: #f8fafc; } 50%, 70% { background: #fca5a5; } 71% { background: #f8fafc; } }
+  .ld-shadow { position: absolute; left: 50%; bottom: 2px; width: 80px; height: 12px; margin-left: -40px; border-radius: 50%; background: rgba(0,0,0,.45); }
+  .ld-mon { position: absolute; bottom: 12px; height: 54px; image-rendering: pixelated; animation: ldHop .5s ease-in-out infinite alternate; }
+  .ld-mon.l { left: 4px; } .ld-mon.r { right: 4px; transform: scaleX(-1); animation-name: ldHopR; animation-delay: .25s; }
+  @keyframes ldHop { to { translate: 0 -10px; } } @keyframes ldHopR { to { translate: 0 -10px; } }
+  .ld-title { font-size: clamp(24px, 5vw, 38px); color: #facc15; text-shadow: 0 3px 0 #1d4ed8; letter-spacing: 1px; text-align: center; padding: 0 16px; }
+  .ld-bar { width: min(360px, calc(100% - 48px)); height: 18px; padding: 3px; border: 3px solid #f8fafc; border-radius: 6px; background: #0f172a; box-shadow: 0 4px 0 rgba(0,0,0,.4); }
+  .ld-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: repeating-linear-gradient(90deg, #22c55e 0 10px, #16a34a 10px 20px); transition: width .25s; }
+  .ld-step { font-size: 18px; color: #e2e8f0; min-height: 1.3em; text-align: center; padding: 0 16px; }
+  .ld-step::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: ldDots 1.2s steps(4) infinite; }
+  @keyframes ldDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  .ld-tip { max-width: min(520px, calc(100% - 32px)); text-align: center; font: 15px/1.4 'Segoe UI', sans-serif; color: #94a3b8; }
+  .ld-tip b { color: #facc15; }
+  .ld-err { color: #fca5a5; font: 600 16px 'Segoe UI', sans-serif; text-align: center; max-width: min(520px, calc(100% - 32px)); }
+  .ld-err button { margin-top: 12px; }
+  @media (prefers-reduced-motion: reduce) { .hm-bg, .hm-ball, .ld-ball, .ld-ball::after, .ld-mon, .hm-step { animation: none; } }
+  #fileWarn { z-index: 95; }
   @media (orientation: landscape) and (max-height: 500px) { body.touchUI .jdialog { bottom: 10px; width: calc(100% - 340px); min-width: 300px; } .jt-stick { width: 110px; height: 110px; } .jt-stick i { left: 30px; top: 30px; } .jt-a, .jt-b { width: 60px; height: 60px; font-size: 22px; } .jt-a { bottom: 56px; } .jt-b { right: 92px; } .jpanel { padding-top: 14px; } }
 </style>
 </head>
@@ -1151,10 +1227,9 @@
     </section>
   </div>
   <div class="footer">
+    <button class="btn alt" id="homeBtn" title="Back to the home screen">🏠 Home</button>
     <button class="btn alt" id="recordsBtn">📊 Records</button>
     <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
-    <button class="btn alt" id="journeyBtn">⭐ Journey</button>
-    <button class="btn alt" id="journey2Btn" title="Journey II: The Lost Days of Meridia">🏮 Journey II</button>
     <button class="btn alt" id="advBtn" title="Open-world survival adventure with one Pokémon">🌲 Adventure</button>
     <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
     <button class="btn alt" id="randomBoth">Random Both Teams</button>
@@ -1165,8 +1240,48 @@
 <div class="overlay hidden" id="tourneySetup"></div>
 <div class="overlay hidden" id="records"></div>
 
+<!-- Home: the first screen. Pokémon Journey (its two journeys) or Pokémon Battle Royale (1v1, Battle Royale, Brawl) -->
+<div class="overlay" id="home">
+  <div class="hm-bg"></div><div class="hm-glow"></div>
+  <div class="hm-box">
+    <div class="hm-logo"><span class="hm-ball"></span><h1>POKéMON ARENA</h1><span class="hm-ball"></span></div>
+    <div class="hm-step hm-big" data-step="main">
+      <p class="hm-hint">What do you want to play?</p>
+      <div class="hm-cards">
+        <button class="hm-card c-journey" data-go="journey"><b>Pokémon Journey</b><small>Story adventures: be the trainer, explore a region, catch Pokémon and beat the gyms.</small><i>2 journeys ›</i><img src="faces/lapras.png" alt=""><img src="faces/pikachu.png" alt=""></button>
+        <button class="hm-card c-battle" data-go="battle"><b>Pokémon Battle Royale</b><small>Pick your Pokémon and battle: one on one, everyone at once, or team against team.</small><i>3 modes ›</i><img src="faces/charizard.png" alt=""><img src="faces/lucario.png" alt=""></button>
+      </div>
+    </div>
+    <div class="hm-step hidden" data-step="journey">
+      <div class="hm-head"><button class="hm-back" data-go="main">‹ Back</button><h2>Pokémon Journey</h2></div>
+      <div class="hm-cards">
+        <button class="hm-card c-j1" id="journeyBtn"><b>Journey</b><small>The Eclipse of Valoria: a meteor's shards, Mega Evolution and Team Eclipse.</small><i>⭐ Journey I</i><img src="faces/rayquaza.png" alt=""></button>
+        <button class="hm-card c-j2" id="journey2Btn" title="Journey II: The Lost Days of Meridia"><b>Journey II</b><small>The Lost Days of Meridia: whole days vanish from people's memories, and only you remember.</small><i>🏮 Journey II</i><img src="faces/chandelure.png" alt=""></button>
+      </div>
+    </div>
+    <div class="hm-step hidden" data-step="battle">
+      <div class="hm-head"><button class="hm-back" data-go="main">‹ Back</button><h2>Pokémon Battle Royale</h2></div>
+      <div class="hm-cards">
+        <button class="hm-card c-1v1" data-mode="1v1"><b>1v1</b><small>A trainer battle: two teams, one Pokémon out at a time.</small><i>⚔ Classic</i><img src="faces/garchomp.png" alt=""></button>
+        <button class="hm-card c-royale" data-mode="royale"><b>Battle Royale</b><small>Everyone against everyone. The last Pokémon standing wins.</small><i>👑 Free for all</i><img src="faces/gengar.png" alt=""></button>
+        <button class="hm-card c-brawl" data-mode="brawl"><b>Brawl</b><small>Both whole teams fight on the field at the same time.</small><i>👥 Team vs team</i><img src="faces/eevee.png" alt=""></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading screen (home.js drives it) -->
+<div id="loader" class="hidden" role="status" aria-live="polite">
+  <div class="ld-stage"><img class="ld-mon l" alt=""><div class="ld-shadow"></div><div class="ld-ball"></div><img class="ld-mon r" alt=""></div>
+  <div class="ld-title"></div>
+  <div class="ld-bar"><i></i></div>
+  <div class="ld-step"></div>
+  <div class="ld-tip"></div>
+</div>
+
 <div id="fileWarn" class="overlay center hidden"><h1 class="logo">Start with start.bat</h1><div style="max-width:520px;color:#cbd5e1">The game needs the little local server. Double-click <b>start.bat</b> in the game folder (or run <code>node serve.mjs</code>) and open <b>http://localhost:8080</b>.</div></div>
 <script>if (location.protocol === 'file:') document.getElementById('fileWarn').classList.remove('hidden');</script>
+<script src="home.js"></script>
 <script type="module" src="boot.mjs" data-scripts="data.js,base.js,fps.js,audio.js,broadcast.js,tournament.js,world.js,pixelmon.js,retro.js,game.js,adventure.js,progress.js,jart.js,jmaps.js,jstory.js,jch3.js,jch4.js,jch5.js,jch6.js,jch7.js,jch8.js,m2maps.js,m2story.js,mch2.js,mch3.js,mch4.js,mch5.js,mch6.js,mch7.js,mch8.js,mch9.js,mch10.js,mch11.js,mch12.js,jintro.js,journey.js,siteconfig.js"></script>
 </body>
 </html>
