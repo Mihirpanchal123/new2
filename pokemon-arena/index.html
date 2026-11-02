@@ -1154,22 +1154,64 @@
   #builder #startBtn:active { transform: translateY(3px); box-shadow: 0 2px 0 #a16207; }
   #builder #startBtn.notready { filter: grayscale(.7) brightness(.8); }
   @media (max-width: 1000px) { #builder .footer { background: rgba(11,18,38,.97); } }
-  @media (max-width: 700px) {
-    #builder h1.logo { font-size: 24px; }
-    .modeinfo { flex-basis: 100%; order: 5; font-size: 12px; }
-    #builder .pane-title .hint { display: none; }
-    #builder #dex { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 7px; }
-    #builder .dexcard .spr { height: 52px; } #builder .dexcard .spr img { max-height: 50px; } #builder .dexcard .spr::before { width: 44px; margin-left: -22px; height: 9px; }
-    #builder .dexcard .add { display: none; }
-    #builder .slots { grid-template-columns: 1fr; }
-    #builder .footer { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-    #builder .fsec { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px 3px; }
-    #builder .fsec::-webkit-scrollbar { display: none; }
-    #builder .fsec .btn { flex: none; font-size: 12px; padding: 6px 10px; box-shadow: 0 2px 0 #020617; }
-    #builder .fpri { flex-wrap: nowrap; gap: 8px; }
+  /* phones (portrait): one screen, no page scroll. A header (Home, logo, size, ⋯ for the other places), the modes,
+     then Pokédex | Team tabs - only one of the two panes shows and scrolls on its own - and Random + Start at the bottom */
+  .mob-only, .mviews, .lbl-s { display: none; }
+  @media (max-width: 700px) and (orientation: portrait) {
+    #builder { height: 100vh; height: 100dvh; overflow: hidden; padding: 8px 10px 0; gap: 8px; }
+    #builder > .topbar:first-child { gap: 8px; flex-wrap: wrap; }
+    #builder .mob-only { display: inline-grid; place-items: center; flex: none; width: 38px; height: 38px; padding: 0; border-radius: 10px; border: 2px solid #334155; background: #111a33; color: #e2e8f0; font-size: 18px; line-height: 1; cursor: pointer; }
+    #builder .mob-only[aria-expanded="true"] { border-color: var(--acc); background: #1e293b; }
+    #mHome { order: 0; } #builder h1.logo { order: 1; flex: 1 1 0; min-width: 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+    #builder .topbar > label.keep { order: 2; font-size: 10px; color: #94a3b8; gap: 4px; } #builder .topbar > label.keep select { padding: 5px 6px; }
+    body.fmtRoyale #builder .tabs { display: none; }
+    #builder .lbl-l { display: none; } #builder .lbl-s { display: inline; }
+    #toast { top: auto; bottom: 84px; max-width: calc(100% - 32px); text-align: center; }
+    #mMore { order: 3; }
+    #builder .fmtSeg { order: 4; flex: 1 1 100%; display: flex; } #builder .fmtSeg button { flex: 1; padding: 8px 4px; font-size: 13px; }
+    .modeinfo { order: 5; flex: 1 1 100%; font-size: 12px; margin-top: -2px; }
+    /* the two tabs */
+    #builder .mviews { display: flex; flex: none; gap: 4px; padding: 4px; border-radius: 14px; background: #0f172a; border: 2px solid #1e293b; }
+    #builder .mviews button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 6px; border: 0; border-radius: 10px; background: transparent; color: #94a3b8; font: 400 16px 'Tiny5', 'Segoe UI', sans-serif; letter-spacing: .5px; cursor: pointer; }
+    #builder .mviews button[aria-selected="true"] { background: var(--acc); color: var(--acc-ink); box-shadow: 0 3px 0 var(--acc2); }
+    #builder .mviews small { font: 800 11px 'Segoe UI', sans-serif; padding: 1px 7px; border-radius: 999px; background: rgba(0,0,0,.28); }
+    #builder .mviews button.bump small { animation: mBump .45s ease-out; }
+    @keyframes mBump { 30% { transform: scale(1.45); background: #22c55e; color: #052e16; } }
+    /* one pane at a time, filling the screen */
+    #builder .main { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; }
+    #builder .main > .pane { flex: 1; min-height: 0; padding: 10px; border-radius: 14px; box-shadow: none; }
+    #builder[data-view="dex"] .main > .pane:last-child, #builder[data-view="team"] .main > .pane:first-child { display: none; }
+    #builder .pane-title { display: none; }
+    #builder .tools { flex-wrap: nowrap; gap: 6px; } #builder #search { flex: 1 1 auto; min-width: 0; width: auto; } #builder .tools select { flex: none; max-width: 112px; padding: 7px 6px; }
+    #builder .chk { flex: none; font-size: 11px; white-space: nowrap; }
+    #builder #dex { flex: 1; max-height: none; min-height: 0; overflow-y: auto; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 7px; padding: 2px 2px 10px; }
+    #builder .dexcard { padding: 6px 4px; } #builder .dexcard .spr { height: 54px; } #builder .dexcard .spr img { max-height: 52px; } #builder .dexcard .spr::before { width: 44px; margin-left: -22px; height: 9px; }
+    #builder .dexcard .nm { font-size: 12px; } #builder .dexcard .meta, #builder .dexcard .add { display: none; }
+    #builder .dexcard:hover { transform: none; box-shadow: none; } #builder .dexcard:hover .spr img { transform: none; }
+    #builder .dexcard:active { transform: scale(.94); }
+    #builder .teams { flex: 1; min-height: 0; overflow-y: auto; padding: 0 2px 10px; }
+    #builder .tabs { align-self: stretch; display: flex; } #builder .tabs button { flex: 1; padding: 8px 6px; }
+    #builder .teamrow { padding: 8px; }
+    #builder .teamhead { gap: 6px; } #builder .teamhead .pname-input { flex: 1 1 90px; min-width: 0; width: auto; }
+    /* team slots: name row, level row, then the four moves two by two */
+    #builder .slots { grid-template-columns: 1fr; gap: 8px; }
+    #builder .slot { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6px; align-items: start; padding: 8px; }
+    #builder .slot > .hd, #builder .slot > .lvrow, #builder .slot > [data-mega], #builder .slot > div:last-child { grid-column: 1 / -1; }
+    #builder .slot .hd img { height: 46px; }
+    #builder .slot select { font-size: 12px; padding: 6px 4px; }
+    #builder .slot.empty { display: flex; flex-direction: row; min-height: 62px; gap: 10px; justify-content: flex-start; padding: 10px 14px; text-align: left; }
+    #builder .slot.empty::before { width: 28px; height: 28px; margin: 0; flex: none; }
+    #builder .slot.empty b { font-size: 14px; } #builder .slot.empty small { display: block; }
+    /* bottom: Random + Start; the other places sit behind ⋯ */
+    #builder .footer { position: static; display: flex; flex-direction: row; gap: 8px; margin: 0 -10px; padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); bottom: auto; background: rgba(11,18,38,.97); border-top: 1px solid #1e293b; }
+    #builder .fpri { flex: 1; flex-wrap: nowrap; gap: 8px; }
     #builder .fpri .btn { flex: 1 1 0; min-width: 0; }
-    #builder #randomBoth { font-size: 13px; padding: 10px 6px; box-shadow: 0 3px 0 #64748b; }
-    #builder .footer #startBtn { flex: 1.3 1 0; font-size: 19px; padding: 9px 6px; box-shadow: 0 4px 0 #a16207; }
+    #builder #randomBoth { font-size: 13px; padding: 11px 6px; box-shadow: 0 3px 0 #64748b; }
+    #builder .footer #startBtn { flex: 1.35 1 0; font-size: 19px; padding: 9px 6px; box-shadow: 0 4px 0 #a16207; }
+    #builder .fsec { display: none; }
+    #builder.more .fsec { display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: fixed; z-index: 5; top: 54px; right: 10px; width: 200px; padding: 8px; border-radius: 14px; background: #111a33; border: 2px solid #334155; box-shadow: 0 12px 30px rgba(0,0,0,.55); animation: hmIn .18s ease-out; }
+    #builder.more .fsec .btn { text-align: left; font-size: 15px; padding: 10px 12px; box-shadow: none; }
+    #builder.more #homeBtn { display: none; }
   }
   @media (orientation: landscape) and (max-height: 500px) {
     #builder h1.logo { font-size: 20px; } .modeinfo { display: none; }
@@ -1298,7 +1340,9 @@
 <!-- Team builder -->
 <div class="overlay" id="builder">
   <div class="topbar">
+    <button class="mob-only" id="mHome" title="Home" aria-label="Home">🏠</button>
     <h1 class="logo">POKéMON ARENA</h1>
+    <button class="mob-only" id="mMore" title="More" aria-label="More: records, tournament, adventure, record" aria-expanded="false">⋯</button>
     <div class="seg fmtSeg" title="Battle format"><button id="fmt1v1" data-fmt="1v1">⚔ 1v1</button><button id="fmtRoyale" data-fmt="royale" title="Battle Royale: everyone against everyone, last one standing wins (Retro 2D)">👑 Royale</button><button id="fmtBrawl" data-fmt="brawl" title="Team Brawl: both teams fight on the field at the same time (Retro 2D)">👥 Brawl</button></div>
     <button class="small" id="settingsToggle" aria-expanded="false">⚙ Settings</button>
     <div id="modeInfo" class="modeinfo"></div>
@@ -1322,6 +1366,10 @@
     <label><input type="checkbox" id="setShorts"> 📱 Shorts mode (9:16)</label>
     <label title="Journey only: your money and every item you can use (Rare Candies, evolution stones, Poké Balls, medicine, Repels, every TM) never run out. Key items are not touched."><input type="checkbox" id="setJourneyInf"> 💰 Journey: unlimited money &amp; items</label>
     <label>Channel <input id="setChannel" type="text" placeholder="your channel name" maxlength="28"></label>
+  </div>
+  <div class="mviews" role="tablist" aria-label="Show">
+    <button role="tab" data-view="dex" aria-selected="true">Pokédex <small id="mDexN"></small></button>
+    <button role="tab" data-view="team" aria-selected="false"><span id="mTeamLbl">Team</span> <small id="mTeamN"></small></button>
   </div>
   <div class="main">
     <section class="pane">

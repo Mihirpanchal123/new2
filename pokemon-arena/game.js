@@ -555,8 +555,9 @@ function applyFormat(fmt) {
   const M = FORMAT_UI[fmt];
   $('modeInfo').innerHTML = M.info;
   $('teamsTitle').textContent = M.teams;
+  $('mTeamLbl').textContent = fmt === 'royale' ? 'Entrants' : 'Teams';
   $('teamsHint').textContent = M.hint;
-  $('randomBoth').textContent = M.random;
+  $('randomBoth').innerHTML = `🎲 <span class="lbl-l">${M.random.replace('🎲 ', '')}</span><span class="lbl-s">Random</span>`;
   $('startBtn').textContent = M.start;
   teams.forEach((t, p) => teams[p] = t.slice(0, settings.teamSize));
   if (fmt === 'royale') editing = 0;
@@ -629,10 +630,18 @@ function renderDex() {
       if (teams[editing].length >= settings.teamSize) { toast(`${PLAYER[editing]}'s team is full (${settings.teamSize}). Remove one or raise team size.`); return; }
       teams[editing].push(makeSpec(n, settings.level));
       renderTeams();
+      // phones: the team is on the other tab, so say where it went (and make its count jump)
+      if (PHONE.matches) {
+        const full = teams[editing].length >= settings.teamSize;
+        toast(`${s.display} → ${teamTitle(editing)} (${teams[editing].length}/${settings.teamSize})${full ? ' · full! Open the Team tab to pick moves' : ''}`, full ? 2600 : 1400);
+        const t = document.querySelector('.mviews [data-view=team]');
+        t.classList.remove('bump'); void t.offsetWidth; t.classList.add('bump');
+      }
     };
     $('dex').append(c);
   }
   $('dexCount').textContent = `${list.length} of ${DEX.order.length}`;
+  $('mDexN').textContent = list.length;
   markDex();
 }
 
@@ -688,7 +697,7 @@ function renderTeams() {
         const e = document.createElement('div');
         e.className = 'slot empty';
         e.innerHTML = `<b>Slot ${i + 1}</b><small>Pick a Pokémon from the Pokédex</small>`;
-        e.onclick = () => setEditing(p);
+        e.onclick = () => { setEditing(p); showView('dex'); };
         slots.append(e);
         continue;
       }
@@ -696,6 +705,9 @@ function renderTeams() {
     }
   }
   markDex();
+  // the phone's Team tab: how full each side is
+  const n = p => `${teams[p].length}/${settings.teamSize}`;
+  $('mTeamN').textContent = settings.format === 'royale' ? n(0) : `${n(0)} · ${n(1)}`;
   // Start lights up once both sides (or the Royale's entrants) are ready
   const fmt = settings.format;
   $('startBtn').classList.toggle('notready', fmt === 'royale' ? teams[0].length < 2 : !teams[0].length || !teams[1].length);
@@ -766,6 +778,18 @@ $('megaOnly').onchange = renderDex;
 $('settingsToggle').onclick = () => { const open = $('builder').classList.toggle('showSettings'); $('settingsToggle').setAttribute('aria-expanded', open); };
 $('edit0').onclick = () => setEditing(0);
 $('edit1').onclick = () => setEditing(1);
+// phones (portrait): Pokédex | Team tabs, Home and ⋯ (the other places) in the header
+const PHONE = matchMedia('(max-width: 700px) and (orientation: portrait)');
+function showView(v) {
+  $('builder').dataset.view = v;
+  document.querySelectorAll('.mviews [data-view]').forEach(b => b.setAttribute('aria-selected', b.dataset.view === v));
+}
+document.querySelectorAll('.mviews [data-view]').forEach(b => b.onclick = () => showView(b.dataset.view));
+showView('dex');
+const setMore = open => { $('builder').classList.toggle('more', open); $('mMore').setAttribute('aria-expanded', open); };
+$('mMore').onclick = e => { e.stopPropagation(); setMore(!$('builder').classList.contains('more')); };
+$('builder').addEventListener('click', e => { if ($('builder').classList.contains('more') && !e.target.closest('#mMore')) setMore(false); });
+$('mHome').onclick = () => $('homeBtn').click();
 $('setSize').onchange = e => {
   settings.teamSize = +e.target.value;
   formatSizes[settings.format] = settings.teamSize; prefs.sizes = formatSizes; savePrefs();
