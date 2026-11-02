@@ -21,7 +21,7 @@ http.createServer(async (req, res) => {
   if (url === '/api/site-config') {
     let body = '';
     for await (const chunk of req) { body += chunk; if (body.length > 1e5) break; }
-    const r = await handle({ method: req.method, body }, process.env, store);
+    const r = await handle({ method: req.method, body, unlock: req.headers['x-unlock'] }, process.env, store);
     res.writeHead(r.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(r.json));
     return;
   }

@@ -145,12 +145,46 @@ const Home = (() => {
     finally { busy = false; }
   }
 
+  // ---- Pokémon Battle Royale "coming soon" or "password" (set on /admin, siteconfig.js calls sync on every config):
+  // the home card says so, its step shows a sign (or the password box) instead of the 3 modes, and anyone on the
+  // team builder goes back home
+  const battleCard = home.querySelector('.hm-card.c-battle'), battleStep = home.querySelector('.hm-step[data-step="battle"]');
+  const battleTag = battleCard.querySelector('i'), battleTagText = battleTag.textContent;
+  const passForm = battleStep.querySelector('.hm-pass'), passInput = passForm.querySelector('input'), passMsg = passForm.querySelector('.hm-pass-msg');
+  const lockState = sec => typeof SiteConfig === 'object' ? SiteConfig.state(sec) : 'open';
+  const battleState = () => lockState('battle');
+  const battleLocked = () => battleState() !== 'open';
+  function sync() {
+    const state = battleState(), soon = state !== 'open';
+    battleCard.classList.toggle('soon', soon);
+    battleStep.classList.toggle('soon', state === 'soon');
+    battleStep.classList.toggle('locked', state === 'password');
+    battleTag.textContent = state === 'soon' ? '🚧 Coming soon' : state === 'password' ? '🔒 Password' : battleTagText;
+    if (state !== 'password') { passInput.value = ''; passMsg.textContent = ''; }
+    // the two Journey cards: their tag says when the world is coming soon or needs its password (its title screen asks)
+    for (const [w, card] of [['valoria', $('journeyBtn')], ['meridia', $('journey2Btn')]]) {
+      const tag = card.querySelector('i'), st = lockState(w);
+      if (tag.dataset.text == null) tag.dataset.text = tag.textContent;
+      card.classList.toggle('soon', st !== 'open');
+      tag.textContent = st === 'soon' ? '🚧 Coming soon' : st === 'password' ? '🔒 Password' : tag.dataset.text;
+    }
+    // on the team builder (not in a battle that is already running, not in a Journey): back to the sign
+    const builder = $('builder');
+    if (soon && home.classList.contains('hidden') && builder && !builder.classList.contains('hidden') && !document.body.classList.contains('journey')) {
+      show(); step('battle');
+    }
+  }
+
   // ---- Pokémon Battle Royale: a mode opens the team builder (the Pokémon selector) set to it
   async function battle(fmt) {
     if (busy) return;
     busy = true;
     try {
-      await load(FORMAT_TITLE[fmt] || 'Pokémon Battle', [['Loading the Pokédex', 1, gameFiles]]);
+      await load(FORMAT_TITLE[fmt] || 'Pokémon Battle', [
+        ['Loading the Pokédex', 0.9, gameFiles],
+        ['Checking the arena', 0.1, () => typeof SiteConfig === 'object' && within(SiteConfig.load(1500), 2000)]
+      ]);
+      if (battleLocked()) { sync(); step('battle'); return; }
       const b = document.querySelector(`#builder .fmtSeg button[data-fmt="${fmt}"]`);
       if (b) b.click();
       hide();
@@ -158,10 +192,21 @@ const Home = (() => {
     finally { busy = false; }
   }
 
+  // the password box: the server checks it (SiteConfig.unlock), then sync shows the 3 modes
+  passForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = passForm.querySelector('button');
+    if (!passInput.value.trim() || btn.disabled) return;
+    btn.disabled = true; passMsg.className = 'hm-pass-msg'; passMsg.textContent = 'Checking...';
+    const err = await SiteConfig.unlock('battle', passInput.value);
+    btn.disabled = false;
+    if (err) { passMsg.className = 'hm-pass-msg bad'; passMsg.textContent = err; passInput.select(); }
+  });
+
   // ---- wiring
   home.addEventListener('click', e => {
     const go = e.target.closest('[data-go]');
-    if (go) { step(go.dataset.go); return; }
+    if (go) { step(go.dataset.go); if (go.dataset.go === 'battle' && battleState() === 'password') passInput.focus(); return; }
     const mode = e.target.closest('[data-mode]');
     if (mode) battle(mode.dataset.mode);
   });
@@ -174,5 +219,5 @@ const Home = (() => {
     if (cur && cur.dataset.step !== 'main') step('main');
   });
 
-  return { show, hide, step, journey, battle };
+  return { show, hide, step, journey, battle, sync };
 })();

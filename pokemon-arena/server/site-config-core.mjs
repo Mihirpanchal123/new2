@@ -1,7 +1,8 @@
 // =====================================================================
 //  SITE CONFIG (server side) - what /admin sets for every visitor: the
 //  game settings that used to sit in the builder's Settings panel, and
-//  which Journey worlds are open or "coming soon". Shared by the Netlify
+//  which Journey worlds (and Pokémon Battle Royale) are open, "coming soon",
+//  or open only to visitors who type that one's password. Shared by the Netlify
 //  Function (netlify/functions/site-config.mjs, stored in Netlify Blobs)
 //  and the local server (serve.mjs, stored in a JSON file).
 //  The password is checked here, on the server: the page never has it.
@@ -51,28 +52,85 @@ const SCHEMA = {
   ...Object.fromEntries(['auto', 'mute', 'replays', 'fps', 'flashes', 'cutins', 'shorts', 'journeyInfinite'].map(k => [k, v => typeof v === 'boolean' ? v : undefined]))
 };
 const WORLDS = ['valoria', 'meridia'];
-function sanitize(c) {
+// what can be locked: each Journey world and Pokémon Battle Royale (all 3 modes). Each is 'open', 'soon'
+// (coming soon) or 'password' (open to visitors who type that section's password)
+const SECTIONS = [...WORLDS, 'battle'];
+const STATES = ['open', 'soon', 'password'];
+const stateOf = (c, sec) => { const v = sec === 'battle' ? c && c.battle : c && c.journey && c.journey[sec]; return STATES.includes(v) ? v : 'open'; };
+
+// prev: the saved config (it keeps a section's password when the admin leaves its field empty)
+function sanitize(c, prev) {
   const out = { journey: {}, game: {} };
-  for (const w of WORLDS) out.journey[w] = c && c.journey && c.journey[w] === 'soon' ? 'soon' : 'open';
+  for (const w of WORLDS) out.journey[w] = stateOf(c, w);
+  out.battle = stateOf(c, 'battle');
+  const pw = c && c.passwords && typeof c.passwords === 'object' ? c.passwords : {};
+  for (const sec of SECTIONS) {
+    const pass = typeof pw[sec] === 'string' ? pw[sec].trim().slice(0, 64) : '';
+    const lock = pass ? hashPass(pass) : prev && prev.secret && prev.secret[sec];
+    if (lock) (out.secret = out.secret || {})[sec] = lock;
+  }
   for (const [k, check] of Object.entries(SCHEMA)) { const v = c && c.game ? check(c.game[k]) : undefined; if (v !== undefined) out.game[k] = v; }
   out.updated = new Date().toISOString();
   return out;
 }
 
-// One request: GET (anyone) reads the config; POST { user, pass } logs in; POST { token, config } saves.
-// store: { get() -> config | null, set(config) }. Returns { status, json }.
-export async function handle({ method, body }, env, store) {
-  if (method === 'GET') { const saved = await store.get(); if (saved) return { status: 200, json: saved }; const d = sanitize({}); delete d.updated; return { status: 200, json: d }; }
+// ---- section passwords: only their scrypt hash is kept, and the browser never sees that.
+// A visitor who types one gets an unlock token for that section (signed with its salt, so a new password ends
+// every old token); the browser sends its tokens back with each config read (x-unlock: "battle:tok,valoria:tok")
+// and the answer says which still count.
+function hashPass(pass) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return { salt, hash: crypto.scryptSync(pass, salt, 32).toString('hex') };
+}
+const passOk = (lock, pass) => !!lock && same(crypto.scryptSync(String(pass || '').trim().slice(0, 64), lock.salt, 32).toString('hex'), lock.hash);
+const unlockToken = (env, sec, lock) => hmac(secret(env), 'unlock:' + sec + ':' + lock.salt);
+function readUnlocks(header) {
+  const out = {};
+  for (const part of String(header || '').slice(0, 2000).split(',')) { const i = part.indexOf(':'); if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim(); }
+  return out;
+}
+// what anyone may read: no secrets, plus which passwords are set and which of this visitor's unlocks are good
+function publicConfig(env, c, unlockHeader) {
+  const { secret: sec = {}, ...pub } = c;
+  const tokens = readUnlocks(unlockHeader);
+  pub.passSet = {}; pub.unlocked = {};
+  for (const s of SECTIONS) {
+    pub.passSet[s] = !!sec[s];
+    if (stateOf(c, s) === 'password') pub.unlocked[s] = !!(sec[s] && tokens[s] && same(tokens[s], unlockToken(env, s, sec[s])));
+  }
+  return pub;
+}
+
+// One request: GET (anyone) reads the config; POST { user, pass } logs in; POST { token, config } saves;
+// POST { unlock: <section>, pass } trades a section's password for its unlock token.
+// unlock: the x-unlock header (a visitor's unlock tokens). store: { get() -> config | null, set(config) }. Returns { status, json }.
+export async function handle({ method, body, unlock }, env, store) {
+  if (method === 'GET') {
+    const saved = await store.get();
+    if (saved) return { status: 200, json: publicConfig(env, saved, unlock) };
+    const d = sanitize({}); delete d.updated; return { status: 200, json: publicConfig(env, d) };
+  }
   if (method !== 'POST') return { status: 405, json: { error: 'Method not allowed' } };
   let b;
   try { b = JSON.parse(body || '{}'); } catch (e) { return { status: 400, json: { error: 'Bad request' } }; }
+  if (b.unlock != null) {
+    const saved = await store.get();
+    const sec = String(b.unlock);
+    const lock = SECTIONS.includes(sec) && saved && stateOf(saved, sec) === 'password' && saved.secret && saved.secret[sec];
+    if (!lock) return { status: 400, json: { error: 'This needs no password right now' } };
+    if (!passOk(lock, b.pass)) { await new Promise(r => setTimeout(r, 700)); return { status: 401, json: { error: 'Wrong password' } }; }
+    return { status: 200, json: { ok: true, token: unlockToken(env, sec, lock) } };
+  }
   if (b.user != null || b.pass != null) {
     const token = login(env, b.user, b.pass);
     if (!token) { await new Promise(r => setTimeout(r, 700)); return { status: 401, json: { error: 'Wrong username or password' } }; }
     return { status: 200, json: { token } };
   }
   if (!verify(env, b.token)) return { status: 401, json: { error: 'Your session has ended: log in again' } };
-  const config = sanitize(b.config);
+  const config = sanitize(b.config, await store.get());
+  const NAMES = { valoria: 'Journey', meridia: 'Journey II', battle: 'Pokémon Battle Royale' };
+  const missing = SECTIONS.find(sec => stateOf(config, sec) === 'password' && !(config.secret && config.secret[sec]));
+  if (missing) return { status: 400, json: { error: 'Type a password for ' + NAMES[missing] + ' first' } };
   await store.set(config);
-  return { status: 200, json: { ok: true, config } };
+  return { status: 200, json: { ok: true, config: publicConfig(env, config) } };
 }

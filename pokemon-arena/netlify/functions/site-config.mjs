@@ -6,7 +6,7 @@ export default async req => {
   // strong: a read always sees the last save (the default can lag up to a minute behind)
   const store = getStore({ name: 'site-config', consistency: 'strong' });
   const body = req.method === 'POST' ? await req.text() : '';
-  const r = await handle({ method: req.method, body }, process.env, {
+  const r = await handle({ method: req.method, body, unlock: req.headers.get('x-unlock') }, process.env, {
     get: () => store.get('config', { type: 'json' }),
     set: c => store.setJSON('config', c)
   });

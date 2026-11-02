@@ -1411,13 +1411,30 @@ const Journey = (() => {
     const el = document.createElement('div');
     el.className = 'overlay jtitle';
     el.dataset.world = world;
-    // a world the admin set to "coming soon" (siteconfig.js): its title, and only that
-    if (typeof SiteConfig === 'object' && SiteConfig.locked(world)) {
+    // a world the admin set to "coming soon" or "password" (siteconfig.js): its title, and the sign or the password box
+    const lock = typeof SiteConfig === 'object' ? SiteConfig.state(world) : 'open';
+    el.dataset.lock = lock;
+    if (lock !== 'open') {
       el.innerHTML = `<div class="jt-box"><h1 class="logo">${W.title}</h1><div class="jt-sub">${W.sub}</div>
-        <div class="jt-soon"><b>🚧 Coming soon</b><small>This journey isn't open yet. Check back soon!</small></div>
+        ${lock === 'soon' ? `<div class="jt-soon"><b>🚧 Coming soon</b><small>This journey isn't open yet. Check back soon!</small></div>`
+          : `<form class="jt-soon jt-pass" autocomplete="off"><b>🔒 Password needed</b><small>Type the password to open this journey.</small>
+              <div class="hm-pass-row"><input type="password" maxlength="64" placeholder="Password" aria-label="Password"><button type="submit" class="btn">Unlock</button></div>
+              <span class="hm-pass-msg" role="status"></span></form>`}
         <button class="btn alt" data-a="back">Back</button></div>`;
       el.querySelector('[data-a=back]').onclick = () => el.remove();
+      const form = el.querySelector('.jt-pass');
+      if (form) form.onsubmit = async ev => {
+        // the server checks it; when it counts, siteconfig.js draws this title again, open (relock)
+        ev.preventDefault();
+        const inp = form.querySelector('input'), btn = form.querySelector('button'), msg = form.querySelector('.hm-pass-msg');
+        if (!inp.value.trim() || btn.disabled) return;
+        btn.disabled = true; msg.className = 'hm-pass-msg'; msg.textContent = 'Checking...';
+        const err = await SiteConfig.unlock(world, inp.value);
+        btn.disabled = false;
+        if (err) { msg.className = 'hm-pass-msg bad'; msg.textContent = err; inp.select(); }
+      };
       document.body.append(el);
+      if (form) form.querySelector('input').focus();
       return;
     }
     const looks = Object.keys(OUTFITS);

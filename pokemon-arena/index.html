@@ -1261,6 +1261,18 @@
   .hm-card.c-j1 { --c: #f59e0b; --d: #b45309; } .hm-card.c-j2 { --c: #8b5cf6; --d: #4c1d95; }
   .hm-card.c-1v1 { --c: #3b82f6; --d: #1e3a8a; } .hm-card.c-royale { --c: #eab308; --d: #a16207; } .hm-card.c-brawl { --c: #ec4899; --d: #9d174d; }
   .hm-big .hm-card { min-height: 250px; }
+  /* Pokémon Battle Royale set to "coming soon" on /admin (home.js sync) */
+  .hm-soon { display: none; width: 100%; text-align: center; }
+  .hm-step.soon .hm-cards { display: none; } .hm-step.soon .hm-soon { display: flex; }
+  /* ... or "password": the box to type it in */
+  .hm-pass { display: none; width: 100%; text-align: center; align-items: center; }
+  .hm-step.locked .hm-cards { display: none; } .hm-step.locked .hm-pass { display: flex; }
+  .hm-pass-row { display: flex; gap: 8px; width: min(380px, 100%); margin-top: 8px; }
+  .hm-pass-row input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 2px solid #334155; background: #0b1226; color: #fff; font: 600 16px 'Segoe UI', sans-serif; }
+  .hm-pass-row input:focus { outline: none; border-color: #ffd84a; }
+  .hm-pass-msg { min-height: 20px; font-size: 14px; color: #cbd5e1; } .hm-pass-msg.bad { color: #f87171; }
+  .jt-pass { align-items: center; } .jt-pass .hm-pass-row { margin: 8px auto 0; }
+  .hm-card.soon { filter: grayscale(.55) brightness(.85); } .hm-card.soon i { background: #ffd84a; color: #241500; }
   .hm-foot { color: #64748b; font-size: 13px; }
   @media (max-width: 600px) {
     .hm-box { gap: 16px; padding: 18px 0; } .hm-ball { width: 34px; height: 34px; border-width: 3px; } .hm-ball + h1 + .hm-ball { display: none; }
@@ -1435,6 +1447,10 @@
         <button class="hm-card c-royale" data-mode="royale"><b>Battle Royale</b><small>Everyone against everyone. The last Pokémon standing wins.</small><i>👑 Free for all</i><img src="faces/gengar.png" alt=""></button>
         <button class="hm-card c-brawl" data-mode="brawl"><b>Brawl</b><small>Both whole teams fight on the field at the same time.</small><i>👥 Team vs team</i><img src="faces/eevee.png" alt=""></button>
       </div>
+      <div class="jt-soon hm-soon"><b>🚧 Coming soon</b><small>Pokémon Battle Royale isn't open yet. Check back soon!</small></div>
+      <form class="jt-soon hm-pass" autocomplete="off"><b>🔒 Password needed</b><small>Type the password to open Pokémon Battle Royale.</small>
+        <div class="hm-pass-row"><input type="password" maxlength="64" placeholder="Password" aria-label="Password"><button type="submit" class="btn">Unlock</button></div>
+        <span class="hm-pass-msg" role="status"></span></form>
     </div>
   </div>
 </div>

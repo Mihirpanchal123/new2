@@ -29,7 +29,8 @@
   .world b { font-size: 16px; } .world small { display: block; color: var(--muted); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
   .seg button { background: transparent; color: var(--muted); border-radius: 0; padding: 8px 14px; font-size: 14px; }
-  .seg button.on.open { background: var(--ok); color: #06210f; } .seg button.on.soon { background: var(--soon); color: #241500; }
+  .seg button.on.open { background: var(--ok); color: #06210f; } .seg button.on.soon { background: var(--soon); color: #241500; } .seg button.on.pass { background: #60a5fa; color: #06142b; }
+  .passrow { padding: 0 0 12px; } .passrow label { max-width: 360px; } .passrow small { display: block; color: var(--muted); font-size: 13px; margin-top: 6px; }
   #login { max-width: 360px; margin: 10vh auto 0; }
   #login label { margin-bottom: 12px; }
   .hidden { display: none !important; }
@@ -56,9 +57,13 @@
     </div>
 
     <div class="card">
-      <h2>Journey worlds</h2>
-      <div class="world"><div><b>⭐ Journey</b><small>The Eclipse of Valoria</small></div><div class="seg" data-world="valoria"><button type="button" data-v="open" class="open">Open</button><button type="button" data-v="soon" class="soon">Coming soon</button></div></div>
-      <div class="world"><div><b>🏮 Journey II</b><small>The Lost Days of Meridia</small></div><div class="seg" data-world="meridia"><button type="button" data-v="open" class="open">Open</button><button type="button" data-v="soon" class="soon">Coming soon</button></div></div>
+      <h2>Open or coming soon</h2>
+      <div class="world"><div><b>⭐ Journey</b><small>The Eclipse of Valoria</small></div><div class="seg" data-world="valoria"><button type="button" data-v="open" class="open">Open</button><button type="button" data-v="password" class="pass">🔒 Password</button><button type="button" data-v="soon" class="soon">Coming soon</button></div></div>
+      <div class="passrow hidden" data-pass="valoria"><label>Password visitors type to open it <input type="text" maxlength="64" autocomplete="off" spellcheck="false"></label><small></small></div>
+      <div class="world"><div><b>🏮 Journey II</b><small>The Lost Days of Meridia</small></div><div class="seg" data-world="meridia"><button type="button" data-v="open" class="open">Open</button><button type="button" data-v="password" class="pass">🔒 Password</button><button type="button" data-v="soon" class="soon">Coming soon</button></div></div>
+      <div class="passrow hidden" data-pass="meridia"><label>Password visitors type to open it <input type="text" maxlength="64" autocomplete="off" spellcheck="false"></label><small></small></div>
+      <div class="world"><div><b>⚔ Pokémon Battle Royale</b><small>All 3 modes: 1v1, Battle Royale and Brawl</small></div><div class="seg" data-world="battle"><button type="button" data-v="open" class="open">Open</button><button type="button" data-v="password" class="pass">🔒 Password</button><button type="button" data-v="soon" class="soon">Coming soon</button></div></div>
+      <div class="passrow hidden" data-pass="battle"><label>Password visitors type to open it <input type="text" maxlength="64" autocomplete="off" spellcheck="false"></label><small></small></div>
     </div>
 
     <div class="card">
@@ -107,8 +112,11 @@
   // the game's own defaults, shown until something is saved
   const DEFAULTS = { level: 50, theme: 'random', speed: '1', length: '1', pool: 'final', sudden: '60', auto: false, replays: true, flashes: true, cutins: true, music: 0.6, sfx: 0.85, mute: false, fps: true, shorts: false, journeyInfinite: false, channel: '' };
   const fields = [...document.querySelectorAll('[data-k]')];
-  const worlds = { valoria: 'open', meridia: 'open' };
-  let token = null;
+  // what can be locked: the two Journey worlds and battle = Pokémon Battle Royale (all 3 modes): open, password or coming soon
+  const SECTIONS = ['valoria', 'meridia', 'battle'], NAMES = { valoria: 'Journey', meridia: 'Journey II', battle: 'Pokémon Battle Royale' };
+  const worlds = { valoria: 'open', meridia: 'open', battle: 'open' };
+  let token = null, passSet = {};   // passSet: the sections the server already keeps a password for
+  const passInput = s => document.querySelector(`[data-pass="${s}"] input`);
   try { token = sessionStorage.getItem(KEY); } catch (e) {}
 
   const msg = (el, text, cls) => { el.textContent = text; el.className = 'msg ' + (cls || ''); };
@@ -120,11 +128,21 @@
   }
   function showWorlds() {
     for (const seg of document.querySelectorAll('.seg')) for (const b of seg.querySelectorAll('button')) b.classList.toggle('on', worlds[seg.dataset.world] === b.dataset.v);
+    for (const s of SECTIONS) {
+      const row = document.querySelector(`[data-pass="${s}"]`);
+      row.classList.toggle('hidden', worlds[s] !== 'password');
+      passInput(s).placeholder = passSet[s] ? 'leave empty to keep the current one' : 'type a password';
+      row.querySelector('small').textContent = passSet[s] ? 'A password is set. Type a new one to change it: everyone who unlocked with the old one has to type the new one.'
+        : `Visitors who type it can play ${s === 'battle' ? 'all 3 modes' : 'this journey'}; everyone else sees a password box.`;
+    }
   }
   function fill(cfg) {
     const g = { ...DEFAULTS, ...(cfg.game || {}) };
     for (const el of fields) { const v = g[el.dataset.k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = String(v); }
-    Object.assign(worlds, { valoria: 'open', meridia: 'open' }, cfg.journey || {});
+    const st = v => ['soon', 'password'].includes(v) ? v : 'open';
+    Object.assign(worlds, { valoria: st((cfg.journey || {}).valoria), meridia: st((cfg.journey || {}).meridia), battle: st(cfg.battle) });
+    passSet = { ...(cfg.passSet || {}) };
+    for (const s of SECTIONS) passInput(s).value = '';
     showWorlds();
     $('updated').textContent = cfg.updated ? 'Last saved: ' + new Date(cfg.updated).toLocaleString() : 'Nothing saved yet: visitors get the game\'s defaults.';
   }
@@ -134,7 +152,9 @@
       const k = el.dataset.k;
       game[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : k === 'level' ? Math.max(1, Math.min(100, Math.round(+el.value) || 50)) : el.value;
     }
-    return { journey: { ...worlds }, game };
+    const passwords = {};
+    for (const s of SECTIONS) { const v = passInput(s).value.trim(); if (v) passwords[s] = v; }
+    return { journey: { valoria: worlds.valoria, meridia: worlds.meridia }, battle: worlds.battle, passwords, game };
   }
   async function openPanel() {
     $('login').classList.add('hidden'); $('panel').classList.remove('hidden');
@@ -157,6 +177,8 @@
   $('save').onclick = async () => {
     $('save').disabled = true; msg($('saveMsg'), 'Saving...');
     try {
+      const missing = SECTIONS.find(s => worlds[s] === 'password' && !passSet[s] && !passInput(s).value.trim());
+      if (missing) { msg($('saveMsg'), `Type a password for ${NAMES[missing]} first.`, 'bad'); passInput(missing).focus(); return; }
       const r = await api('POST', { token, config: read() });
       if (r.status === 401) { msg($('saveMsg'), r.j.error, 'bad'); setTimeout(logout, 1500); return; }
       if (!r.ok) return msg($('saveMsg'), r.j.error || 'Could not save', 'bad');
