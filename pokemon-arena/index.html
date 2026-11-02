@@ -1063,6 +1063,122 @@
   .jt-new input { font: inherit; font-size: 20px; padding: 8px 12px; border-radius: 10px; border: 2px solid #94a3b8; background: #0f172a; color: #fff; text-align: center; }
   .jt-looks { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; } .jt-looks button { background: #1e293b; border: 3px solid transparent; border-radius: 10px; padding: 6px 2px; cursor: pointer; color: #fff; font: inherit; } .jt-looks button.on { border-color: #ffd84a; } .jt-looks img { width: 100%; max-width: 64px; image-rendering: pixelated; display: block; margin: 0 auto 2px; }
   @media (max-width: 600px) { .jdialog { min-height: 76px; padding: 10px 12px; } .jd-text { font-size: 17px; } .jd-face { width: 48px; height: 42px; } .jp { font-size: 16px; } .jpc { grid-template-columns: 1fr; } .jstart img { height: 70px; } .jstats { grid-template-columns: repeat(3, 1fr); } .jbanner { font-size: 16px; } .jchapter b { font-size: 26px; } .jt-looks { grid-template-columns: repeat(3, 1fr); } .jtabs-bag button { font-size: 11px; flex-direction: column; } .jshop { grid-template-columns: 1fr auto auto auto auto; gap: 5px; } .jshop small, .jshop .jico { display: none; } .jfoot .jkeys { display: none; } }
+  /* Pokémon selector (the team builder): the mode's colour (--acc) runs through it; Pokédex cards and team slots are
+     tinted by their first type (--t1); a card shows when it is on the team being edited */
+  #builder { --acc: #3b82f6; --acc2: #1e3a8a; --acc-ink: #fff; background: radial-gradient(ellipse 70% 45% at 50% -10%, color-mix(in srgb, var(--acc) 26%, transparent), transparent), #0b1226; }
+  body[data-fmt="royale"] #builder { --acc: #eab308; --acc2: #a16207; --acc-ink: #111827; }
+  body[data-fmt="brawl"] #builder { --acc: #ec4899; --acc2: #9d174d; }
+  #builder h1.logo { font: 400 30px 'Tiny5', 'Segoe UI', sans-serif; letter-spacing: 1px; text-shadow: 0 3px 0 #1d4ed8; }
+  #builder .fmtSeg { border: 2px solid #334155; border-radius: 12px; background: #0f172a; padding: 3px; gap: 3px; }
+  #builder .fmtSeg button { border-radius: 9px; padding: 7px 14px; font-size: 14px; background: transparent; transition: background .15s; }
+  #builder .fmtSeg button:hover { background: #1e293b; }
+  #builder .fmtSeg button.on0 { background: var(--acc); color: var(--acc-ink); box-shadow: 0 3px 0 var(--acc2); }
+  .modeinfo { flex: 1 1 260px; min-width: 0; color: #94a3b8; font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .modeinfo b { color: var(--acc); font-weight: 800; }
+  #builder .topbar label.keep select { border: 2px solid #334155; border-radius: 10px; padding: 6px 10px; background: #0f172a; font-weight: 800; }
+  #builder .pane { background: linear-gradient(180deg, #111a33, #0b1222 220px); border: 2px solid #1e293b; border-radius: 16px; box-shadow: 0 6px 0 rgba(2,6,23,.55); }
+  #builder .pane-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font: 400 20px 'Tiny5', 'Segoe UI', sans-serif; letter-spacing: .5px; }
+  #builder .pane-title .muted { font-family: 'Segoe UI', sans-serif; letter-spacing: 0; }
+  #builder .pane-title .hint { margin-left: auto; color: #64748b; }
+  #builder .tools input, #builder .tools select { border: 2px solid #334155; border-radius: 10px; padding: 7px 12px; background-color: #0f172a; font-size: 14px; }
+  #builder #search { padding-left: 34px; background: #0f172a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' stroke-width='2.2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='M11 11l4 4'/%3E%3C/svg%3E") no-repeat 11px 50%; }
+  #builder .tools input:focus, #builder .tools select:focus { outline: none; border-color: var(--acc); }
+  #builder .gentabs button { border-width: 2px; border-color: #334155; padding: 5px 13px; transition: border-color .12s, background .12s; }
+  #builder .gentabs button[aria-selected="true"] { box-shadow: 0 3px 0 #a16207; }
+  /* Pokédex cards */
+  #builder #dex { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); grid-auto-rows: max-content; gap: 10px; padding: 2px 8px 8px 2px; }
+  .dexcard { --t1: #64748b; padding: 8px 6px 8px; border-radius: 14px;
+    background: linear-gradient(165deg, color-mix(in srgb, var(--t1) 34%, #1e293b), #182133 60%); border: 2px solid color-mix(in srgb, var(--t1) 45%, #334155);
+    transition: transform .12s, border-color .12s, box-shadow .12s; }
+  .dexcard:hover { transform: translateY(-3px); border-color: #facc15; box-shadow: 0 6px 0 rgba(0,0,0,.35); }
+  .dexcard:active { transform: translateY(0) scale(.97); }
+  .dexcard .spr { position: relative; height: 70px; }
+  .dexcard .spr::before { content: ""; position: absolute; left: 50%; bottom: 1px; width: 58px; height: 12px; margin-left: -29px; border-radius: 50%; background: rgba(0,0,0,.32); }
+  .dexcard .spr img { position: relative; max-height: 66px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.25)); transition: transform .15s; }
+  .dexcard:hover .spr img { transform: scale(1.1); }
+  .dexcard .nm { margin-top: 3px; font-size: 13px; line-height: 1.15; }
+  .dexcard .nm small { display: block; font-size: 10px; font-weight: 800; color: rgba(255,255,255,.55); }
+  .dexcard .meta { margin-top: 1px; }
+  .dexcard .add { position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--acc); color: var(--acc-ink); font: 900 17px/1 'Segoe UI', sans-serif; box-shadow: 0 2px 0 var(--acc2); opacity: 0; transform: scale(.5); transition: opacity .12s, transform .12s; z-index: 1; }
+  .dexcard:hover .add { opacity: 1; transform: none; }
+  .dexcard .pk { position: absolute; top: 6px; left: 6px; z-index: 1; padding: 2px 7px; border-radius: 999px; background: #22c55e; color: #052e16; font-size: 10px; font-weight: 900; box-shadow: 0 2px 0 #14532d; }
+  .dexcard.picked { border-color: #22c55e; box-shadow: inset 0 0 0 2px rgba(34,197,94,.35); }
+  .dexcard.picked:hover .add { opacity: 0; }
+  #dex.full .dexcard:not(.picked) { opacity: .72; filter: saturate(.6); }
+  #dex.full .dexcard .add { display: none; }
+  /* teams */
+  #builder .tabs { border: 2px solid #334155; border-radius: 12px; background: #0f172a; padding: 3px; gap: 3px; }
+  #builder .tabs button { border-radius: 9px; background: transparent; }
+  #builder .tabs button.on0 { background: #2563eb; box-shadow: 0 3px 0 #1e3a8a; } #builder .tabs button.on1 { background: #dc2626; box-shadow: 0 3px 0 #7f1d1d; }
+  body[data-fmt="royale"] #builder .tabs button.on0 { background: var(--acc); color: var(--acc-ink); box-shadow: 0 3px 0 var(--acc2); }
+  #builder .teamrow { border-radius: 16px; padding: 10px; margin-bottom: 12px; transition: box-shadow .15s, opacity .15s; }
+  #builder .teamrow.t0 { background: linear-gradient(180deg, rgba(37,99,235,.16), #0f172a 140px); }
+  #builder .teamrow.t1 { background: linear-gradient(180deg, rgba(220,38,38,.16), #0f172a 140px); }
+  body[data-fmt="royale"] #builder .teamrow.t0 { border-color: var(--acc); background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 16%, transparent), #0f172a 140px); }
+  #builder .teamrow.editing { box-shadow: 0 0 0 3px #facc15, 0 10px 24px rgba(0,0,0,.35); }
+  #builder .teamhead { flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  #builder .teamhead > span:first-child { font: 400 19px 'Tiny5', 'Segoe UI', sans-serif; letter-spacing: .5px; }
+  #builder .teamhead select, #builder .pname-input { border: 2px solid #334155; border-radius: 8px; padding: 4px 8px; background: #0b1222; }
+  #builder .teamhead .small { border-radius: 8px; padding: 5px 11px; box-shadow: 0 2px 0 #0f172a; }
+  .party { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: #94a3b8; font-size: 12px; font-weight: 800; }
+  .party i { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #475569; box-sizing: border-box; }
+  .party i.on { border-color: #111; background: linear-gradient(#ef4444 0 40%, #111 40% 60%, #f8fafc 60%); }
+  .party b { margin-left: 4px; }
+  #builder .teamrow.compact .strip img { height: 48px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+  #builder .slots { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  #builder .slot { --t1: #64748b; padding: 8px 10px 10px; border-radius: 14px; background: linear-gradient(160deg, color-mix(in srgb, var(--t1) 24%, #1e293b), #162035 55%); border: 2px solid color-mix(in srgb, var(--t1) 40%, #334155); }
+  #builder .slot .hd { gap: 8px; margin-bottom: 4px; }
+  #builder .slot .hd img { height: 54px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+  #builder .slot .hd b { font-size: 15px; }
+  #builder .slot .x { top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.3); font-size: 13px; line-height: 1; }
+  #builder .slot .x:hover { background: #dc2626; color: #fff; }
+  #builder .slot select, #builder .slot input { background: #0b1222; border: 1px solid #334155; border-radius: 7px; padding: 4px 6px; margin-top: 4px; }
+  #builder .slot select[data-move] { border-left: 5px solid var(--mc, #334155); }
+  #builder .slot select[data-mega] { border-left: 5px solid #a78bfa; background: linear-gradient(90deg, rgba(167,139,250,.2), #0b1222 70%); }
+  #builder .slot .lvrow { color: #cbd5e1; font-weight: 800; }
+  #builder .evo { border-radius: 999px; padding: 3px 10px; margin-top: 6px; background: #065f46; box-shadow: 0 2px 0 #022c22; }
+  #builder .slot.empty { flex-direction: column; gap: 4px; min-height: 120px; border-radius: 14px; color: #64748b; font-weight: 700; transition: border-color .12s, color .12s; }
+  #builder .slot.empty::before { content: ""; width: 34px; height: 34px; margin-bottom: 4px; border-radius: 50%; box-sizing: border-box; border: 3px solid #334155; background: radial-gradient(circle, #0b1226 0 4px, #334155 4px 7px, transparent 7px), linear-gradient(transparent 43%, #334155 43% 57%, transparent 57%); }
+  #builder .slot.empty b { font: 400 15px 'Tiny5', 'Segoe UI', sans-serif; color: #94a3b8; }
+  #builder .slot.empty small { font-size: 11px; }
+  #builder .slot.empty:hover { border-color: var(--acc); color: #cbd5e1; }
+  /* footer: the other places on the left, the battle on the right */
+  #builder .footer { justify-content: space-between; align-items: center; gap: 10px 16px; }
+  #builder .fsec, #builder .fpri { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #builder .fsec .btn { font-size: 14px; padding: 8px 13px; border-radius: 10px; background: #1e293b; color: #e2e8f0; border: 2px solid #334155; box-shadow: 0 3px 0 #020617; }
+  #builder .fsec .btn:hover { border-color: #64748b; background: #273449; }
+  #builder .fpri { gap: 12px; }
+  #builder #randomBoth { font-size: 16px; padding: 11px 20px; border-radius: 12px; }
+  #builder #startBtn { font: 400 24px 'Tiny5', 'Segoe UI', sans-serif; letter-spacing: 1px; padding: 9px 30px; border-radius: 12px; background: linear-gradient(#fde047, #facc15 55%, #eab308); box-shadow: 0 5px 0 #a16207; transition: filter .15s, transform .1s; }
+  #builder #startBtn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  #builder #startBtn:active { transform: translateY(3px); box-shadow: 0 2px 0 #a16207; }
+  #builder #startBtn.notready { filter: grayscale(.7) brightness(.8); }
+  @media (max-width: 1000px) { #builder .footer { background: rgba(11,18,38,.97); } }
+  @media (max-width: 700px) {
+    #builder h1.logo { font-size: 24px; }
+    .modeinfo { flex-basis: 100%; order: 5; font-size: 12px; }
+    #builder .pane-title .hint { display: none; }
+    #builder #dex { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 7px; }
+    #builder .dexcard .spr { height: 52px; } #builder .dexcard .spr img { max-height: 50px; } #builder .dexcard .spr::before { width: 44px; margin-left: -22px; height: 9px; }
+    #builder .dexcard .add { display: none; }
+    #builder .slots { grid-template-columns: 1fr; }
+    #builder .footer { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+    #builder .fsec { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -10px; padding: 0 10px 3px; }
+    #builder .fsec::-webkit-scrollbar { display: none; }
+    #builder .fsec .btn { flex: none; font-size: 12px; padding: 6px 10px; box-shadow: 0 2px 0 #020617; }
+    #builder .fpri { flex-wrap: nowrap; gap: 8px; }
+    #builder .fpri .btn { flex: 1 1 0; min-width: 0; }
+    #builder #randomBoth { font-size: 13px; padding: 10px 6px; box-shadow: 0 3px 0 #64748b; }
+    #builder .footer #startBtn { flex: 1.3 1 0; font-size: 19px; padding: 9px 6px; box-shadow: 0 4px 0 #a16207; }
+  }
+  @media (orientation: landscape) and (max-height: 500px) {
+    #builder h1.logo { font-size: 20px; } .modeinfo { display: none; }
+    #builder .footer { flex-wrap: nowrap; }
+    #builder .fsec, #builder .fpri { flex-wrap: nowrap; }
+    #builder .fsec .btn { font-size: 11px; padding: 5px 8px; }
+    #builder #randomBoth { font-size: 12px; padding: 7px 10px; } #builder .footer #startBtn { font-size: 16px; padding: 6px 14px; }
+  }
+
   /* Home: the first screen - Pokémon Journey or Pokémon Battle Royale, then their modes */
   #home { z-index: 30; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0b1226; }
   body.journey #home { display: none; }
@@ -1185,6 +1301,7 @@
     <h1 class="logo">POKéMON ARENA</h1>
     <div class="seg fmtSeg" title="Battle format"><button id="fmt1v1" data-fmt="1v1">⚔ 1v1</button><button id="fmtRoyale" data-fmt="royale" title="Battle Royale: everyone against everyone, last one standing wins (Retro 2D)">👑 Royale</button><button id="fmtBrawl" data-fmt="brawl" title="Team Brawl: both teams fight on the field at the same time (Retro 2D)">👥 Brawl</button></div>
     <button class="small" id="settingsToggle" aria-expanded="false">⚙ Settings</button>
+    <div id="modeInfo" class="modeinfo"></div>
     <label class="keep"><span id="sizeLbl">Team size</span> <select id="setSize"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label>
     <label>Default level <input type="number" id="setLevel" min="1" max="100" value="50"></label>
     <label>Arena <select id="setTheme"><option value="random">Random</option></select></label>
@@ -1208,7 +1325,7 @@
   </div>
   <div class="main">
     <section class="pane">
-      <div class="pane-title">Pokédex <span id="dexCount" class="muted"></span></div>
+      <div class="pane-title">Pokédex <span id="dexCount" class="muted"></span><span class="muted hint">Click a Pokémon to add it</span></div>
       <div class="tools">
         <input id="search" type="search" placeholder="Search Pokémon...">
         <select id="typeFilter"><option value="">All types</option></select>
@@ -1218,7 +1335,7 @@
       <div id="dex"></div>
     </section>
     <section class="pane">
-      <div class="pane-title">Teams <span class="muted">— click a Pokémon in the Pokédex to add it to the selected team</span></div>
+      <div class="pane-title"><span id="teamsTitle">Teams</span> <span class="muted hint" id="teamsHint">Pick a side, then add Pokémon from the Pokédex</span></div>
       <div class="seg tabs"><button id="edit0" class="on0">Player 1</button><button id="edit1">Player 2</button></div>
       <div class="teams">
         <div class="teamrow t0" id="team0"></div>
@@ -1227,13 +1344,17 @@
     </section>
   </div>
   <div class="footer">
-    <button class="btn alt" id="homeBtn" title="Back to the home screen">🏠 Home</button>
-    <button class="btn alt" id="recordsBtn">📊 Records</button>
-    <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
-    <button class="btn alt" id="advBtn" title="Open-world survival adventure with one Pokémon">🌲 Adventure</button>
-    <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
-    <button class="btn alt" id="randomBoth">Random Both Teams</button>
-    <button class="btn" id="startBtn">Start Battle!</button>
+    <div class="fsec">
+      <button class="btn alt" id="homeBtn" title="Back to the home screen">🏠 Home</button>
+      <button class="btn alt" id="recordsBtn">📊 Records</button>
+      <button class="btn alt" id="tourneyBtn">🏆 Tournament</button>
+      <button class="btn alt" id="advBtn" title="Open-world survival adventure with one Pokémon">🌲 Adventure</button>
+      <button class="btn alt" id="recBtn2" title="Record (R)">⏺ Record</button>
+    </div>
+    <div class="fpri">
+      <button class="btn alt" id="randomBoth">🎲 Random Both Teams</button>
+      <button class="btn" id="startBtn">Start Battle!</button>
+    </div>
   </div>
 </div>
 

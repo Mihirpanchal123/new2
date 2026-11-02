@@ -533,6 +533,11 @@ let editing = 0;
 // battle format: 1v1 trainer battle, Battle Royale (free-for-all) or Team Brawl (whole teams on the field at once)
 const FORMAT_SIZES = { '1v1': [1, 6], royale: [2, 8], brawl: [1, 4] };
 const FORMAT_LABEL = { '1v1': 'Team size', royale: 'Entrants', brawl: 'Per team' };
+const FORMAT_UI = {
+  '1v1': { info: '<b>1v1</b> · Two trainers, one Pokémon out at a time. Each side can be you or the CPU.', teams: 'Teams', hint: 'Pick a side, then add Pokémon from the Pokédex', random: '🎲 Random Both Teams', start: '⚔ Start Battle!' },
+  royale: { info: '<b>Battle Royale</b> · Every Pokémon against every other one. The last one standing wins.', teams: 'Entrants', hint: 'Add 2 to 8 Pokémon from the Pokédex', random: '🎲 Random Entrants', start: '👑 Start Royale!' },
+  brawl: { info: '<b>Brawl</b> · Both whole teams fight on the field at the same time.', teams: 'Teams', hint: 'Pick a side, then add Pokémon from the Pokédex', random: '🎲 Random Both Teams', start: '👥 Start Brawl!' }
+};
 const formatSizes = { '1v1': 3, royale: 8, brawl: 3, ...prefs.sizes };
 settings.format = FORMAT_SIZES[prefs.format] ? prefs.format : '1v1';
 const teamTitle = p => settings.format === 'royale' ? 'Entrants' : PLAYER[p];
@@ -545,6 +550,14 @@ function applyFormat(fmt) {
   document.querySelectorAll('.fmtSeg button').forEach(b => b.classList.toggle('on0', b.dataset.fmt === fmt));
   document.body.classList.toggle('fmtRoyale', fmt === 'royale');
   document.body.classList.toggle('fmtMulti', fmt !== '1v1');
+  // the selector's colour, words and buttons follow the mode
+  document.body.dataset.fmt = fmt;
+  const M = FORMAT_UI[fmt];
+  $('modeInfo').innerHTML = M.info;
+  $('teamsTitle').textContent = M.teams;
+  $('teamsHint').textContent = M.hint;
+  $('randomBoth').textContent = M.random;
+  $('startBtn').textContent = M.start;
   teams.forEach((t, p) => teams[p] = t.slice(0, settings.teamSize));
   if (fmt === 'royale') editing = 0;
   setEditing(editing);
@@ -603,11 +616,13 @@ function renderDex() {
     const s = DEX.species[n];
     const c = document.createElement('div');
     c.className = 'dexcard';
+    c.dataset.sp = n;
+    c.style.setProperty('--t1', TYPE_COLORS[s.types[0]] || '#64748b');
     const evo = s.evoFrom ? `from ${DEX.species[s.evoFrom].display} · ${s.evoMethod}` : 'Base form';
     c.title = `${s.display}\n${evo}\nMin level ${s.minLevel}` + (s.megas.length ? `\nMega: ${s.megas.map(m => `${m.display} (${m.stone})`).join(', ')}` : '');
-    c.innerHTML = `${s.megas.length ? '<span class="mg mega-badge">MEGA</span>' : ''}
-      <div class="spr"><img loading="lazy" src="${s.sprite}"></div>
-      <div class="nm">#${s.id} ${s.display}</div>
+    c.innerHTML = `${s.megas.length ? '<span class="mg mega-badge">MEGA</span>' : ''}<span class="add">+</span>
+      <div class="spr"><img loading="lazy" src="${s.sprite}" alt=""></div>
+      <div class="nm"><small>#${String(s.id).padStart(3, '0')}</small>${s.display}</div>
       <div>${s.types.map(typeBadge).join('')}</div>
       <div class="meta">${s.minLevel > 1 ? `Lv ${s.minLevel}+ · ${s.evoMethod}` : 'Base form'}</div>`;
     c.onclick = () => {
@@ -618,7 +633,25 @@ function renderDex() {
     $('dex').append(c);
   }
   $('dexCount').textContent = `${list.length} of ${DEX.order.length}`;
+  markDex();
 }
+
+// the Pokédex shows which Pokémon are on the team being edited (and dims the rest when it is full)
+function markDex() {
+  const have = {};
+  for (const s of teams[editing] || []) have[s.species] = (have[s.species] || 0) + 1;
+  $('dex').classList.toggle('full', (teams[editing] || []).length >= settings.teamSize);
+  $('dex').querySelectorAll('.dexcard').forEach(c => {
+    const n = have[c.dataset.sp] || 0;
+    c.classList.toggle('picked', n > 0);
+    let b = c.querySelector('.pk');
+    if (!n) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('span'); b.className = 'pk'; c.prepend(b); }
+    b.textContent = n > 1 ? `✓ ×${n}` : '✓ IN TEAM';
+  });
+}
+// the team's Poké Balls: one per place, filled when taken
+const partyBalls = p => `<span class="party" title="${teams[p].length} of ${settings.teamSize}">${Array.from({ length: settings.teamSize }, (_, i) => `<i class="${i < teams[p].length ? 'on' : ''}"></i>`).join('')}<b>${teams[p].length}/${settings.teamSize}</b></span>`;
 
 function renderTeams() {
   for (const p of [0, 1]) {
@@ -630,7 +663,7 @@ function renderTeams() {
     if (editing !== p) {
       // the team not being edited collapses to a strip of sprites; click to edit it
       row.innerHTML = `<div class="teamhead"><span style="color:${p ? '#f87171' : '#60a5fa'}">${teamTitle(p)}</span>
-        <span class="muted">${controllers[p] === 'cpu' ? 'CPU' : 'Human'} · ${teams[p].length}/${settings.teamSize} · click to edit</span></div>
+        <span class="muted">${controllers[p] === 'cpu' ? 'CPU' : 'Human'} · click to edit</span>${partyBalls(p)}</div>
         <div class="strip">${teams[p].map(s => `<img src="${DEX.species[s.species].sprite}" title="${DEX.species[s.species].display} Lv${s.level}">`).join('') || '<span class="muted">No Pokémon yet</span>'}</div>`;
       row.onclick = () => setEditing(p);
       continue;
@@ -640,7 +673,7 @@ function renderTeams() {
       <select data-outfit="${p}" title="Trainer outfit">${Object.entries(OUTFITS).map(([k, o]) => `<option value="${k}" ${settings.outfits[p] === k ? 'selected' : ''}>${o.label}</option>`).join('')}</select>
       <select data-ctrl="${p}"><option value="human">Human</option><option value="cpu">CPU</option></select>
       <button class="small" data-rand="${p}">Random</button><button class="small" data-clear="${p}">Clear</button>
-      <span style="font-weight:600;color:#94a3b8;font-size:12px">${teams[p].length}/${settings.teamSize}</span></div><div class="slots"></div>`;
+      ${partyBalls(p)}</div><div class="slots"></div>`;
     row.querySelector('[data-ctrl]').value = controllers[p];
     row.querySelector('[data-ctrl]').onchange = e => { controllers[p] = e.target.value; };
     row.querySelector('[data-name]').onchange = e => { PLAYER[p] = e.target.value.trim() || `Player ${p + 1}`; };
@@ -654,7 +687,7 @@ function renderTeams() {
       if (!spec) {
         const e = document.createElement('div');
         e.className = 'slot empty';
-        e.textContent = 'Click a Pokémon above';
+        e.innerHTML = `<b>Slot ${i + 1}</b><small>Pick a Pokémon from the Pokédex</small>`;
         e.onclick = () => setEditing(p);
         slots.append(e);
         continue;
@@ -662,12 +695,17 @@ function renderTeams() {
       slots.append(slotEl(p, i, spec));
     }
   }
+  markDex();
+  // Start lights up once both sides (or the Royale's entrants) are ready
+  const fmt = settings.format;
+  $('startBtn').classList.toggle('notready', fmt === 'royale' ? teams[0].length < 2 : !teams[0].length || !teams[1].length);
 }
 
 function slotEl(p, i, spec) {
   const sp = DEX.species[spec.species];
   const el = document.createElement('div');
   el.className = 'slot';
+  el.style.setProperty('--t1', TYPE_COLORS[sp.types[0]] || '#64748b');
   const avail = learnable(spec.species, spec.level);
   const moveOpts = sel => `<option value="">— none —</option>` + avail.map(id => {
     const m = MOVES[id];
@@ -689,6 +727,8 @@ function slotEl(p, i, spec) {
     if (!spec.moves.length) spec.moves = defaultMoves(spec.species, spec.level);
     renderTeams();
   };
+  // each move's box is edged in its type's colour
+  el.querySelectorAll('[data-move]').forEach(s => { const m = MOVES[s.value]; if (m) s.style.setProperty('--mc', TYPE_COLORS[m.type] || '#334155'); });
   const megaSel = el.querySelector('[data-mega]');
   if (megaSel) megaSel.onchange = e => { spec.mega = e.target.value || null; };
   el.querySelectorAll('[data-move]').forEach(s => s.onchange = e => {
