@@ -10,10 +10,11 @@
 // =====================================================================
 const Journey = (() => {
   const TS = 16, WALK = 72, RUN = 128;
-  // the worlds: maps, story, save slot, title and the rival's name. film: the opening film (jintro.js) is Valoria's
+  // the worlds: maps, story, save slot, title and the rival's name. film: the world's opening film (Valoria: jintro.js,
+  // Meridia: m2intro.js)
   const WORLDS = {
-    valoria: () => ({ id: 'valoria', key: 'pokemon-arena-journey-v1', maps: JMaps, story: JStory, title: 'POKéMON JOURNEY', sub: 'The Eclipse of Valoria', rival: 'Sora', region: 'Valoria', start: { map: 'home2f', x: 2, y: 3 }, film: true }),
-    meridia: () => ({ id: 'meridia', key: 'pokemon-arena-journey2-v1', maps: MMaps, story: MStory, title: 'POKéMON JOURNEY II', sub: 'The Lost Days of Meridia', rival: 'Juno', region: 'Meridia', start: MStory.START, film: false })
+    valoria: () => ({ id: 'valoria', key: 'pokemon-arena-journey-v1', maps: JMaps, story: JStory, title: 'POKéMON JOURNEY', sub: 'The Eclipse of Valoria', rival: 'Sora', region: 'Valoria', start: { map: 'home2f', x: 2, y: 3 }, film: () => JIntro }),
+    meridia: () => ({ id: 'meridia', key: 'pokemon-arena-journey2-v1', maps: MMaps, story: MStory, title: 'POKéMON JOURNEY II', sub: 'The Lost Days of Meridia', rival: 'Juno', region: 'Meridia', start: MStory.START, film: () => typeof MIntro === 'object' ? MIntro : null })
   };
   let W, ITEMS, BADGES, STARTERS, TRAINERS, TALK, META;
   function useWorld(id) { W = (WORLDS[id] || WORLDS.valoria)(); ({ ITEMS, BADGES, STARTERS, TRAINERS, T: TALK, META } = W.story); }
@@ -1444,14 +1445,14 @@ const Journey = (() => {
       <div class="jt-new"><b>${sv ? 'New game' : 'Who are you?'}</b><input maxlength="10" placeholder="Your name" value="${sv ? '' : ''}">
       <div class="jt-looks">${looks.map(k => `<button data-l="${k}" class="${k === pick ? 'on' : ''}"><img src="${JArt.person(OUTFITS[k]).face}" alt=""><small>${OUTFITS[k].label}</small></button>`).join('')}</div>
       <button class="btn ${sv ? 'alt' : ''}" data-a="new">${sv ? 'Start over (erases your save)' : '★ Begin your journey'}</button></div>
-      ${W.film ? '<button class="btn alt" data-a="film">🎬 Watch the intro</button>' : ''}<button class="btn alt" data-a="back">Back</button></div>`;
+      ${W.film() ? '<button class="btn alt" data-a="film">🎬 Watch the intro</button>' : ''}<button class="btn alt" data-a="back">Back</button></div>`;
     document.body.append(el);
     el.addEventListener('click', e => {
       const l = e.target.closest('[data-l]');
       if (l) { pick = l.dataset.l; el.querySelectorAll('[data-l]').forEach(b => b.classList.toggle('on', b === l)); return; }
       const a = e.target.closest('[data-a]'); if (!a) return;
       if (a.dataset.a === 'back') return el.remove();
-      if (a.dataset.a === 'film') { el.classList.add('hidden'); JIntro.play({ name: sv ? sv.name : '', look: lookOf(sv ? sv.outfit : pick) }).then(() => el.classList.remove('hidden')); return; }
+      if (a.dataset.a === 'film') { el.classList.add('hidden'); W.film().play({ name: sv ? sv.name : '', look: lookOf(sv ? sv.outfit : pick) }).then(() => el.classList.remove('hidden')); return; }
       if (a.dataset.a === 'cont') { el.remove(); return start(sv); }
       if (a.dataset.a === 'new') {
         if (sv && !confirm('Start a new game? Your saved journey will be erased.')) return;
@@ -1459,7 +1460,7 @@ const Journey = (() => {
         // the opening film first; the story then skips the legend it already showed
         el.remove();
         const g = newGame(name, pick);
-        if (W.film) JIntro.play({ name, look: lookOf(pick) }).then(() => { g.flags.film = true; start(g); });
+        if (W.film()) W.film().play({ name, look: lookOf(pick) }).then(() => { g.flags.film = true; start(g); });
         else start(g);
       }
     });

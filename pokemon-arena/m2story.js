@@ -73,9 +73,10 @@ const MStory = (() => {
   //  Prologue: Lantern Night
   // =====================================================================
   on('intro', { sets: ['intro'] }, async J => {
-    await J.say(['Once a year, on Lantern Night, the people of Meridia send paper lanterns up into the dark - one for every day they want to remember.',
-      'And at midnight, all eight great lighthouses of Meridia shine together, so that no ship and no memory is ever lost at sea.',
-      'Tonight is Lantern Night in the little fishing village of Tidemark.']);
+    // (the opening film, m2intro.js, told the legend already)
+    if (!J.flag('film')) await J.say(['Once a year, on Lantern Night, the people of Meridia send paper lanterns up into the dark - one for every day they want to remember.',
+      'And at midnight, all eight great lighthouses of Meridia shine together, so that no ship and no memory is ever lost at sea.']);
+    await J.say('Tonight is Lantern Night in the little fishing village of Tidemark.');
     await J.say('{NAME}! Are you awake? The festival\'s starting - and Professor Okafor is waiting for you in the square!', { name: 'Mom (downstairs)', look: 'mom' });
     J.set('intro');
   });
