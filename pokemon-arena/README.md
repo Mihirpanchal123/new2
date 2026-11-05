@@ -85,6 +85,8 @@ Click **⏺ Record** (or press **R**), then pick **this tab** and tick "share ta
 Every battle is saved as its own video (`pokemon-battle-<date>.mp4`) in your Downloads folder. Press R again to stop.
 Combine with auto-play + Turbo speed to record lots of battles hands-free.
 
+**Reels / Shorts for the Journeys:** `node tools/make-reels.mjs` records five vertical (1080x1920) promo videos from the game itself into `videos/reels/` (headless Chrome or Edge, no ffmpeg): Journey I, Journey II, real-time battles, catch & evolve, and the two worlds. Each opens on a hook headline, has a voiceover with word-by-word captions above Instagram's caption area, the trailer score ducked under the voice, and a "play free · link in bio" end card; a `-cover.jpg` is saved next to each. `--reel=2,4` makes only those. The voiceover is one WAV per line in `videos/reels/vo/` (spoken by Windows' built-in voice when missing); drop in your own recording with the same name to replace a line (it is kept while that line's text is unchanged; `--revoice` redoes them all, `--voice=zira` picks the other voice, `--no-vo` leaves captions only). The lines themselves are at the top of the script.
+
 ## Add more Pokémon
 Add an evolution chain's first species to `ROOTS` in `tools/build-data.mjs`, then run:
 ```

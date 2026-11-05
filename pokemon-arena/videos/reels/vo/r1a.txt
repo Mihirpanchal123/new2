@@ -1,0 +1,1 @@
+This is a full Pokémon adventure... and it runs right in your browser.
