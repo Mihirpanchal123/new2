@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('brothers', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'brothers', bg: 'court', glow: true,\n      cast: [{ who: 'ravana', x: 500, y: 1330, s: 1.15 }],\n      cam: [1.0, 1.07, 459, 560, 470, 600],\n      arm: (t, i, talk) => -10 + 6 * Math.sin(t * 1.4),\n      lines: [[41.8, 44.3, 'फिर किसलिए लड़े मेरे भाई…', 0, 0], [44.6, 45.55, 'किसलिए?', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

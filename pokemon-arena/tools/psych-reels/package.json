@@ -1,0 +1,9 @@
+{
+  "name": "psych-reels",
+  "private": true,
+  "description": "Makes the 10 animated psychological Instagram Reels (Hindi voiceover + subtitles): node make.mjs",
+  "type": "module",
+  "dependencies": {
+    "msedge-tts": "^2.1.1"
+  }
+}

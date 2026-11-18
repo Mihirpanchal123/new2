@@ -1,0 +1,14 @@
+{
+ "text": "1650।",
+ "sig": "[\"sarvam\",{\"speaker\":\"ratan_hi_latenight\",\"pace\":1.15,\"temperature\":0.5,\"model\":\"bulbul:v4-flash\"},[[\"सोलह सौ पचास।\",0]]]",
+ "said": [
+  "सोलह सौ पचास।"
+ ],
+ "words": [
+  {
+   "w": "1650।",
+   "t": 0.04,
+   "d": 1.0005
+  }
+ ]
+}

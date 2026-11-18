@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('boast', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'boast', back: '<g style=\"opacity:.28\">' + W.lace(40, 120, 40, 980, 18, 7) + W.lace(878, 120, 878, 980, 18, 7) + '</g>',\n      cast: [{ who: 'ravana', x: 560, y: 1730, s: 1.36 }],\n      cam: [1.0, 1.045, 459, 520, 470, 500],\n      arm: (t, i, talk) => 30 + 8 * Math.sin(t * 1.2),\n      lines: [[4.2, 5.3, 'इसे पहनकर', 0, 0], [5.9, 7.95, 'देवराज इंद्र भी मेरे सामने टिक नहीं सकता।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

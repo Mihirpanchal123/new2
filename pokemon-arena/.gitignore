@@ -1,3 +1,6 @@
 node_modules/
 # the admin settings when running locally (node serve.mjs)
 server/site-config.local.json
+
+# secrets (API keys)
+.env

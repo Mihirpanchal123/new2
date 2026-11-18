@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('refuse', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'refuse', bg: 'court', back: W.guard(110, 0.85, false) + W.guard(250, 0.75, false) + W.guard(820, 0.85, true),\n      cast: [{ who: 'ravana', x: 500, y: 975, s: 0.88 }],\n      cam: [1.0, 1.06, 459, 540, 480, 520],\n      arm: (t, i, talk) => 10 + 34 * kit.eio(kit.clamp01((t - 0.6) / 1.2)) - 30 * kit.eio(kit.clamp01((t - 4.0) / 1.0)) + 4 * Math.sin(t * 1.7),\n      lines: [[35.5, 38.5, 'यदि मैं ऐसा करूँ…', 0, 0], [38.8, 40.95, 'तो यह शत्रु के आगे सिर झुकाना होगा।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

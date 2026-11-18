@@ -1,0 +1,794 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block;height:960px;width:540px}</style>
+</head><body>
+<canvas id="out" width="1080" height="1920"></canvas>
+<script>
+// =====================================================================
+//  "धोलावीरा — 5,000 साल पुरानी इंजीनियरिंग" — animated documentary
+//  9:16, 1080x1920 @ 30fps. Stylised reconstruction; every frame is a
+//  pure function of time. The city is a small 3D scene (metres, x = east,
+//  y = north, z = up) drawn with a perspective drone camera.
+// =====================================================================
+const W = 1080, H = 1920, FPS = 30, TAU = Math.PI * 2;
+let FRAME = 0, CURT = 0;
+
+// ---------- helpers ----------
+function rng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const mod = (a, n) => ((a % n) + n) % n;
+const eOut = t => 1 - Math.pow(1 - clamp(t), 3);
+const eIn = t => Math.pow(clamp(t), 3);
+const eInOut = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const prog = (u, a, b) => clamp((u - a) / (b - a));
+const norm = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+const hex = s => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const rgba = (c, a = 1) => `rgba(${Math.min(255, c[0]) | 0},${Math.min(255, c[1]) | 0},${Math.min(255, c[2]) | 0},${a})`;
+function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function poly(ctx, pts, fill) { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+function sky(ctx, stops, h) { const g = ctx.createLinearGradient(0, 0, 0, h); stops.forEach(([o, c]) => g.addColorStop(o, c)); ctx.fillStyle = g; ctx.fillRect(-50, -50, W + 100, h + 50); }
+function glow(ctx, x, y, r, col) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); ctx.restore(); }
+function txt(ctx, s, x, y, size, col = '#fff', align = 'center', weight = 700, outline = 7) {
+  ctx.save(); ctx.font = `${weight} ${size}px "Nirmala UI", "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  if (col.startsWith('rgba(')) { const k = col.lastIndexOf(','), al = parseFloat(col.slice(k + 1)); if (!(al > 0)) { ctx.restore(); return; } ctx.globalAlpha *= Math.min(1, al); col = col.slice(0, k) + ',1)'; }
+  if (outline) { ctx.lineWidth = outline; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(s, x, y); }
+  ctx.fillStyle = col; ctx.fillText(s, x, y); ctx.restore();
+}
+function arrow(ctx, x1, y1, x2, y2, col, lw) {
+  const a = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1); if (L < 2) return;
+  ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(a) * lw * 2, y2 - Math.sin(a) * lw * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a - .45) * lw * 4, y2 - Math.sin(a - .45) * lw * 4); ctx.lineTo(x2 - Math.cos(a + .45) * lw * 4, y2 - Math.sin(a + .45) * lw * 4); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function title(ctx, s, y, a, size) {
+  if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.font = `700 ${size}px "Nirmala UI", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 30; const g = ctx.createLinearGradient(0, y - size / 2, 0, y + size / 2);
+  g.addColorStop(0, '#fff6dc'); g.addColorStop(.5, '#f5c66a'); g.addColorStop(1, '#c98f2e'); ctx.fillStyle = g; ctx.fillText(s, W / 2, y); ctx.restore();
+}
+function pill(ctx, s, x, y, size, a, col = 'rgba(255,255,255,.92)', bg = 'rgba(0,0,0,.45)') {
+  if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; ctx.font = `600 ${size}px "Nirmala UI", "Segoe UI", sans-serif`; const w = ctx.measureText(s).width;
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x - w / 2 - size * .7, y - size * .9, w + size * 1.4, size * 1.8, size * .9); ctx.fill();
+  ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); ctx.restore();
+}
+
+// ---------- textures ----------
+const noise = [0, 1, 2, 3].map(s => {
+  const c = mk(540, 960), x = c.getContext('2d'), d = x.createImageData(540, 960), r = rng(100 + s);
+  for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  x.putImageData(d, 0, 0); return c;
+});
+const fogC = (() => {
+  const c = mk(2400, 900), x = c.getContext('2d'), r = rng(77); x.filter = 'blur(38px)';
+  for (let i = 0; i < 80; i++) { x.fillStyle = `rgba(255,255,255,${.22 + r() * .35})`; x.beginPath(); x.ellipse(r() * 2400, 280 + r() * 360, 150 + r() * 380, 50 + r() * 110, 0, 0, TAU); x.fill(); }
+  return c;
+})();
+function fog(ctx, y, alpha, off, scale = 1) {
+  if (alpha <= 0) return; ctx.save(); ctx.globalAlpha = alpha; const w = 2400 * scale, h = 900 * scale, x0 = mod(off, w) - w;
+  for (let x = x0; x < W; x += w) ctx.drawImage(fogC, x, y - h / 2, w, h); ctx.restore();
+}
+function rain(ctx, u, a) {
+  if (a <= 0) return; const r = rng(5); ctx.save(); ctx.strokeStyle = `rgba(210,225,240,${.45 * a})`; ctx.lineWidth = 2; ctx.beginPath();
+  for (let i = 0; i < 320; i++) { const sp = 1500 + r() * 900, x = mod(r() * W * 1.3 - u * sp * .25, W * 1.3) - W * .15, y = mod(r() * H - u * -sp, H + 200) - 100, l = 40 + r() * 50; ctx.moveTo(x, y); ctx.lineTo(x - l * .25, y + l); }
+  ctx.stroke(); ctx.restore();
+}
+function dust(ctx, u, n, col, seed = 3) {
+  const r = rng(seed); ctx.save(); ctx.fillStyle = col;
+  for (let i = 0; i < n; i++) { const x = mod(r() * W + u * (12 + r() * 30), W), y = mod(r() * H - u * (6 + r() * 14) + Math.sin(u + i) * 10, H), s = 1 + r() * 3; ctx.globalAlpha = .3 + .5 * r(); ctx.beginPath(); ctx.arc(x, y, s, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+// =====================================================================
+//  3D ENGINE — perspective camera, clipped polygons, boxes, reservoirs
+// =====================================================================
+function camera(o) {
+  const sY = Math.sin(o.yaw), cY = Math.cos(o.yaw), sP = Math.sin(o.pitch), cP = Math.cos(o.pitch);
+  const F = [cP * sY, cP * cY, -sP], R = [cY, -sY, 0], U = [sY * sP, cY * sP, cP];
+  const C = [o.tx - F[0] * o.dist, o.ty - F[1] * o.dist, (o.tz || 0) - F[2] * o.dist];
+  const f = o.f || 1500, cx = W / 2, cy = o.cy || H * .42;
+  const cs = (x, y, z) => { const dx = x - C[0], dy = y - C[1], dz = z - C[2]; return [dx * R[0] + dy * R[1], dx * U[0] + dy * U[1] + dz * U[2], dx * F[0] + dy * F[1] + dz * F[2]]; };
+  return { C, F, R, U, f, cx, cy, cs, hz: cy - f * Math.tan(o.pitch), p(x, y, z) { const [a, b, c] = cs(x, y, z); return c > 1 ? [cx + f * a / c, cy - f * b / c, c] : null; } };
+}
+const NEAR = 1.5;
+function proj(cam, pts) {
+  const c = pts.map(p => cam.cs(p[0], p[1], p[2])), o = [];
+  for (let i = 0; i < c.length; i++) {
+    const a = c[i], b = c[(i + 1) % c.length], ia = a[2] >= NEAR, ib = b[2] >= NEAR;
+    if (ia) o.push(a);
+    if (ia !== ib) { const t = (NEAR - a[2]) / (b[2] - a[2]); o.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, NEAR]); }
+  }
+  return o.length >= 3 ? o.map(q => [cam.cx + cam.f * q[0] / q[2], cam.cy - cam.f * q[1] / q[2]]) : null;
+}
+function path2(ctx, s) { ctx.beginPath(); s.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+function fill3(ctx, cam, pts, fill) { const s = proj(cam, pts); if (!s) return null; path2(ctx, s); ctx.fillStyle = fill; ctx.fill(); return s; }
+function seg3(ctx, cam, a, b) {
+  let A = cam.cs(a[0], a[1], a[2]), B = cam.cs(b[0], b[1], b[2]); if (A[2] < NEAR && B[2] < NEAR) return;
+  if (A[2] < NEAR || B[2] < NEAR) { const t = (NEAR - A[2]) / (B[2] - A[2]), M = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, NEAR]; if (A[2] < NEAR) A = M; else B = M; }
+  ctx.moveTo(cam.cx + cam.f * A[0] / A[2], cam.cy - cam.f * A[1] / A[2]); ctx.lineTo(cam.cx + cam.f * B[0] / B[2], cam.cy - cam.f * B[1] / B[2]);
+}
+const rect3 = (x0, y0, x1, y1, z) => [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]];
+function ribbon(pts, w, z = 0) {
+  const L = [], R = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    L.push([pts[i][0] - dy * w / 2, pts[i][1] + dx * w / 2, z]); R.push([pts[i][0] + dy * w / 2, pts[i][1] - dx * w / 2, z]);
+  }
+  return [...L, ...R.reverse()];
+}
+function polyLen(pts) { const c = [0]; for (let i = 1; i < pts.length; i++) c.push(c[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return c; }
+function polyAt(pts, cum, s) {
+  let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
+  const t = clamp((s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1)); return [lerp(pts[i - 1][0], pts[i][0], t), lerp(pts[i - 1][1], pts[i][1], t)];
+}
+function hull(P) {
+  P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
+// ---------- palettes (light, sky) ----------
+const PALS = {
+  gold: { sky: [[0, '#2f4b7c'], [.5, '#b9857a'], [.8, '#f0a874'], [1, '#ffd49a']], L: norm([-.8, -.3, .42]), amb: .5, bright: 1.0, tint: [1.1, .97, .84], haze: [255, 200, 155], water: [[70, 105, 130], [240, 180, 126]], glow: 'rgba(255,190,120,.55)', shadow: 1 },
+  day: { sky: [[0, '#6f9fd0'], [.5, '#a9c6e0'], [.8, '#e2e6e0'], [1, '#f4efe2']], L: norm([.35, -.6, .75]), amb: .58, bright: 1.0, tint: [1.03, 1, .95], haze: [232, 232, 228], water: [[52, 110, 140], [150, 200, 220]], glow: 'rgba(255,255,230,.35)', shadow: .9 },
+  storm: { sky: [[0, '#252a36'], [.5, '#3c4350'], [.8, '#5b6270'], [1, '#7a808a']], L: norm([.2, -.4, .9]), amb: .8, bright: .62, tint: [.92, .96, 1.04], haze: [110, 118, 130], water: [[40, 70, 90], [100, 130, 150]], glow: 'rgba(0,0,0,0)', shadow: .2 },
+  sunset: { sky: [[0, '#2b2d5c'], [.45, '#8a4f7d'], [.78, '#f08a5d'], [1, '#ffc98b']], L: norm([-.85, .1, .3]), amb: .5, bright: .92, tint: [1.15, .9, .8], haze: [255, 165, 125], water: [[74, 63, 106], [243, 154, 106]], glow: 'rgba(255,150,90,.6)', shadow: 1 },
+  dusk: { sky: [[0, '#151a3d'], [.42, '#4b3a6b'], [.78, '#d9745a'], [1, '#f2a46a']], L: norm([-.9, .2, .2]), amb: .5, bright: .74, tint: [1.12, .88, .86], haze: [220, 130, 110], water: [[58, 48, 80], [217, 128, 90]], glow: 'rgba(255,140,90,.5)', shadow: .9 },
+  today: { sky: [[0, '#7fa6c8'], [.5, '#b8cbd8'], [.8, '#e3ddd0'], [1, '#efe6d6']], L: norm([.4, -.5, .7]), amb: .58, bright: .98, tint: [1, 1, .97], haze: [230, 225, 215], water: [[60, 100, 120], [150, 190, 200]], glow: 'rgba(255,255,230,.3)', shadow: .85 },
+};
+function mixPal(a, b, t) {
+  if (t <= 0) return a; if (t >= 1) return b;
+  const ms = (x, y) => rgba(mixc(hex(x), hex(y), t));
+  return {
+    sky: a.sky.map((s, i) => [lerp(s[0], b.sky[i][0], t), ms(s[1], b.sky[i][1])]), skyMixed: true,
+    L: norm(mixc(a.L, b.L, t)), amb: lerp(a.amb, b.amb, t), bright: lerp(a.bright, b.bright, t), tint: mixc(a.tint, b.tint, t),
+    haze: mixc(a.haze, b.haze, t), water: [mixc(a.water[0], b.water[0], t), mixc(a.water[1], b.water[1], t)], glow: t < .5 ? a.glow : b.glow, shadow: lerp(a.shadow, b.shadow, t),
+  };
+}
+function shadeCol(col, P, nx, ny, nz, a = 1) {
+  const L = P.L, k = (P.amb + (1 - P.amb) * Math.max(0, nx * L[0] + ny * L[1] + nz * L[2])) * P.bright, T = P.tint;
+  return rgba([col[0] * k * T[0], col[1] * k * T[1], col[2] * k * T[2]], a);
+}
+
+// ---------- materials ----------
+const SALT = [238, 230, 216], GROUND = [200, 160, 114], TOWN = [214, 182, 138], CERE = [226, 202, 162];
+const STONE = [216, 188, 146], STONE2 = [196, 166, 126], BRICK = [192, 146, 104], PLAT = [204, 174, 132], RUINC = [158, 140, 118], BED = [224, 204, 170];
+
+// ---------- the world ----------
+const mansarY = x => 425 + 50 * Math.sin(x / 290) + 18 * Math.sin(x / 97);
+const manharY = x => -420 + 42 * Math.sin(x / 260 + 1) + 16 * Math.sin(x / 83 + 2);
+const WORLD = (() => {
+  const r = rng(42), boxes = [], streets = [];
+  const add = (x0, y0, x1, y1, h, col, o = {}) => boxes.push({ x0, y0, x1, y1, z0: o.z0 || 0, h, hr: o.hr ?? Math.max(.6, h * .15), col, kind: o.kind || 'house' });
+  const ring = (x0, y0, x1, y1, t, h, col, hr, z0 = 0, seg = 40) => {
+    for (const [a, b] of [[y0, y0 + t], [y1 - t, y1]]) for (let x = x0; x < x1 - .1; x += seg) add(x, a, Math.min(x1, x + seg), b, h, col, { hr, z0, kind: 'wall' });
+    for (const [a, b] of [[x0, x0 + t], [x1 - t, x1]]) for (let y = y0 + t; y < y1 - t - .1; y += seg) add(a, y, b, Math.min(y1 - t, y + seg), h, col, { hr, z0, kind: 'wall' });
+  };
+  const grid = (x0, y0, x1, y1, dens = 1) => {
+    const P = 15;
+    for (let ix = 0; x0 + ix * P + 11 <= x1; ix++) for (let iy = 0; y0 + iy * P + 11 <= y1; iy++) {
+      if (ix % 5 === 2 || iy % 6 === 3) continue;
+      if (r() > dens) continue;
+      const x = x0 + ix * P, y = y0 + iy * P, w = 9 + r() * 4, d = 9 + r() * 4, h = 3.6 + r() * 2.4;
+      add(x + (13 - w) / 2, y + (13 - d) / 2, x + (13 + w) / 2, y + (13 + d) / 2, h, mixc(STONE, BRICK, r() * .7), { kind: 'house' });
+    }
+    for (let ix = 2; x0 + ix * P + 11 <= x1; ix += 5) streets.push({ ax: 'y', c: x0 + ix * P + 6.5, a: y0, b: y1 });
+    for (let iy = 3; y0 + iy * P + 11 <= y1; iy += 6) streets.push({ ax: 'x', c: y0 + iy * P + 6.5, a: x0, b: x1 });
+  };
+  // outer fortification with bastions
+  ring(-385, -310, 385, 310, 14, 9, STONE2, 2.4);
+  for (let x = -385; x <= 385; x += 110) for (const y of [-310, 310]) add(x - 11, y - 11, x + 11, y + 11, 11, STONE2, { hr: 3, kind: 'wall' });
+  for (let y = -200; y <= 200; y += 110) for (const x of [-385, 385]) add(x - 11, y - 11, x + 11, y + 11, 11, STONE2, { hr: 3, kind: 'wall' });
+  // citadel: castle + bailey on raised platforms
+  add(-40, -285, 100, -165, 12, PLAT, { hr: 9, kind: 'plat' });
+  ring(-40, -285, 100, -165, 6, 4.5, STONE, 1.2, 12, 35);
+  for (const [a, b, c, d, h] of [[-22, -268, 28, -232, 5], [40, -262, 84, -220, 6.5], [-24, -214, 18, -184, 4], [32, -206, 82, -182, 4.5]]) add(a, b, c, d, h, STONE, { z0: 12, kind: 'house', hr: 1 });
+  add(-175, -285, -40, -180, 8, PLAT, { hr: 6, kind: 'plat' });
+  ring(-175, -285, -40, -180, 5, 3, STONE, 1, 8, 34);
+  for (let x = -165; x < -55; x += 22) for (let y = -272; y < -195; y += 24) if (r() < .8) add(x, y, x + 15, y + 15, 3.8 + r() * 1.5, mixc(STONE, BRICK, r() * .4), { z0: 8, kind: 'house', hr: .8 });
+  // middle town (walled) and lower town
+  ring(-265, -100, 145, 150, 8, 6, STONE2, 1.6);
+  grid(-255, -90, 135, 140, .95);
+  grid(165, -235, 322, 290, .9);
+  grid(-365, 170, 145, 292, .55);
+  // check dams on the seasonal streams
+  for (const [x, f] of [[560, mansarY], [300, manharY], [-260, manharY]]) add(x - 7, f(x) - 26, x + 7, f(x) + 26, 3.2, STONE2, { hr: 1.2, kind: 'dam' });
+  const res = [
+    { x0: 332, y0: -245, x1: 369, y1: 255, d: 9, steps: 3, ins: 3.2 },
+    { x0: -345, y0: -294, x1: -195, y1: -266, d: 6, steps: 2, ins: 3 },
+    { x0: 115, y0: -294, x1: 315, y1: -262, d: 7, steps: 2, ins: 3 },
+  ];
+  const channels = [
+    [[560, mansarY(560) - 20], [530, 360], [440, 326], [352, 302], [352, 252]],
+    [[300, manharY(300) + 20], [270, -350], [215, -320], [215, -290]],
+    [[-260, manharY(-260) + 20], [-268, -340], [-270, -290]],
+  ];
+  const mansar = [], manhar = [];
+  for (let x = 2600; x >= -1400; x -= 40) { mansar.push([x, mansarY(x)]); manhar.push([x, manharY(x)]); }
+  const island = [], islandOuter = [];
+  for (let i = 0; i < 60; i++) { const a = i / 60 * TAU, rr = 2100 + 260 * Math.sin(a * 3 + 1) + 160 * Math.sin(a * 7) + 70 * (r() - .5); island.push([900 + Math.cos(a) * rr * 1.25, -900 + Math.sin(a) * rr, 0]); islandOuter.push([900 + Math.cos(a) * (rr + 120) * 1.25, -900 + Math.sin(a) * (rr + 120), 0]); }
+  const patches = [];
+  for (let k = 0; k < 9; k++) { const cx = 300 + r() * 2200, cy = -2200 + r() * 1900, R = 150 + r() * 260, pts = []; if (Math.hypot(cx, cy) < 700) continue; for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; pts.push([cx + Math.cos(a) * R * (.7 + r() * .5), cy + Math.sin(a) * R * (.6 + r() * .4), 0]); } patches.push(pts); }
+  const shrubs = [];
+  for (let i = 0; i < 700; i++) { const a = r() * TAU, d = 420 + r() * 1500, x = Math.cos(a) * d, y = Math.sin(a) * d; shrubs.push({ x, y, r: 2 + r() * 3.5, inside: false }); }
+  for (let i = 0; i < 260; i++) shrubs.push({ x: (r() - .5) * 740, y: (r() - .5) * 590, r: 1.2 + r() * 2.2, inside: true });
+  const walkers = [], cloth = [[214, 196, 166], [176, 72, 52], [232, 222, 202], [128, 94, 62], [70, 88, 120], [190, 150, 70]];
+  for (const s of streets) { const n = Math.max(1, Math.round((s.b - s.a) / 45)); for (let i = 0; i < n; i++) walkers.push({ s, ph: r() * 1000, v: (r() < .5 ? -1 : 1) * (1 + r() * .6), off: (r() - .5) * 5, col: cloth[(r() * cloth.length) | 0] }); }
+  return { boxes, res, channels, mansar, manhar, island, islandOuter, patches, shrubs, walkers, streets, cum: { mansar: polyLen(mansar), manhar: polyLen(manhar), ch: channels.map(polyLen) } };
+})();
+const MAIN_ST = WORLD.streets.find(s => s.ax === 'x' && s.c > 40 && s.c < 60 && s.a < -200);
+
+function drawBox(ctx, cam, b, P) {
+  const C = cam.C, { x0, y0, x1, y1, z0 } = b, z1 = z0 + b.hh, col = b.cc;
+  if (C[1] < y0) fill3(ctx, cam, [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], shadeCol(col, P, 0, -1, 0));
+  if (C[1] > y1) fill3(ctx, cam, [[x1, y1, z0], [x0, y1, z0], [x0, y1, z1], [x1, y1, z1]], shadeCol(col, P, 0, 1, 0));
+  if (C[0] < x0) fill3(ctx, cam, [[x0, y1, z0], [x0, y0, z0], [x0, y0, z1], [x0, y1, z1]], shadeCol(col, P, -1, 0, 0));
+  if (C[0] > x1) fill3(ctx, cam, [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], shadeCol(col, P, 1, 0, 0));
+  if (C[2] > z1) fill3(ctx, cam, rect3(x0, y0, x1, y1, z1), shadeCol(mixc(col, [255, 245, 225], .08), P, 0, 0, 1));
+}
+function drawRes(ctx, cam, R, level, P, ruin, u, glint) {
+  const C = cam.C, steps = R.steps, dz = R.d / steps, ins = R.ins;
+  const rr = k => [R.x0 + k * ins, R.y0 + k * ins, R.x1 - k * ins, R.y1 - k * ins];
+  const rim = proj(cam, rect3(R.x0, R.y0, R.x1, R.y1, 0)); if (!rim) return;
+  const stone = mixc([186, 160, 122], RUINC, ruin * .7);
+  ctx.save(); path2(ctx, rim); ctx.clip();
+  for (let k = 0; k < steps; k++) {
+    const [a, b, c, d] = rr(k), zt = -k * dz, zb = -(k + 1) * dz;
+    if (k > 0) fill3(ctx, cam, rect3(...rr(k - 1), zt), shadeCol(stone, P, 0, 0, 1));
+    if (C[1] < d) fill3(ctx, cam, [[a, d, zt], [c, d, zt], [c, d, zb], [a, d, zb]], shadeCol(stone, P, 0, -1, 0));
+    if (C[1] > b) fill3(ctx, cam, [[a, b, zt], [c, b, zt], [c, b, zb], [a, b, zb]], shadeCol(stone, P, 0, 1, 0));
+    if (C[0] < c) fill3(ctx, cam, [[c, b, zt], [c, d, zt], [c, d, zb], [c, b, zb]], shadeCol(stone, P, -1, 0, 0));
+    if (C[0] > a) fill3(ctx, cam, [[a, b, zt], [a, d, zt], [a, d, zb], [a, b, zb]], shadeCol(stone, P, 1, 0, 0));
+  }
+  fill3(ctx, cam, rect3(...rr(steps - 1), -R.d), shadeCol(mixc(stone, [90, 80, 70], .35), P, 0, 0, 1));
+  const lv = level * (1 - ruin);
+  if (lv > .01) {
+    const zw = -R.d + lv * R.d * .94, kw = Math.min(steps - 1, Math.floor(-zw / dz)), ri = rr(kw);
+    const clipK = proj(cam, rect3(...ri, -kw * dz));
+    if (clipK) {
+      ctx.save(); path2(ctx, clipK); ctx.clip();
+      const s = proj(cam, rect3(...ri, zw));
+      if (s) {
+        const ys = s.map(q => q[1]), g = ctx.createLinearGradient(0, Math.min(...ys), 0, Math.max(...ys));
+        g.addColorStop(0, rgba(P.water[1], .95)); g.addColorStop(1, rgba(P.water[0], .97)); path2(ctx, s); ctx.fillStyle = g; ctx.fill();
+        const rg = rng(R.x0 * 7 + 11); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1.5; ctx.beginPath();
+        for (let i = 0; i < 26; i++) { const x = lerp(ri[0], ri[2], rg()), y = lerp(ri[1], ri[3], mod(rg() + u * .02, 1)), l = 3 + rg() * 8; seg3(ctx, cam, [x, y, zw], [x + l * Math.cos(u + i), y + l * .3, zw]); }
+        ctx.stroke();
+        if (glint) {
+          ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 40; i++) {
+            const p = cam.p(lerp(ri[0], ri[2], rg()), lerp(ri[1], ri[3], rg()), zw); const k = Math.pow(Math.max(0, Math.sin(u * 3.1 + i * 1.7)), 10) * glint; if (!p || k < .02) continue;
+            const sz = 6 + 14 * k; ctx.strokeStyle = `rgba(255,240,200,${k})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p[0] - sz, p[1]); ctx.lineTo(p[0] + sz, p[1]); ctx.moveTo(p[0], p[1] - sz * .6); ctx.lineTo(p[0], p[1] + sz * .6); ctx.stroke();
+            glow(ctx, p[0], p[1], sz * 2.2, `rgba(255,220,160,${.5 * k})`);
+          }
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      }
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+function flowDash(ctx, cam, pts, cum, u, speed, col, lw, z = .4, gap = 34, len = 14) {
+  const tot = cum[cum.length - 1]; ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.beginPath();
+  for (let s = mod(u * speed, gap); s < tot - len; s += gap) { const a = polyAt(pts, cum, s), b = polyAt(pts, cum, s + len); seg3(ctx, cam, [a[0], a[1], z], [b[0], b[1], z]); }
+  ctx.stroke(); ctx.restore();
+}
+
+// o: camera {tx,ty,tz,yaw,pitch,dist,f,cy} + pal, u, ruin, wet (streams), level (reservoirs), channelWater, people, salt, glint
+function renderCity(ctx, o) {
+  const P = o.pal, cam = camera(o), C = cam.C, ruin = o.ruin || 0, u = o.u || 0, hz = cam.hz;
+  if (hz > 0) sky(ctx, P.sky, hz + 4);
+  const sp = cam.p(C[0] + P.L[0] * 1e5, C[1] + P.L[1] * 1e5, C[2] + P.L[2] * 1e5);
+  if (sp && hz > 0) glow(ctx, sp[0], sp[1], 760, P.glow);
+  const y0 = Math.max(0, hz), sg = ctx.createLinearGradient(0, y0, 0, H);
+  sg.addColorStop(0, shadeCol(mixc(SALT, P.haze, .5), P, 0, 0, 1)); sg.addColorStop(1, shadeCol(SALT, P, 0, 0, 1)); ctx.fillStyle = sg; ctx.fillRect(0, y0, W, H - y0);
+  if (o.salt) {
+    const r = rng(9), gx = Math.round(C[0] / 70) * 70, gy = Math.round(C[1] / 70) * 70; ctx.save(); ctx.strokeStyle = shadeCol([150, 135, 115], P, 0, 0, 1, .35); ctx.lineWidth = 1.3; ctx.beginPath();
+    for (let k = -30; k <= 30; k++) { const j = (r() - .5) * 40, j2 = (r() - .5) * 120; seg3(ctx, cam, [gx + k * 70 + j, gy - 2100, 0], [gx + k * 70 - j + j2, gy + 2100, 0]); seg3(ctx, cam, [gx - 2100, gy + k * 70 + j, 0], [gx + 2100, gy + k * 70 - j + j2, 0]); }
+    ctx.stroke(); ctx.restore();
+  }
+  fill3(ctx, cam, WORLD.islandOuter, shadeCol(mixc(GROUND, SALT, .5), P, 0, 0, 1));
+  fill3(ctx, cam, WORLD.island, shadeCol(GROUND, P, 0, 0, 1));
+  for (const p of WORLD.patches) fill3(ctx, cam, p, shadeCol(mixc(GROUND, [150, 118, 86], .45), P, 0, 0, 1));
+  // seasonal streams
+  const wet = o.wet || 0;
+  for (const [pts, cum] of [[WORLD.mansar, WORLD.cum.mansar], [WORLD.manhar, WORLD.cum.manhar]]) {
+    fill3(ctx, cam, ribbon(pts, 40, .05), shadeCol(mixc(BED, GROUND, .25), P, 0, 0, 1));
+    if (wet > 0) { fill3(ctx, cam, ribbon(pts, 26 * Math.sqrt(wet), .1), rgba(mixc(P.water[0], P.water[1], .25), .85 * Math.min(1, wet * 2))); flowDash(ctx, cam, pts, cum, u, 26, `rgba(230,245,255,${.55 * wet})`, 2, .2, 46, 12); }
+  }
+  // town ground
+  fill3(ctx, cam, rect3(-385, -310, 385, 310, .1), shadeCol(mixc(TOWN, RUINC, ruin * .5), P, 0, 0, 1));
+  fill3(ctx, cam, rect3(-175, -165, 100, -108, .15), shadeCol(mixc(CERE, RUINC, ruin * .4), P, 0, 0, 1));
+  // channels from the dams to the reservoirs
+  WORLD.channels.forEach((ch, i) => {
+    fill3(ctx, cam, ribbon(ch, 8, .2), shadeCol(mixc(STONE2, RUINC, ruin), P, 0, 0, 1, 1 - ruin * .6));
+    if (o.channelWater) { fill3(ctx, cam, ribbon(ch, 4.5, .3), rgba(P.water[0], .9 * o.channelWater)); flowDash(ctx, cam, ch, WORLD.cum.ch[i], u, 30, `rgba(220,245,255,${.8 * o.channelWater})`, 2.5, .5, 22, 8); }
+  });
+  for (const R of WORLD.res) drawRes(ctx, cam, R, o.level ?? .78, P, ruin, u, o.glint || 0);
+  // scrub
+  for (const s of WORLD.shrubs) {
+    const a = s.inside ? ruin : 1; if (a <= .02) continue;
+    const p = cam.p(s.x, s.y, 0); if (!p || p[0] < -20 || p[0] > W + 20 || p[1] < -20 || p[1] > H + 20) continue;
+    const rr = s.r * cam.f / p[2]; if (rr < .5) continue;
+    ctx.fillStyle = shadeCol([92, 98, 62], P, 0, 0, 1, .85 * a); ctx.beginPath(); ctx.ellipse(p[0], p[1] - rr * .4, rr, rr * .7, 0, 0, TAU); ctx.fill();
+  }
+  // boxes (+ people)
+  const list = [];
+  for (const b of WORLD.boxes) { b.hh = lerp(b.h, b.hr, ruin); b.cc = ruin ? mixc(b.col, RUINC, ruin * .85) : b.col; list.push(b); }
+  if (o.people && ruin < .5) for (const w of WORLD.walkers) {
+    const s = mod(w.ph + u * w.v, w.s.b - w.s.a) + w.s.a, x = w.s.ax === 'x' ? s : w.s.c + w.off, y = w.s.ax === 'x' ? w.s.c + w.off : s;
+    list.push({ x0: x - .35, y0: y - .35, x1: x + .35, y1: y + .35, z0: 0, hh: 1.7, cc: w.col, kind: 'person' });
+  }
+  // shadows
+  const sx = -P.L[0] / Math.max(.22, P.L[2]), sy = -P.L[1] / Math.max(.22, P.L[2]);
+  ctx.beginPath();
+  for (const b of list) {
+    if (b.z0 > 0 || b.hh < .8) continue; const dx = sx * b.hh, dy = sy * b.hh;
+    const s = proj(cam, hull([[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1], [b.x0 + dx, b.y0 + dy], [b.x1 + dx, b.y0 + dy], [b.x1 + dx, b.y1 + dy], [b.x0 + dx, b.y1 + dy]]).map(q => [q[0], q[1], .2]));
+    if (s) { s.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); }
+  }
+  ctx.fillStyle = `rgba(40,20,25,${.3 * P.shadow})`; ctx.fill();
+  for (const b of list) { const cx = (b.x0 + b.x1) / 2 - C[0], cy = (b.y0 + b.y1) / 2 - C[1], cz = b.z0 + b.hh / 2 - C[2]; b.d2 = cx * cx + cy * cy + cz * cz; }
+  list.sort((a, b) => b.d2 - a.d2);
+  for (const b of list) {
+    if (b.kind === 'house' || b.kind === 'person') { const p = cam.p((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, b.z0); if (!p || p[0] < -250 || p[0] > W + 250 || p[1] < -300 || p[1] > H + 300) continue; }
+    drawBox(ctx, cam, b, P);
+  }
+  // atmosphere
+  if (hz > -300) { const g = ctx.createLinearGradient(0, hz - 120, 0, hz + 260); g.addColorStop(0, rgba(P.haze, 0)); g.addColorStop(.35, rgba(P.haze, .32)); g.addColorStop(1, rgba(P.haze, 0)); ctx.fillStyle = g; ctx.fillRect(0, hz - 120, W, 380); }
+  else { const g = ctx.createLinearGradient(0, 0, 0, H * .5); g.addColorStop(0, rgba(P.haze, .35)); g.addColorStop(1, rgba(P.haze, 0)); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * .5); }
+  return cam;
+}
+function label3(ctx, cam, X, Y, Z, s, a, o = {}) {
+  const p = cam.p(X, Y, Z); if (!p || a <= 0) return;
+  const col = o.col || '#ffffff', dx = o.dx || 0, dy = o.dy ?? -130, size = o.size || 46;
+  ctx.save(); ctx.globalAlpha = a; ctx.font = `700 ${size}px "Nirmala UI", sans-serif`;
+  const w = ctx.measureText(s).width; let tx = clamp(p[0] + dx, w / 2 + 40, W - w / 2 - 40); const ty = p[1] + dy;
+  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(lerp(p[0], tx, .85), lerp(p[1], ty + (dy < 0 ? size * .6 : -size * .6), 1)); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p[0], p[1], 8, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.globalAlpha = a; txt(ctx, s, tx, ty, size, col, 'center', 700, 8);
+  if (o.sub) txt(ctx, o.sub, tx, ty + (dy < 0 ? -size * .95 : size * .95), size * .58, 'rgba(255,255,255,.9)', 'center', 600, 6);
+  ctx.restore();
+}
+
+// =====================================================================
+//  2D props
+// =====================================================================
+function person(c, x, y, s, ph, dir, col, o = {}) {
+  const sw = Math.sin(ph), skin = o.skin || '#5b3a26', dark = '#3a2418';
+  c.save(); c.translate(x, y); c.scale(dir, 1); c.lineCap = 'round'; c.lineJoin = 'round';
+  const limb = (a, shade, back) => { c.strokeStyle = shade; c.lineWidth = s * .055; c.beginPath(); c.moveTo(0, -s * .48); c.quadraticCurveTo(Math.sin(a) * s * .1 + s * .03, -s * .25, Math.sin(a) * s * .19, -Math.max(0, Math.cos(a + 1.2)) * s * .02); c.stroke(); };
+  limb(-sw * .8, dark); // back leg
+  if (!o.pot) { c.strokeStyle = dark; c.lineWidth = s * .045; c.beginPath(); c.moveTo(0, -s * .78); c.lineTo(sw * s * .1, -s * .52); c.stroke(); }
+  c.fillStyle = skin; c.beginPath(); c.roundRect(-s * .075, -s * .83, s * .15, s * .36, s * .05); c.fill();
+  limb(sw * .8, skin);
+  c.fillStyle = col; c.beginPath(); c.moveTo(-s * .095, -s * .56); c.lineTo(s * .095, -s * .56); c.lineTo(s * .12 + sw * s * .03, -s * .28); c.lineTo(-s * .11 + sw * s * .02, -s * .28); c.closePath(); c.fill();
+  if (o.shawl) { c.fillStyle = o.shawl; c.beginPath(); c.moveTo(-s * .08, -s * .82); c.lineTo(s * .04, -s * .82); c.lineTo(s * .08, -s * .6); c.lineTo(-s * .08, -s * .66); c.closePath(); c.fill(); }
+  c.fillStyle = skin; c.beginPath(); c.arc(s * .012, -s * .9, s * .062, 0, TAU); c.fill();
+  c.fillStyle = '#1e1410'; c.beginPath(); c.arc(-s * .02, -s * .93, s * .05, Math.PI * .9, Math.PI * 2.05); c.fill(); c.beginPath(); c.arc(-s * .06, -s * .9, s * .028, 0, TAU); c.fill();
+  if (o.pot) {
+    c.strokeStyle = skin; c.lineWidth = s * .045; c.beginPath(); c.moveTo(0, -s * .78); c.lineTo(s * .06, -s * .93); c.lineTo(s * .03, -s * 1.0); c.stroke();
+    const g = c.createLinearGradient(-s * .08, 0, s * .08, 0); g.addColorStop(0, '#c0643a'); g.addColorStop(1, '#7a3a20'); c.fillStyle = g; c.beginPath(); c.ellipse(0, -s * 1.03, s * .085, s * .07, 0, 0, TAU); c.fill(); c.fillRect(-s * .035, -s * 1.12, s * .07, s * .04);
+  } else { c.strokeStyle = skin; c.lineWidth = s * .045; c.beginPath(); c.moveTo(0, -s * .78); c.lineTo(-sw * s * .1, -s * .52); c.stroke(); }
+  c.restore();
+}
+const STREET = (() => { const r = rng(7), houses = []; let x = 0; while (x < 3200) { const w = 170 + r() * 190, h = 190 + r() * 130; houses.push({ x, w, h, door: r() < .75, dx: .2 + r() * .45, par: r() < .55, tone: r(), win: r() < .6 }); x += w + (r() < .3 ? 70 + r() * 90 : 8); } return { houses, len: x }; })();
+const CRACKS = (() => { const r = rng(21), L = []; for (let i = 0; i < 300; i++) { let X = (r() - .5) * 90, Z = r() * 140, a = r() * TAU; const pts = [[X, Z]]; for (let k = 0; k < 6; k++) { a += (r() - .5) * 1.3; const st = .6 + r() * 2.2; X += Math.cos(a) * st; Z += Math.sin(a) * st * .8; pts.push([X, Z]); } L.push(pts); } return L; })();
+const shimC = mk(W, 220);
+
+// =====================================================================
+//  SHOTS — each: (ctx, u = seconds into shot, d = shot duration)
+// =====================================================================
+const S = {};
+// 0A — drone over the salt desert of the Rann towards Khadir, golden hour
+S['0A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  const cam = renderCity(ctx, { pal: PALS.gold, u, salt: true, tx: 0, ty: 0, yaw: lerp(2.2, 2.42, e), pitch: lerp(.075, .13, e), dist: lerp(4300, 2300, e), cy: H * .44, f: 1700 });
+  fog(ctx, cam.hz + 60, .22, u * 40, 1.3); fog(ctx, cam.hz + 320, .12, -u * 70 + 500, 1.6);
+  dust(ctx, u, 60, 'rgba(255,225,180,1)');
+  const a1 = prog(CURT, LINES[1].s, LINES[1].s + .6);
+  pill(ctx, 'गुजरात · कच्छ · लगभग 3000 ईसा पूर्व', W / 2, H * .17, 34, a1);
+};
+// 0B — a single drop of water, slow motion
+S['0B'] = (ctx, u, d) => {
+  const ti = 1.25, hz = 560, cy = 1120, z = lerp(1, 1.18, eInOut(u / d));
+  ctx.save(); ctx.translate(W / 2, cy); ctx.scale(z, z); ctx.translate(-W / 2, -cy);
+  sky(ctx, [[0, '#0b0d16'], [.7, '#2c2028'], [1, '#6a4030']], hz);
+  let g = ctx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, '#5a3b2c'); g.addColorStop(.25, '#1f2a30'); g.addColorStop(1, '#070b0e'); ctx.fillStyle = g; ctx.fillRect(-100, hz, W + 200, H);
+  glow(ctx, W / 2, hz + 30, 520, 'rgba(255,170,90,.35)');
+  ctx.strokeStyle = 'rgba(255,190,120,.16)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 26; i++) { const y = hz + 20 + Math.pow(i / 26, 1.6) * (H - hz), w = 80 + i * 22; ctx.beginPath(); ctx.moveTo(W / 2 - w + Math.sin(u * 1.4 + i) * 20, y); ctx.lineTo(W / 2 + w + Math.sin(u * 1.4 + i) * 20, y); ctx.stroke(); }
+  const tt = u - ti;
+  if (tt < 0) {
+    const y = lerp(-120, cy, Math.pow(u / ti, 1.25)), r = 22;
+    ctx.save(); const tg = ctx.createLinearGradient(0, y - 260, 0, y); tg.addColorStop(0, 'rgba(255,220,160,0)'); tg.addColorStop(1, 'rgba(255,220,160,.35)'); ctx.fillStyle = tg; ctx.fillRect(W / 2 - 3, y - 260, 6, 240);
+    ctx.beginPath(); ctx.moveTo(W / 2, y - r * 2.6); ctx.bezierCurveTo(W / 2 + r * .3, y - r * 1.4, W / 2 + r, y - r * .6, W / 2 + r, y); ctx.arc(W / 2, y, r, 0, Math.PI); ctx.bezierCurveTo(W / 2 - r, y - r * .6, W / 2 - r * .3, y - r * 1.4, W / 2, y - r * 2.6);
+    const dg = ctx.createRadialGradient(W / 2 - 7, y - 8, 2, W / 2, y, r * 1.6); dg.addColorStop(0, '#fff8e6'); dg.addColorStop(.4, '#f6c27a'); dg.addColorStop(1, '#8a5530'); ctx.fillStyle = dg; ctx.fill(); ctx.restore();
+    glow(ctx, W / 2, y, 90, 'rgba(255,200,130,.4)');
+  } else {
+    for (let k = 0; k < 6; k++) { const R = (tt - k * .16) * 330; if (R <= 0) continue; ctx.strokeStyle = `rgba(255,215,160,${.75 * Math.exp(-tt * .9) * (1 - k * .12)})`; ctx.lineWidth = 4 - k * .4; ctx.beginPath(); ctx.ellipse(W / 2, cy, R, R * .24, 0, 0, TAU); ctx.stroke(); }
+    const r = rng(4);
+    for (let i = 0; i < 22; i++) { const a = r() * TAU, v = 120 + r() * 160, vy = 380 + r() * 420, t2 = tt * 1.1; const x = W / 2 + Math.cos(a) * v * t2, y = cy + Math.sin(a) * v * t2 * .24 - (vy * t2 - 900 * t2 * t2); if (y > cy + 40 || t2 > 1.3) continue; ctx.fillStyle = `rgba(255,232,190,${clamp(1.2 - t2)})`; ctx.beginPath(); ctx.arc(x, y, 3 + r() * 5, 0, TAU); ctx.fill(); }
+    const jt = tt - .22; if (jt > 0 && jt < 1.1) { const h = Math.sin(jt / 1.1 * Math.PI) * 190; const jg = ctx.createLinearGradient(0, cy - h, 0, cy); jg.addColorStop(0, 'rgba(255,236,200,.95)'); jg.addColorStop(1, 'rgba(255,200,140,.2)'); ctx.fillStyle = jg; ctx.beginPath(); ctx.moveTo(W / 2 - 14, cy); ctx.quadraticCurveTo(W / 2 - 5, cy - h * .6, W / 2, cy - h); ctx.quadraticCurveTo(W / 2 + 5, cy - h * .6, W / 2 + 14, cy); ctx.fill(); ctx.beginPath(); ctx.arc(W / 2, cy - h - 16, 10, 0, TAU); ctx.fill(); }
+    glow(ctx, W / 2, cy, 260 * Math.exp(-tt * 1.4), 'rgba(255,190,120,.5)');
+  }
+  ctx.restore();
+};
+// 1A — aerial reveal of the reconstructed city + title
+S['1A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  renderCity(ctx, { pal: PALS.gold, u, tx: 0, ty: -20, yaw: lerp(-.38, -.08, e), pitch: lerp(.6, .76, e), dist: lerp(1380, 1170, e), cy: H * .5 });
+  const g = ctx.createLinearGradient(0, 0, 0, H * .32); g.addColorStop(0, 'rgba(10,8,20,.55)'); g.addColorStop(1, 'rgba(10,8,20,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * .32);
+  title(ctx, 'धोलावीरा', H * .16, prog(u, .15, .9), 150);
+  txt(ctx, 'हड़प्पा सभ्यता का एक प्रमुख नगर', W / 2, H * .16 + 110, 42, `rgba(255,240,220,${prog(u, .7, 1.4)})`, 'center', 600, 6);
+};
+// 1B — simplified map: Kachchh, the Great Rann, Khadir Bet
+const KHADIR = (() => { const r = rng(14), pts = []; for (let i = 0; i < 30; i++) { const a = i / 30 * TAU; pts.push([640 + Math.cos(a) * (175 + 22 * Math.sin(a * 3) + 12 * r()), 800 + Math.sin(a) * (88 + 12 * Math.sin(a * 2 + 1) + 8 * r())]); } return pts; })();
+const blob = (cx, cy, rx, ry, seed) => { const r = rng(seed), pts = []; for (let i = 0; i < 22; i++) { const a = i / 22 * TAU; pts.push([cx + Math.cos(a) * rx * (.8 + .3 * r()), cy + Math.sin(a) * ry * (.8 + .3 * r())]); } return pts; };
+const BELA = blob(900, 850, 110, 55, 3), PACHHAM = blob(330, 930, 120, 60, 8);
+S['1B'] = (ctx, u, d) => {
+  const p = u / d, z = lerp(.95, 1.75, eInOut(prog(p, .05, .95))), KX = 515, KY = 760;
+  const T = ([x, y]) => [W / 2 + (x - KX) * z, H * .4 + (y - KY) * z];
+  ctx.fillStyle = '#ebe2d2'; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalAlpha = .06; ctx.drawImage(noise[1], 0, 0, W, H); ctx.restore();
+  ctx.strokeStyle = 'rgba(160,140,120,.18)'; ctx.lineWidth = 1.5; const r = rng(2);
+  for (let i = 0; i < 60; i++) { const a = T([r() * 1400 - 160, r() * 1300]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[0] + 40 * z, a[1] + (r() - .5) * 20 * z); ctx.stroke(); }
+  const land = '#cfae80', edge = '#a88458';
+  const main = [[-400, 1260], [100, 1190], [300, 1222], [520, 1160], [760, 1200], [980, 1130], [1500, 1170], [1500, 2600], [-400, 2600]];
+  for (const shp of [main, KHADIR, BELA, PACHHAM]) { const s = shp.map(T); poly(ctx, s, land); ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); }
+  const lb = (s, pt, size, col, w = 700) => { const q = T(pt); txt(ctx, s, q[0], q[1], size, col, 'center', w, 0); };
+  ctx.save(); ctx.globalAlpha = .85; lb('कच्छ का बड़ा रण', [520, 560], 44, '#8c7a66', 600); ctx.restore();
+  lb('खडीर बेट', [660, 830], 42, '#5a3e22'); lb('कच्छ', [560, 1330], 54, '#5a3e22'); lb('गुजरात', [560, 1440], 34, '#7a5e40', 600);
+  const q = T([KX, KY]), pa = eOut(prog(u, .3, .9)), pulse = mod(u * .8, 1);
+  ctx.strokeStyle = `rgba(200,60,40,${(1 - pulse) * .8})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(q[0], q[1], 14 + pulse * 70, 0, TAU); ctx.stroke();
+  ctx.save(); ctx.translate(q[0], q[1] - (1 - pa) * 80); ctx.globalAlpha = pa; ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-26, -34, -30, -60, 0, -74); ctx.bezierCurveTo(30, -60, 26, -34, 0, 0); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -50, 10, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.globalAlpha = prog(u, .7, 1.2); txt(ctx, 'धोलावीरा', q[0], q[1] - 120, 58, '#b5531c', 'center', 700, 0); ctx.restore();
+  ctx.save(); ctx.translate(W - 110, 230); ctx.fillStyle = '#5a3e22'; ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(16, 10); ctx.lineTo(0, 0); ctx.lineTo(-16, 10); ctx.closePath(); ctx.fill(); txt(ctx, 'N', 0, 40, 30, '#5a3e22', 'center', 700, 0); ctx.restore();
+  txt(ctx, 'सरलीकृत नक्शा · पैमाने पर नहीं', W / 2, 1230, 28, 'rgba(90,62,34,.8)', 'center', 600, 0);
+};
+// 1C — street life (side tracking shot)
+S['1C'] = (ctx, u, d) => {
+  sky(ctx, [[0, '#3c5a88'], [.55, '#e0a57a'], [1, '#ffd9a2']], 1190);
+  glow(ctx, W * .16, 760, 700, 'rgba(255,190,120,.55)');
+  const far = u * 14; ctx.fillStyle = '#9b7a68';
+  ctx.beginPath(); ctx.moveTo(-50, 1020); for (let x = -50; x <= W + 50; x += 30) { const X = x + far, k = mod(X, 900); const hgt = k < 500 ? 90 + (k > 60 && k < 440 ? 60 : 0) + (k > 120 && k < 380 ? 40 : 0) : 30; ctx.lineTo(x, 1020 - hgt); } ctx.lineTo(W + 50, 1060); ctx.lineTo(-50, 1060); ctx.fill();
+  fog(ctx, 1000, .35, -u * 20, 1.2);
+  const off = u * 75, base = 1190;
+  for (const hs of STREET.houses) {
+    for (const rep of [0, STREET.len]) {
+      const X = hs.x + rep - mod(off, STREET.len) - 100; if (X > W + 20 || X + hs.w < -20) continue;
+      const top = base - hs.h, sb = base - hs.h * .42;
+      ctx.fillStyle = rgba(mixc([206, 160, 112], [222, 186, 140], hs.tone)); ctx.fillRect(X, top, hs.w, hs.h);
+      ctx.fillStyle = rgba(mixc([170, 140, 108], [186, 158, 122], hs.tone)); ctx.fillRect(X, sb, hs.w, base - sb);
+      ctx.strokeStyle = 'rgba(90,60,40,.35)'; ctx.lineWidth = 2; for (let y = sb + 22; y < base; y += 24) { ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X + hs.w, y); ctx.stroke(); }
+      for (let y = sb; y < base; y += 24) for (let x = X + ((y / 24) % 2 ? 0 : 20); x < X + hs.w; x += 42) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 24); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(80,45,30,.28)'; ctx.fillRect(X + hs.w - 24, top, 24, hs.h);
+      if (hs.par) { ctx.fillStyle = rgba(mixc([196, 150, 104], [214, 176, 130], hs.tone)); ctx.fillRect(X - 4, top - 16, hs.w + 8, 16); }
+      ctx.fillStyle = 'rgba(70,40,25,.45)'; ctx.fillRect(X - 4, top - 2, hs.w + 8, 5);
+      if (hs.door) { const dx = X + hs.w * hs.dx; ctx.fillStyle = '#3a2416'; ctx.beginPath(); ctx.roundRect(dx, base - 120, 60, 120, [10, 10, 0, 0]); ctx.fill(); ctx.fillStyle = 'rgba(255,190,120,.15)'; ctx.fillRect(dx + 6, base - 112, 8, 112); }
+      if (hs.win) { ctx.fillStyle = '#4a2e1c'; for (let k = 0; k < 2; k++) ctx.fillRect(X + hs.w * (.62 + k * .14), top + 40, 12, 34); }
+    }
+  }
+  let g = ctx.createLinearGradient(0, base, 0, H); g.addColorStop(0, '#b8946a'); g.addColorStop(1, '#6e5238'); ctx.fillStyle = g; ctx.fillRect(0, base, W, H - base);
+  ctx.fillStyle = '#8f7556'; ctx.fillRect(0, base + 6, W, 30);
+  ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.lineWidth = 3; for (let x = -mod(off * 1.05, 70); x < W; x += 70) { ctx.beginPath(); ctx.moveTo(x, base + 6); ctx.lineTo(x, base + 36); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(70,50,30,.3)'; ctx.lineWidth = 2;
+  for (let j = 0; j < 7; j++) { const y = base + 50 + j * j * 9; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); const sp = 90 + j * 26; for (let x = -mod(off * (1.1 + j * .12) + j * 37, sp); x < W; x += sp) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 9 + j * 2 * 9); ctx.stroke(); } }
+  const WK = [[120, 1, 1.1, 1268, 215, '#e8dcc4', 0], [520, -1, 1.0, 1262, 205, '#b5533a', 1], [830, 1, .9, 1270, 210, '#d9c7a4', 0], [300, -1, 1.2, 1266, 200, '#7d5a3a', 0], [700, 1, 1.0, 1400, 300, '#c9a35a', 1], [60, -1, 1.1, 1410, 310, '#ece2cc', 0], [980, -1, .95, 1405, 295, '#5f6f8a', 0]];
+  for (const [x0, dir, sp, y, s, col, pot] of WK) {
+    const lane = y > 1300 ? 1.3 : 1, x = mod(x0 + dir * sp * 70 * u - off * lane + 200, W + 400) - 200;
+    person(ctx, x, y, s, u * sp * 5.2 + x0, dir, col, { pot: !!pot, shawl: pot ? null : (x0 % 3 ? null : '#a4553a') });
+  }
+  // potter's corner (static, moves with the street)
+  const px = mod(640 - off * 1.0, STREET.len) - 100;
+  if (px > -200 && px < W + 200) { for (const [dx, dy, s] of [[0, 0, 1], [40, 4, .8], [-36, 6, .9], [12, -50, .85]]) { const cx = px + dx, cy = 1250 + dy; const pg = ctx.createLinearGradient(cx - 30 * s, 0, cx + 30 * s, 0); pg.addColorStop(0, '#c87a48'); pg.addColorStop(1, '#7a3c22'); ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(cx, cy - 34 * s, 30 * s, 36 * s, 0, 0, TAU); ctx.fill(); ctx.fillRect(cx - 12 * s, cy - 78 * s, 24 * s, 12 * s); } }
+  ctx.save(); ctx.filter = 'blur(7px)'; const fx = mod(1100 - u * 300, W + 900) - 450; ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.ellipse(fx, 1820, 150, 190, 0, 0, TAU); ctx.fill(); ctx.fillRect(fx - 60, 1580, 120, 40); ctx.restore();
+  dust(ctx, u, 70, 'rgba(255,220,170,1)', 9);
+  ctx.fillStyle = 'rgba(255,170,90,.08)'; ctx.fillRect(0, 0, W, H);
+};
+// 1D — sunlight on a reservoir
+S['1D'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  renderCity(ctx, { pal: PALS.gold, u, glint: 1, level: .82, people: true, tx: 345, ty: 70, tz: -3, yaw: lerp(-.42, -.22, e), pitch: lerp(.62, .46, e), dist: lerp(420, 250, e), cy: H * .42 });
+  dust(ctx, u, 40, 'rgba(255,230,190,1)', 5);
+};
+// 2A — the problem: heat, dust, a dry stream bed
+S['2A'] = (ctx, u, d) => {
+  const hy = 760, camH = 1.6, f = 1150, zoff = u * 1.4;
+  sky(ctx, [[0, '#9db4c6'], [.6, '#eee4cc'], [1, '#fff3d4']], hy + 4);
+  glow(ctx, W * .72, 300, 760, 'rgba(255,250,225,.9)'); ctx.fillStyle = '#fffdf5'; ctx.beginPath(); ctx.arc(W * .72, 300, 62, 0, TAU); ctx.fill();
+  let g = ctx.createLinearGradient(0, hy, 0, H); g.addColorStop(0, '#d9bc90'); g.addColorStop(1, '#a87a4c'); ctx.fillStyle = g; ctx.fillRect(0, hy, W, H - hy);
+  const P2 = (X, Z) => [W / 2 + X * f / Z, hy + camH * f / Z];
+  const L = [], R = []; for (let Z = 1.2; Z < 320; Z *= 1.08) { const c = 2.5 + 5 * Math.sin((Z + zoff) / 24); L.push(P2(c - 3.4, Z)); R.push(P2(c + 3.4, Z)); }
+  poly(ctx, [...L, ...R.reverse()], '#e3cda4');
+  ctx.strokeStyle = 'rgba(140,100,60,.35)'; ctx.lineWidth = 3; ctx.beginPath(); L.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,58,30,.55)'; ctx.lineCap = 'round';
+  for (const cr of CRACKS) {
+    const dz = mod(cr[0][1] - zoff, 140) + 1.4 - cr[0][1]; ctx.beginPath(); let ok = false;
+    cr.forEach(([X, Z], i) => { const ZZ = Z + dz; if (ZZ < 1) return; const [x, y] = P2(X, ZZ); if (!ok) { ctx.moveTo(x, y); ok = true; } else ctx.lineTo(x, y); });
+    ctx.lineWidth = clamp(10 / (cr[0][1] + dz), .5, 4); ctx.stroke();
+  }
+  ctx.fillStyle = '#6d5a40';
+  for (const [x, s] of [[120, 1], [300, .6], [760, .8], [980, .5]]) { ctx.beginPath(); ctx.ellipse(x, hy - 12 * s, 40 * s, 12 * s, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - 2, hy - 12 * s, 4, 12 * s); }
+  const sc = shimC.getContext('2d'); sc.clearRect(0, 0, W, 220); sc.drawImage(ctx.canvas, 0, hy - 110, W, 220, 0, 0, W, 220);
+  for (let y = 0; y < 220; y += 3) ctx.drawImage(shimC, 0, y, W, 3, Math.sin(y * .15 + u * 7) * 3.5, hy - 110 + y, W, 3);
+  fog(ctx, hy + 40, .35, u * 60, 1.2); dust(ctx, u * 3, 90, 'rgba(240,210,160,1)', 12);
+  pill(ctx, 'मौसमी नाला — साल के ज़्यादातर समय सूखा', W / 2, hy + 150, 30, prog(u, .8, 1.4));
+  ctx.fillStyle = 'rgba(255,200,120,.08)'; ctx.fillRect(0, 0, W, H);
+};
+// 2B — Mansar & Manhar seasonal streams; the monsoon arrives
+S['2B'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p), tr = LINES[9].s, storm = eInOut(prog(CURT, tr + .4, tr + 2.6)), wet = eInOut(prog(CURT, tr + 1.8, LINES[10].s + 1.2));
+  const pal = mixPal(PALS.day, PALS.storm, storm);
+  const cam = renderCity(ctx, { pal, u, wet, tx: 0, ty: 20, yaw: lerp(.32, .12, e), pitch: lerp(.86, .78, e), dist: lerp(2700, 2150, e), cy: H * .44 });
+  fog(ctx, H * .2, .25 * storm, u * 30, 2); rain(ctx, u, storm);
+  const la = prog(u, .4, 1.1) * (1 - storm * .25);
+  label3(ctx, cam, -560, mansarY(-560), 0, 'मनसर', la, { dy: -110, size: 48, sub: 'मौसमी नाला', col: '#bfe9ff' });
+  label3(ctx, cam, -560, manharY(-560), 0, 'मनहर', la, { dy: -120, size: 48, sub: 'मौसमी नाला', col: '#bfe9ff' });
+  pill(ctx, 'साल भर बहने वाली कोई बड़ी नदी नहीं', W / 2, H * .17 + 150, 30, prog(u, .6, 1.2) * (1 - storm));
+  pill(ctx, 'मानसून', W / 2, H * .17 + 150, 36, storm * (1 - prog(CURT, LINES[10].s + 1, LINES[10].s + 1.6)), '#cfefff');
+};
+// 3A — a stepped stone reservoir filling up
+S['3A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  renderCity(ctx, { pal: PALS.day, u, people: true, channelWater: 1, level: lerp(.12, .86, eInOut(prog(p, .05, .95))), tx: 350, ty: 160, tz: -4, yaw: lerp(2.55, 2.85, e), pitch: lerp(.55, .48, e), dist: lerp(240, 175, e), cy: H * .42 });
+  dust(ctx, u, 20, 'rgba(255,255,255,1)', 2);
+};
+// 3B — diagram: check dams divert the streams into channels and reservoirs
+S['3B'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  const cam = renderCity(ctx, { pal: PALS.day, u, wet: 1, channelWater: prog(p, .15, .4), level: lerp(.35, .85, p), tx: 160, ty: 40, yaw: lerp(.08, -.06, e), pitch: lerp(1.0, .92, e), dist: lerp(1750, 1500, e), cy: H * .42 });
+  ctx.fillStyle = 'rgba(5,15,35,.28)'; ctx.fillRect(0, 0, W, H);
+  WORLD.channels.forEach((ch, i) => flowDash(ctx, cam, ch, WORLD.cum.ch[i], u, 60, '#7fe3ff', 6, 2, 40, 18));
+  flowDash(ctx, cam, WORLD.mansar, WORLD.cum.mansar, u, 70, 'rgba(127,227,255,.7)', 5, 2, 70, 22);
+  flowDash(ctx, cam, WORLD.manhar, WORLD.cum.manhar, u, 70, 'rgba(127,227,255,.7)', 5, 2, 70, 22);
+  for (const [x, f] of [[560, mansarY], [300, manharY], [-260, manharY]]) { const q = cam.p(x, f(x), 3); if (q) { ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 5; ctx.shadowColor = '#ffd36a'; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(q[0], q[1], 26 + 4 * Math.sin(u * 4), 0, TAU); ctx.stroke(); ctx.shadowBlur = 0; } }
+  const t13 = LINES[13].s, t14 = LINES[14].s;
+  label3(ctx, cam, 560, mansarY(560), 3, 'चेक डैम / बाँध', prog(CURT, t13, t13 + .5), { dy: -120, dx: -60, size: 42, col: '#ffd36a' });
+  label3(ctx, cam, 300, manharY(300), 3, 'बाँध', prog(CURT, t13 + .4, t13 + .9), { dy: -110, dx: 90, size: 42, col: '#ffd36a' });
+  label3(ctx, cam, 470, 334, 1, 'नहर', prog(CURT, t14, t14 + .5), { dy: 120, dx: 60, size: 42, col: '#7fe3ff' });
+  label3(ctx, cam, 350, -60, 0, 'जलाशय', prog(CURT, t14 + .6, t14 + 1.1), { dy: -40, dx: -170, size: 42, col: '#7fe3ff' });
+  label3(ctx, cam, -270, -280, 0, 'जलाशय', prog(CURT, t14 + .9, t14 + 1.4), { dy: -120, dx: -40, size: 42, col: '#7fe3ff' });
+};
+// 3C — cutaway: rock-cut well, covered drain, reservoir
+S['3C'] = (ctx, u, d) => {
+  const p = u / d, z = lerp(1, 1.1, eInOut(p)), sh = lerp(0, 30, p), GY = 640;
+  const T = (x, y) => [(x - W / 2 - sh) * z + W / 2, (y - 900) * z + 900];
+  ctx.save(); ctx.translate(W / 2, 900); ctx.scale(z, z); ctx.translate(-W / 2 - sh, -900);
+  sky(ctx, [[0, '#6f9fd0'], [.7, '#bcd3e6'], [1, '#efe8d8']], GY);
+  glow(ctx, 160, 180, 420, 'rgba(255,250,220,.6)');
+  let g = ctx.createLinearGradient(0, GY, 0, 1000); g.addColorStop(0, '#9a744c'); g.addColorStop(1, '#7a5a3a'); ctx.fillStyle = g; ctx.fillRect(-100, GY, W + 300, 360);
+  g = ctx.createLinearGradient(0, 1000, 0, H); g.addColorStop(0, '#77706a'); g.addColorStop(1, '#4e4944'); ctx.fillStyle = g; ctx.fillRect(-100, 1000, W + 300, H);
+  const r = rng(6); ctx.strokeStyle = 'rgba(30,25,20,.35)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { const y = 1030 + i * 60 + r() * 20; ctx.beginPath(); ctx.moveTo(-100, y); for (let x = -100; x < W + 300; x += 80) ctx.lineTo(x, y + (r() - .5) * 16); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(40,25,15,.25)'; for (let i = 0; i < 260; i++) { ctx.beginPath(); ctx.arc(r() * (W + 200) - 100, GY + 10 + r() * 340, 1 + r() * 3, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#c9a77a'; ctx.fillRect(-100, GY - 6, W + 300, 10);
+  // houses on the surface
+  for (const [x, w, h] of [[-60, 230, 150], [560, 120, 120]]) { ctx.fillStyle = '#d8b88a'; ctx.fillRect(x, GY - h, w, h); ctx.fillStyle = '#b9966c'; ctx.fillRect(x, GY - h * .4, w, h * .4); ctx.fillStyle = '#3a2416'; ctx.fillRect(x + w * .4, GY - 80, 40, 80); }
+  // well
+  const wx = 370, ww = 120, wb = 1500;
+  ctx.fillStyle = '#18130f'; ctx.fillRect(wx - ww / 2, GY, ww, wb - GY);
+  ctx.fillStyle = '#b8a07c'; for (let y = GY; y < 1000; y += 22) for (const sd of [-1, 1]) { ctx.fillRect(sd < 0 ? wx - ww / 2 - 20 : wx + ww / 2, y + 1, 20, 20); }
+  ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.lineWidth = 2; for (let y = GY; y < 1000; y += 22) for (const sd of [-1, 1]) ctx.strokeRect(sd < 0 ? wx - ww / 2 - 20 : wx + ww / 2, y + 1, 20, 20);
+  ctx.fillStyle = '#5f5852'; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(wx + sd * ww / 2, 1000); for (let y = 1000; y <= wb; y += 40) ctx.lineTo(wx + sd * (ww / 2 + 6 + 10 * Math.sin(y * .07)), y); ctx.lineTo(wx + sd * ww / 2, wb); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = '#c9b28c'; ctx.fillRect(wx - ww / 2 - 28, GY - 46, 30, 46); ctx.fillRect(wx + ww / 2 - 2, GY - 46, 30, 46);
+  g = ctx.createLinearGradient(0, 1380, 0, wb); g.addColorStop(0, '#5aa7c8'); g.addColorStop(1, '#1d4a64'); ctx.fillStyle = g; ctx.fillRect(wx - ww / 2, 1380 + Math.sin(u * 2) * 3, ww, wb - 1380);
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx - ww / 2, 1380 + Math.sin(u * 2) * 3); ctx.lineTo(wx + ww / 2, 1380 - Math.sin(u * 2) * 3); ctx.stroke();
+  const py = lerp(GY - 20, 1350, (Math.sin(u * 1.1 - 1.4) + 1) / 2);
+  ctx.strokeStyle = '#d9c39a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx, GY - 90); ctx.lineTo(wx, py - 30); ctx.stroke();
+  ctx.fillStyle = '#9c5a32'; ctx.beginPath(); ctx.ellipse(wx, py, 24, 28, 0, 0, TAU); ctx.fill(); ctx.fillRect(wx - 10, py - 36, 20, 10);
+  ctx.strokeStyle = '#7a5a3a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(wx - 60, GY - 46); ctx.lineTo(wx - 50, GY - 100); ctx.lineTo(wx + 50, GY - 100); ctx.lineTo(wx + 60, GY - 46); ctx.stroke();
+  // covered drain to the reservoir
+  const dy0 = GY + 14, dy1 = GY + 64, dx0 = 470, dx1 = 860;
+  ctx.fillStyle = '#2a2018'; ctx.fillRect(dx0, dy0, dx1 - dx0, dy1 - dy0);
+  ctx.fillStyle = '#b8a07c'; ctx.fillRect(dx0, dy1, dx1 - dx0, 14);
+  for (let x = dx0; x < dx1; x += 64) { ctx.fillStyle = '#cdb690'; ctx.fillRect(x + 2, dy0 - 16, 60, 16); ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.strokeRect(x + 2, dy0 - 16, 60, 16); }
+  ctx.fillStyle = '#4a93b6'; ctx.fillRect(dx0, dy1 - 22, dx1 - dx0, 22);
+  ctx.strokeStyle = 'rgba(220,245,255,.9)'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = dx0 + mod(u * 90, 50); x < dx1 - 10; x += 50) { ctx.moveTo(x, dy1 - 11); ctx.lineTo(x + 18, dy1 - 11); } ctx.stroke();
+  // reservoir section
+  const rx = 860; ctx.fillStyle = '#b8a07c'; ctx.beginPath(); ctx.moveTo(rx, GY); ctx.lineTo(rx + 30, GY); for (let k = 0; k < 4; k++) { ctx.lineTo(rx + 30 + k * 40, GY + 90 + k * 90); ctx.lineTo(rx + 70 + k * 40, GY + 90 + k * 90); } ctx.lineTo(rx + 190, 1100); ctx.lineTo(rx, 1100); ctx.closePath(); ctx.fill();
+  g = ctx.createLinearGradient(0, 760, 0, 1060); g.addColorStop(0, '#5aa7c8'); g.addColorStop(1, '#1d4a64'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(rx + 100, 760); ctx.lineTo(W + 200, 760); ctx.lineTo(W + 200, 1060); ctx.lineTo(rx + 190, 1060); ctx.lineTo(rx + 150, 900); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(90,170,210,.8)'; ctx.beginPath(); ctx.moveTo(dx1, dy1 - 22); ctx.quadraticCurveTo(dx1 + 40, dy1 - 10, dx1 + 70, 760); ctx.lineTo(dx1 + 50, 760); ctx.quadraticCurveTo(dx1 + 20, dy1, dx1, dy1); ctx.fill();
+  ctx.restore();
+  const t15 = LINES[15].s, t16 = LINES[16].s;
+  let a = prog(CURT, t15 - .2, t15 + .4), q = T(wx + ww / 2 + 30, 1180); txt(ctx, 'चट्टान काटकर बना कुआँ', 740, 1160, 42, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 600, 1180, q[0] + 10, q[1], `rgba(255,211,106,${a})`, 5);
+  a = prog(CURT, t16 - .2, t16 + .4); q = T(660, dy0 - 18); txt(ctx, 'पत्थरों से ढकी नाली', 520, 470, 42, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 560, 500, q[0], q[1] - 10, `rgba(255,211,106,${a})`, 5);
+  a = prog(CURT, t16 + .8, t16 + 1.3); q = T(rx + 190, 820); txt(ctx, 'जलाशय', 920, 560, 42, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 930, 590, q[0], q[1] - 20, `rgba(255,211,106,${a})`, 5);
+  txt(ctx, 'व्याख्यात्मक चित्र · सरलीकृत', W / 2, 150, 28, 'rgba(255,255,255,.8)', 'center', 600, 5);
+};
+// 4A — the plan: citadel, middle town, lower town, fortifications
+S['4A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  const cam = renderCity(ctx, { pal: PALS.day, u, tx: 0, ty: -10, yaw: lerp(.42, -.12, e), pitch: lerp(1.02, .9, e), dist: lerp(1520, 1360, e), cy: H * .45 });
+  ctx.fillStyle = 'rgba(5,10,25,.18)'; ctx.fillRect(0, 0, W, H);
+  // fortification trace
+  const tw = eInOut(prog(CURT, LINES[17].s, LINES[19].s + .5)), wallPts = [[-385, -310], [385, -310], [385, 310], [-385, 310], [-385, -310]], cum = polyLen(wallPts), tot = cum[4] * tw;
+  ctx.save(); ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 6; ctx.shadowColor = '#ffd36a'; ctx.shadowBlur = 18; ctx.beginPath();
+  for (let s = 0; s < tot; s += 20) { const a = polyAt(wallPts, cum, s), b = polyAt(wallPts, cum, Math.min(tot, s + 20)); seg3(ctx, cam, [a[0], a[1], 10], [b[0], b[1], 10]); }
+  ctx.stroke(); ctx.restore();
+  const t20 = LINES[20].s, d20 = LINES[20].e - t20;
+  const zone = (x0, y0, x1, y1, z, col, a) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; const s = fill3(ctx, cam, rect3(x0, y0, x1, y1, z), col.replace('A', '.28')); if (s) { ctx.strokeStyle = col.replace('A', '1'); ctx.lineWidth = 4; ctx.stroke(); } ctx.restore(); };
+  const a1 = prog(CURT, t20 - .2, t20 + .3), a2 = prog(CURT, t20 + d20 * .33, t20 + d20 * .33 + .4), a3 = prog(CURT, t20 + d20 * .62, t20 + d20 * .62 + .4);
+  zone(-175, -285, 100, -165, 14, 'rgba(255,211,106,A)', a1); zone(-265, -100, 145, 150, 7, 'rgba(127,227,255,A)', a2); zone(160, -240, 325, 292, 7, 'rgba(160,240,150,A)', a3);
+  label3(ctx, cam, -40, -225, 14, 'सिटाडेल', a1, { dy: 150, dx: -80, size: 48, col: '#ffd36a', sub: 'दुर्ग · ऊँचे चबूतरे पर' });
+  label3(ctx, cam, -60, 25, 7, 'मिडिल टाउन', a2, { dy: -170, dx: -60, size: 48, col: '#7fe3ff' });
+  label3(ctx, cam, 245, 120, 7, 'लोअर टाउन', a3, { dy: -230, dx: 40, size: 48, col: '#a0f096' });
+  pill(ctx, 'किलेबंदी', W / 2, H * .17 + 140, 34, prog(CURT, LINES[19].s - .5, LINES[19].s) * (1 - a1), '#ffd36a');
+  txt(ctx, 'सरलीकृत योजना · पैमाने पर नहीं', W / 2, 150, 28, 'rgba(255,255,255,.85)', 'center', 600, 5);
+};
+// 4B — low drone flight down a street, over the inner wall
+S['4B'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p), y = MAIN_ST ? MAIN_ST.c : 51.5;
+  renderCity(ctx, { pal: PALS.gold, u: u + 20, people: true, tx: lerp(-200, 210, eInOut(p * .95)), ty: y, tz: lerp(4, 0, e), yaw: lerp(1.5708, 1.35, e), pitch: lerp(.2, .42, e), dist: lerp(70, 300, eIn(p)), cy: H * .42, f: 1300 });
+  dust(ctx, u, 50, 'rgba(255,225,180,1)', 7);
+};
+// 5A — c. 1,500 years of settlement (timeline over the city at sunset)
+S['5A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  renderCity(ctx, { pal: PALS.sunset, u, tx: 0, ty: 0, yaw: lerp(.95, .62, e), pitch: lerp(.58, .55, e), dist: lerp(1650, 1450, e), cy: H * .5 });
+  const g = ctx.createLinearGradient(0, 0, 0, H * .34); g.addColorStop(0, 'rgba(10,8,25,.6)'); g.addColorStop(1, 'rgba(10,8,25,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * .34);
+  const tl = eInOut(prog(CURT, LINES[22].s - .2, LINES[22].e + .3)), a = prog(u, .1, .6), y = H * .2, x0 = 150, x1 = 930;
+  ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  ctx.strokeStyle = '#f5c66a'; ctx.shadowColor = '#f5c66a'; ctx.shadowBlur = 16; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(lerp(x0, x1, tl), y); ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff'; for (const x of [x0, lerp(x0, x1, tl)]) { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.fill(); }
+  ctx.restore();
+  txt(ctx, 'लगभग 3000 ईसा पूर्व', x0 + 60, y + 60, 32, `rgba(255,255,255,${a})`, 'center', 600, 6);
+  txt(ctx, 'लगभग 1500 ईसा पूर्व', x1 - 60, y + 60, 32, `rgba(255,255,255,${a * prog(tl, .85, 1)})`, 'center', 600, 6);
+  title(ctx, '≈ 1,500 वर्ष', y - 90, prog(tl, .3, .8), 84);
+  txt(ctx, 'बसावट के कई चरण — बीच में अंतराल भी', W / 2, y + 125, 30, `rgba(255,235,210,${prog(tl, .7, 1)})`, 'center', 600, 6);
+};
+// 5B — reconstruction fades into the present-day ruins
+S['5B'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p), ruin = eInOut(prog(p, .12, .7));
+  renderCity(ctx, { pal: mixPal(PALS.sunset, PALS.today, ruin), u, ruin, tx: 0, ty: 0, yaw: lerp(.62, .25, e), pitch: lerp(.55, .62, e), dist: lerp(1450, 1250, e), cy: H * .5 });
+  const sw = prog(p, .12, .7); if (sw > 0 && sw < 1) { ctx.fillStyle = `rgba(255,240,220,${Math.sin(sw * Math.PI) * .18})`; ctx.fillRect(0, 0, W, H); }
+  pill(ctx, 'पुनर्निर्माण', W / 2, H * .17, 32, 1 - prog(p, .1, .3));
+  pill(ctx, 'आज: पुरातात्विक अवशेष', W / 2, H * .17, 32, prog(p, .6, .8));
+};
+// 6A — final wide shot of the ruins at dusk + title
+S['6A'] = (ctx, u, d) => {
+  const p = u / d, e = eInOut(p);
+  renderCity(ctx, { pal: mixPal(PALS.today, PALS.dusk, prog(p, 0, .35)), u, ruin: 1, tx: 0, ty: 0, yaw: lerp(.25, -.05, e), pitch: lerp(.62, .42, e), dist: lerp(1250, 2100, e), cy: H * .55 });
+  const g = ctx.createLinearGradient(0, 0, 0, H * .45); g.addColorStop(0, 'rgba(8,8,22,.75)'); g.addColorStop(1, 'rgba(8,8,22,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * .45);
+  const t1 = LINES[25].s, t2 = LINES[26].e;
+  title(ctx, 'धोलावीरा', H * .14, prog(CURT, t1 - .1, t1 + .6), 150);
+  const a2 = prog(CURT, t2 - .3, t2 + .6);
+  txt(ctx, 'DHOLAVIRA — ANCIENT INDIA\'S', W / 2, H * .14 + 125, 46, `rgba(255,255,255,${a2})`, 'center', 700, 6);
+  txt(ctx, 'ENGINEERING GENIUS', W / 2, H * .14 + 185, 58, `rgba(245,198,106,${a2})`, 'center', 800, 7);
+  pill(ctx, 'UNESCO WORLD HERITAGE SITE | 2021', W / 2, H * .14 + 275, 32, a2, '#fff', 'rgba(20,60,120,.75)');
+};
+S['END'] = (ctx, u, d) => {
+  ctx.fillStyle = '#07070b'; ctx.fillRect(0, 0, W, H);
+  const a = prog(u, .2, .8), b = prog(u, .9, 1.5);
+  txt(ctx, 'आपको धोलावीरा की कौन-सी बात', W / 2, 760, 50, `rgba(255,255,255,${a})`, 'center', 700, 0);
+  txt(ctx, 'सबसे ज़्यादा हैरान करती है?', W / 2, 836, 50, `rgba(255,255,255,${a})`, 'center', 700, 0);
+  txt(ctx, 'कमेंट में बताइए', W / 2, 930, 44, `rgba(245,198,106,${a})`, 'center', 700, 0);
+  txt(ctx, 'इस वीडियो के दृश्य एनिमेटेड चित्रण और कलात्मक पुनर्निर्माण हैं —', W / 2, 1160, 30, `rgba(220,220,230,${b})`, 'center', 600, 0);
+  txt(ctx, 'ये पुरातात्विक फ़ुटेज नहीं हैं।', W / 2, 1210, 30, `rgba(220,220,230,${b})`, 'center', 600, 0);
+  txt(ctx, 'Visuals are animated illustrations & artistic reconstructions, not archaeological footage.', W / 2, 1275, 21, `rgba(180,180,195,${b})`, 'center', 500, 0);
+};
+
+// =====================================================================
+//  SCRIPT, TIMING, SHOTS
+// =====================================================================
+const SCRIPT = [
+  ['कल्पना कीजिए…', 'आज से लगभग 5,000 साल पहले, गुजरात के एक सूखे इलाके में एक शहर बसा था,', 'जहाँ पानी की हर बूंद को बचाने के लिए शानदार इंजीनियरिंग का इस्तेमाल किया जाता था।'],
+  ['इस शहर का नाम था — धोलावीरा।', 'कच्छ के खडीर द्वीप पर बसा यह प्राचीन शहर,', 'हड़प्पा सभ्यता का एक महत्वपूर्ण केंद्र था।', 'लेकिन इसकी सबसे बड़ी खासियत इसकी इमारतें नहीं…', 'बल्कि पानी को संभालने का इसका तरीका था।'],
+  ['सोचिए, इस इलाके में सालभर बहने वाली कोई बड़ी नदी नहीं थी।', 'पानी के लिए यहाँ के लोग मानसून और मौसमी नालों पर निर्भर थे।', 'ऐसे में इतने बड़े शहर को पानी उपलब्ध कराना किसी चुनौती से कम नहीं था।'],
+  ['लेकिन धोलावीरा के लोगों ने इसका अनोखा समाधान निकाला।', 'उन्होंने विशाल जलाशय बनाए,', 'मौसमी नदियों के पानी को मोड़ा,', 'और बारिश के पानी को जमा करने के लिए विशेष रास्ते तैयार किए।', 'चट्टानों को काटकर कुएँ बनाए गए,', 'और पानी को एक जगह से दूसरी जगह पहुँचाने के लिए ड्रेनेज सिस्टम विकसित किए गए।'],
+  ['और सिर्फ पानी ही नहीं…', 'इस शहर की प्लानिंग भी कमाल की थी।', 'पूरा शहर अलग-अलग हिस्सों में बँटा था —', 'सिटाडेल, मिडिल टाउन और लोअर टाउन।', 'चारों तरफ मजबूत किलेबंदी और व्यवस्थित सड़कें थीं।'],
+  ['यह शहर लगभग 1,500 साल तक आबाद रहा।', 'यहाँ के अवशेष बताते हैं कि प्राचीन भारत में लोग सिर्फ शहर नहीं बनाते थे…', 'बल्कि प्रकृति और उपलब्ध संसाधनों को समझकर भविष्य की योजना भी बनाते थे।'],
+  ['और यही है धोलावीरा…', 'प्राचीन भारत की इंजीनियरिंग का एक ऐसा अध्याय, जिसे दुनिया आज भी पहचानती है।'],
+];
+const CARDS = [null, null, ['चुनौती', 'पानी की कमी'], ['समाधान', 'जल-प्रबंधन'], ['योजना', 'शहर की बनावट'], null, null];
+const RATE = 2.9;
+const LINES = [], SCN = [];
+{
+  // With a recorded voice-over (window.VO = seconds of speech per line) the timeline follows the voice.
+  const VO = window.VO, gap = VO ? 0.3 : 0.2;
+  let t = 0, idx = 0;
+  SCRIPT.forEach((ls, si) => {
+    const st = t; let lt = st + (si === 0 ? 0.5 : 0.45);
+    for (const s of ls) {
+      const n = s.replace(/—/g, ' ').split(/\s+/).filter(Boolean).length;
+      const d = VO ? VO[idx] : Math.max(1.0, n / RATE);
+      LINES.push({ si, txt: s, s: lt, e: lt + d }); idx++;
+      lt += d + gap + (/[…—]$/.test(s) ? 0.25 : 0);
+    }
+    t = lt + (si === SCRIPT.length - 1 ? 2.8 : 0.35); SCN.push({ s: st, e: t });
+  });
+}
+// [id, scene, first line (null = scene start), honesty tag, transition out, transition length]
+const SHOTDEF = [
+  ['0A', 0, null, 'recon', 'cut'], ['0B', 0, 2, 'illus', 'ripple', .8],
+  ['1A', 1, null, 'recon', 'cut'], ['1B', 1, 4, 'diagram', 'cut'], ['1C', 1, 5, 'recon', 'cut'], ['1D', 1, 6, 'recon', 'fadeblack', .6],
+  ['2A', 2, null, 'illus', 'cut'], ['2B', 2, 9, 'illus', 'dissolve', .7],
+  ['3A', 3, null, 'recon', 'cut'], ['3B', 3, 13, 'diagram', 'cut'], ['3C', 3, 15, 'diagram', 'warm', .5],
+  ['4A', 4, null, 'diagram', 'cut'], ['4B', 4, 21, 'recon', 'fadeblack', .8],
+  ['5A', 5, null, 'recon', 'cut'], ['5B', 5, 23, 'recon', 'dissolve', .8],
+  ['6A', 6, null, 'today', 'cut'],
+];
+const SHOTS = SHOTDEF.map(([id, si, li, tag, out, td]) => ({ id, si, tag, out, td: td || 0, s: li === null ? SCN[si].s : LINES[li].s - 0.3 }));
+SHOTS.forEach((sh, i) => { sh.d = (i < SHOTS.length - 1 ? SHOTS[i + 1].s : SCN[SCN.length - 1].e) - sh.s; });
+const END_D = 4.2; SHOTS.push({ id: 'END', s: SCN[SCN.length - 1].e, d: END_D, tag: null, out: 'cut', td: 0, si: 7 });
+const TOTAL = SCN[SCN.length - 1].e + END_D;
+window.TOTAL_FRAMES = Math.round(TOTAL * FPS);
+window.LINES = LINES; window.SHOTS = SHOTS.map(s => ({ id: s.id, s: +s.s.toFixed(2), d: +s.d.toFixed(2) }));
+
+// =====================================================================
+//  COMPOSITING
+// =====================================================================
+const out = document.getElementById('out'), O = out.getContext('2d'), bufA = mk(W, H), bufB = mk(W, H), tmp = mk(W, H);
+function drawShot(i, buf, t) {
+  const sh = SHOTS[i], c = buf.getContext('2d');
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.filter = 'none'; c.shadowBlur = 0; c.shadowColor = 'transparent';
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  S[sh.id](c, Math.max(0, t - sh.s), sh.d); c.restore();
+}
+function composite(o, type, A, B, k) {
+  switch (type) {
+    case 'ripple': { const tc = tmp.getContext('2d'); tc.globalAlpha = 1; tc.drawImage(A, 0, 0); tc.globalAlpha = eInOut(k); tc.drawImage(B, 0, 0); tc.globalAlpha = 1; const amp = Math.sin(k * Math.PI) * 26; for (let y = 0; y < H; y += 4) o.drawImage(tmp, 0, y, W, 4, Math.sin(y * .025 + k * 12) * amp, y, W, 4); break; }
+    case 'warm': o.drawImage(k < .5 ? A : B, 0, 0); o.fillStyle = `rgba(255,226,170,${Math.pow(1 - Math.abs(k - .5) * 2, 1.2)})`; o.fillRect(0, 0, W, H); break;
+    case 'fadeblack': o.drawImage(k < .5 ? A : B, 0, 0); o.fillStyle = `rgba(0,0,0,${1 - Math.abs(k - .5) * 2})`; o.fillRect(0, 0, W, H); break;
+    case 'dissolve': o.drawImage(A, 0, 0); o.globalAlpha = eInOut(k); o.drawImage(B, 0, 0); o.globalAlpha = 1; break;
+  }
+}
+const TAGS = { illus: 'एनिमेटेड चित्रण · ANIMATED ILLUSTRATION', diagram: 'व्याख्यात्मक चित्र · ILLUSTRATIVE DIAGRAM', recon: 'कलात्मक पुनर्निर्माण · ARTISTIC RECONSTRUCTION', today: 'आज के अवशेष (चित्रण) · PRESENT-DAY RUINS, ILLUSTRATED' };
+function tag(ctx, k) {
+  if (!k) return; ctx.save(); ctx.font = '600 24px "Nirmala UI", "Segoe UI", sans-serif'; const t = TAGS[k], w = ctx.measureText(t).width;
+  ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.beginPath(); ctx.roundRect(32, 56, w + 36, 46, 23); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textBaseline = 'middle'; ctx.fillText(t, 50, 80); ctx.restore();
+}
+function card(ctx, c, u) {
+  const a = eOut(prog(u, .15, .55)) * (1 - prog(u, 2.3, 2.7)); if (a <= 0) return;
+  const y = H * .17 - (1 - a) * 24;
+  ctx.save(); ctx.globalAlpha = a;
+  txt(ctx, c[0], W / 2, y - 46, 36, '#f5c66a', 'center', 700, 6);
+  txt(ctx, c[1], W / 2, y + 14, 70, '#ffffff', 'center', 700, 9);
+  ctx.font = '700 70px "Nirmala UI"'; const tw = ctx.measureText(c[1]).width; ctx.fillStyle = '#f5c66a'; ctx.fillRect(W / 2 - tw / 2 * a, y + 64, tw * a, 4);
+  ctx.restore();
+}
+const KEY = new Set(['धोलावीरा', 'पानी', 'बूंद', 'इंजीनियरिंग', 'हड़प्पा', 'खडीर', 'मानसून', 'मौसमी', 'जलाशय', 'कुएँ', 'ड्रेनेज', 'प्लानिंग', 'सिटाडेल', 'मिडिल', 'लोअर', 'टाउन', 'किलेबंदी', '1,500', '5,000', 'चुनौती', 'समाधान', 'भविष्य']);
+function subtitle(ctx, s, a) {
+  ctx.save(); ctx.font = '700 56px "Nirmala UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const words = s.split(' ').filter(Boolean), sp = ctx.measureText(' ').width, lines = []; let cur = [], cw = 0;
+  for (const w of words) { const ww = ctx.measureText(w).width; if (cur.length && cw + sp + ww > 930) { lines.push(cur); cur = []; cw = 0; } cw += (cur.length ? sp : 0) + ww; cur.push([w, ww]); }
+  if (cur.length) lines.push(cur);
+  const lh = 80, y0 = H * .73 - (lines.length - 1) * lh / 2;
+  ctx.globalAlpha = a;
+  lines.forEach((ln, i) => {
+    const tw = ln.reduce((q, [, w]) => q + w, 0) + sp * (ln.length - 1); let x = W / 2 - tw / 2; const y = y0 + i * lh;
+    for (const [w, ww] of ln) { ctx.lineWidth = 11; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(w, x, y); ctx.fillStyle = KEY.has(w.replace(/[,।?!—…]/g, '')) ? '#f5c66a' : '#ffffff'; ctx.fillText(w, x, y); x += ww + sp; }
+  });
+  ctx.restore();
+}
+function finish(ctx) {
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, H * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.42)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalAlpha = .09; ctx.globalCompositeOperation = 'overlay'; ctx.drawImage(noise[FRAME % 4], 0, 0, W, H); ctx.restore();
+}
+window.renderFrame = f => {
+  FRAME = f; const t = f / FPS; CURT = t;
+  let i = SHOTS.length - 1; for (let j = 0; j < SHOTS.length; j++) if (t < SHOTS[j].s + SHOTS[j].d) { i = j; break; }
+  O.save(); O.fillStyle = '#000'; O.fillRect(0, 0, W, H);
+  let tr = null;
+  for (let j = 0; j < SHOTS.length - 1; j++) { const sh = SHOTS[j], b = sh.s + sh.d; if (sh.td > 0 && Math.abs(t - b) < sh.td / 2) tr = { j, k: (t - (b - sh.td / 2)) / sh.td }; }
+  if (tr) { drawShot(tr.j, bufA, t); drawShot(tr.j + 1, bufB, t); composite(O, SHOTS[tr.j].out, bufA, bufB, tr.k); }
+  else { drawShot(i, bufA, t); O.drawImage(bufA, 0, 0); }
+  finish(O);
+  tag(O, SHOTS[i].tag);
+  const sc = SHOTS[i].si; if (sc < 7 && CARDS[sc]) card(O, CARDS[sc], t - SCN[sc].s);
+  for (const L of LINES) if (t >= L.s - .05 && t <= L.e + .12) subtitle(O, L.txt, Math.min(1, (t - L.s + .05) / .12, (L.e + .12 - t) / .12));
+  if (t < .35) { O.fillStyle = `rgba(0,0,0,${1 - t / .35})`; O.fillRect(0, 0, W, H); }
+  if (t > TOTAL - .6) { O.fillStyle = `rgba(0,0,0,${prog(t, TOTAL - .6, TOTAL)})`; O.fillRect(0, 0, W, H); }
+  O.restore();
+  return out.toDataURL('image/jpeg', 0.92);
+};
+window.ready = true;
+</script>
+</body></html>

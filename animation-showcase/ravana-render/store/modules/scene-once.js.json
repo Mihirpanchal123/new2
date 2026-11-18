@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('once', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'once', glow: true, back: '<rect width=\"918\" height=\"1027\" style=\"fill:var(--accent);opacity:.2\"/>',\n      cast: [{ who: 'ravana', x: 580, y: 1760, s: 1.42 }],\n      cam: [1.0, 1.13, 455, 520, 430, 470],\n      arm: (t, i, talk) => 28 + 6 * Math.sin(t * 1.1),\n      lines: [[71.5, 72.9, 'ऐसे जीवन का', 0, 0], [73.7, 74.9, 'कोई मान नहीं करता।', 0, 0], [75.0, 76.7, 'मृत्यु तो एक दिन आएगी ही।', 0, 0], [77.0, 79.55, 'कायर बार-बार मरते हैं, वीर केवल एक बार।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

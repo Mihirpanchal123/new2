@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('beg', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'beg', tears: true, back: '<g style=\"opacity:.3\">' + W.lace(70, 160, 70, 960, 14, 9) + W.lace(848, 160, 848, 960, 14, 9) + '</g>',\n      cast: [{ who: 'mandodari', x: 420, y: 1480, s: 1.12, flip: true }],\n      cam: [1.0, 1.04, 459, 520, 459, 505],\n      arm: (t) => 22 + 6 * Math.sin(t * 2.0),\n      lines: [[29.9, 32.2, 'मेरी बस एक विनती मान लीजिए…', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('return', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'return', tears: true,\n      cast: [{ who: 'mandodari', x: 350, y: 2140, s: 1.95, flip: true }],\n      cam: [1.02, 1.06, 470, 500, 476, 492],\n      arm: (t) => 10,\n      lines: [[33.17, 34.68, 'सीता को श्रीराम के पास लौटा दीजिए।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

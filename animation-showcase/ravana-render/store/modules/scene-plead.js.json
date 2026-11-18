@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('plead', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'plead', back: '<rect width=\"918\" height=\"1027\" style=\"fill:var(--accent);opacity:.16\"/>',\n      cast: [{ who: 'malyavan', x: 360, y: 1900, s: 1.6, flip: true }],\n      cam: [1.0, 1.02, 470, 500, 474, 496],\n      arm: (t) => 6,\n      lines: [[70.5, 71.45, 'हठ छोड़ो, लंकेश।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

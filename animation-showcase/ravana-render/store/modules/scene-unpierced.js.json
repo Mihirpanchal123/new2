@@ -1,0 +1,4 @@
+{
+  "kind": "js",
+  "text": "kit.scene('unpierced', {\n  init(kit) {\n    this.s = W.shot(kit, {\n      id: 'unpierced', glow: true,\n      cast: [{ who: 'ravana', x: 600, y: 2020, s: 1.72 }],\n      cam: [1.0, 1.06, 450, 540, 440, 520],\n      arm: (t) => 34 + 6 * Math.sin(t * 1.1),\n      lines: [[8.5, 9.6, 'यह कवच', 0, 0], [9.8, 12.15, 'अभेद्य है… कोई अस्त्र इसे भेद नहीं सकता।', 0, 0]],\n    });\n  },\n  render(t) { this.s.render(t); },\n});"
+}

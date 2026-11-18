@@ -1,0 +1,715 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block;width:960px;height:540px}</style>
+</head><body>
+<canvas id="out" width="1920" height="1080"></canvas>
+<script>
+// =====================================================================
+//  धोलावीरा — 10-minute YouTube documentary, 16:9, 1920x1080 @ 30fps
+//  Stylised reconstruction. Every frame is a pure function of time.
+// =====================================================================
+const W = 1920, H = 1080, FPS = 30, TAU = Math.PI * 2;
+let FRAME = 0, CURT = 0;
+</script>
+<script src="dhola-engine.js"></script>
+<script>
+const city = (ctx, u, o) => renderCity(ctx, Object.assign({ u, f: 1600, cy: H * .46 }, o));
+const topShade = (ctx, h = .32, a = .55) => { const g = ctx.createLinearGradient(0, 0, 0, H * h); g.addColorStop(0, `rgba(8,8,20,${a})`); g.addColorStop(1, 'rgba(8,8,20,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * h); };
+const LS = i => LINES[i].s, LE = i => LINES[i].e;
+const at = (i, a = 0, b = .5) => prog(CURT, LS(i) + a, LS(i) + a + b);
+function note(ctx, s, y = 112) { txt(ctx, s, W / 2, y, 24, 'rgba(255,255,255,.82)', 'center', 600, 5); }
+function label2(ctx, s, x, y, tx, ty, a, col = '#ffd36a', size = 38) { if (a <= 0) return; txt(ctx, s, x, y, size, `rgba(255,255,255,${a})`, 'center', 700, 8); arrow(ctx, lerp(x, tx, .18), lerp(y, ty, .18) + (ty > y ? size * .5 : -size * .5), tx, ty, col.replace(')', `,${a})`).replace('rgb(', 'rgba('), 4); }
+function paper(ctx, tone = '#ebe2d2') { ctx.fillStyle = tone; ctx.fillRect(0, 0, W, H); ctx.save(); ctx.globalAlpha = .06; ctx.drawImage(noise[1], 0, 0, W, H); ctx.restore(); const g = ctx.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, W * .7); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(80,50,20,.35)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+function panel(ctx, x, y, w, h, a = .62) { ctx.fillStyle = `rgba(10,12,24,${a})`; ctx.beginPath(); ctx.roundRect(x, y, w, h, 22); ctx.fill(); ctx.strokeStyle = 'rgba(245,198,106,.35)'; ctx.lineWidth = 2; ctx.stroke(); }
+
+// ---------- 2D scenes ----------
+function heatScene(ctx, u, d, label) {
+  const hy = 540, camH = 1.6, f = 1500, zoff = u * 1.4;
+  sky(ctx, [[0, '#9db4c6'], [.6, '#eee4cc'], [1, '#fff3d4']], hy + 4);
+  glow(ctx, W * .74, 190, 700, 'rgba(255,250,225,.9)'); ctx.fillStyle = '#fffdf5'; ctx.beginPath(); ctx.arc(W * .74, 190, 56, 0, TAU); ctx.fill();
+  let g = ctx.createLinearGradient(0, hy, 0, H); g.addColorStop(0, '#d9bc90'); g.addColorStop(1, '#a87a4c'); ctx.fillStyle = g; ctx.fillRect(0, hy, W, H - hy);
+  const P2 = (X, Z) => [W / 2 + X * f / Z, hy + camH * f / Z];
+  const L = [], R = []; for (let Z = 1.6; Z < 320; Z *= 1.08) { const c = 2.5 + 5 * Math.sin((Z + zoff) / 24); L.push(P2(c - 3.4, Z)); R.push(P2(c + 3.4, Z)); }
+  poly(ctx, [...L, ...R.reverse()], '#e3cda4');
+  ctx.strokeStyle = 'rgba(90,58,30,.55)'; ctx.lineCap = 'round';
+  for (const cr of CRACKS) {
+    const dz = mod(cr[0][1] - zoff, 140) + 1.6 - cr[0][1]; ctx.beginPath(); let ok = false;
+    cr.forEach(([X, Z]) => { const ZZ = Z + dz; if (ZZ < 1.2) return; const [x, y] = P2(X * 1.6, ZZ); if (!ok) { ctx.moveTo(x, y); ok = true; } else ctx.lineTo(x, y); });
+    ctx.lineWidth = clamp(10 / (cr[0][1] + dz), .5, 4); ctx.stroke();
+  }
+  ctx.fillStyle = '#6d5a40';
+  for (const [x, s] of [[180, 1], [520, .6], [1300, .8], [1700, .5], [930, .4]]) { ctx.beginPath(); ctx.ellipse(x, hy - 12 * s, 44 * s, 12 * s, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - 2, hy - 12 * s, 4, 12 * s); }
+  const sc = shimC.getContext('2d'); sc.clearRect(0, 0, W, 220); sc.drawImage(ctx.canvas, 0, hy - 110, W, 220, 0, 0, W, 220);
+  for (let y = 0; y < 220; y += 3) ctx.drawImage(shimC, 0, y, W, 3, Math.sin(y * .15 + u * 7) * 3.5, hy - 110 + y, W, 3);
+  fog(ctx, hy + 40, .3, u * 60, 1.2); dust(ctx, u * 3, 110, 'rgba(240,210,160,1)', 12);
+  if (label) pill(ctx, label, W / 2, hy + 120, 30, prog(u, .6, 1.2));
+  ctx.fillStyle = 'rgba(255,200,120,.08)'; ctx.fillRect(0, 0, W, H);
+}
+function dropScene(ctx, u, d) {
+  const ti = 1.25, hz = 330, cy = 700, z = lerp(1, 1.15, eInOut(u / d));
+  ctx.save(); ctx.translate(W / 2, cy); ctx.scale(z, z); ctx.translate(-W / 2, -cy);
+  sky(ctx, [[0, '#0b0d16'], [.7, '#2c2028'], [1, '#6a4030']], hz);
+  let g = ctx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, '#5a3b2c'); g.addColorStop(.25, '#1f2a30'); g.addColorStop(1, '#070b0e'); ctx.fillStyle = g; ctx.fillRect(-200, hz, W + 400, H);
+  glow(ctx, W / 2, hz + 30, 700, 'rgba(255,170,90,.35)');
+  ctx.strokeStyle = 'rgba(255,190,120,.16)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 24; i++) { const y = hz + 16 + Math.pow(i / 24, 1.6) * (H - hz), w = 160 + i * 50; ctx.beginPath(); ctx.moveTo(W / 2 - w + Math.sin(u * 1.4 + i) * 30, y); ctx.lineTo(W / 2 + w + Math.sin(u * 1.4 + i) * 30, y); ctx.stroke(); }
+  const tt = u - ti;
+  if (tt < 0) {
+    const y = lerp(-100, cy, Math.pow(u / ti, 1.25)), r = 18;
+    const tg = ctx.createLinearGradient(0, y - 220, 0, y); tg.addColorStop(0, 'rgba(255,220,160,0)'); tg.addColorStop(1, 'rgba(255,220,160,.35)'); ctx.fillStyle = tg; ctx.fillRect(W / 2 - 3, y - 220, 6, 200);
+    ctx.beginPath(); ctx.moveTo(W / 2, y - r * 2.6); ctx.bezierCurveTo(W / 2 + r * .3, y - r * 1.4, W / 2 + r, y - r * .6, W / 2 + r, y); ctx.arc(W / 2, y, r, 0, Math.PI); ctx.bezierCurveTo(W / 2 - r, y - r * .6, W / 2 - r * .3, y - r * 1.4, W / 2, y - r * 2.6);
+    const dg = ctx.createRadialGradient(W / 2 - 6, y - 7, 2, W / 2, y, r * 1.6); dg.addColorStop(0, '#fff8e6'); dg.addColorStop(.4, '#f6c27a'); dg.addColorStop(1, '#8a5530'); ctx.fillStyle = dg; ctx.fill();
+    glow(ctx, W / 2, y, 80, 'rgba(255,200,130,.4)');
+  } else {
+    for (let k = 0; k < 7; k++) { const R = (tt - k * .3) * 380; if (R <= 0) continue; ctx.strokeStyle = `rgba(255,215,160,${.75 * Math.exp(-tt * .55) * (1 - k * .11)})`; ctx.lineWidth = 4 - k * .4; ctx.beginPath(); ctx.ellipse(W / 2, cy, R, R * .2, 0, 0, TAU); ctx.stroke(); }
+    const r = rng(4);
+    for (let i = 0; i < 22; i++) { const a = r() * TAU, v = 120 + r() * 160, vy = 330 + r() * 360, t2 = tt * 1.1; const x = W / 2 + Math.cos(a) * v * t2, y = cy + Math.sin(a) * v * t2 * .2 - (vy * t2 - 800 * t2 * t2); if (y > cy + 30 || t2 > 1.3) continue; ctx.fillStyle = `rgba(255,232,190,${clamp(1.2 - t2)})`; ctx.beginPath(); ctx.arc(x, y, 3 + r() * 4, 0, TAU); ctx.fill(); }
+    const jt = tt - .22; if (jt > 0 && jt < 1.1) { const h = Math.sin(jt / 1.1 * Math.PI) * 160; const jg = ctx.createLinearGradient(0, cy - h, 0, cy); jg.addColorStop(0, 'rgba(255,236,200,.95)'); jg.addColorStop(1, 'rgba(255,200,140,.2)'); ctx.fillStyle = jg; ctx.beginPath(); ctx.moveTo(W / 2 - 12, cy); ctx.quadraticCurveTo(W / 2 - 4, cy - h * .6, W / 2, cy - h); ctx.quadraticCurveTo(W / 2 + 4, cy - h * .6, W / 2 + 12, cy); ctx.fill(); ctx.beginPath(); ctx.arc(W / 2, cy - h - 14, 9, 0, TAU); ctx.fill(); }
+    glow(ctx, W / 2, cy, 240 * Math.exp(-tt * 1.2), 'rgba(255,190,120,.5)');
+  }
+  ctx.restore();
+}
+function streetScene(ctx, u, d, variant = '') {
+  const base = 760;
+  sky(ctx, [[0, '#3c5a88'], [.55, '#e0a57a'], [1, '#ffd9a2']], base + 10);
+  glow(ctx, W * .14, 470, 800, 'rgba(255,190,120,.55)');
+  const far = u * 14; ctx.fillStyle = '#9b7a68';
+  ctx.beginPath(); ctx.moveTo(-50, 640); for (let x = -50; x <= W + 50; x += 30) { const k = mod(x + far, 1200); const hgt = k < 640 ? 70 + (k > 70 && k < 570 ? 50 : 0) + (k > 150 && k < 490 ? 34 : 0) : 24; ctx.lineTo(x, 640 - hgt); } ctx.lineTo(W + 50, 680); ctx.lineTo(-50, 680); ctx.fill();
+  fog(ctx, 620, .3, -u * 20, 1.2);
+  const off = u * 75;
+  for (const hs of STREET.houses) for (const rep of [0, STREET.len]) {
+    const X = hs.x + rep - mod(off, STREET.len) - 100, hh = hs.h * .85; if (X > W + 20 || X + hs.w < -20) continue;
+    const top = base - hh, sb = base - hh * .42;
+    ctx.fillStyle = rgba(mixc([206, 160, 112], [222, 186, 140], hs.tone)); ctx.fillRect(X, top, hs.w, hh);
+    ctx.fillStyle = rgba(mixc([170, 140, 108], [186, 158, 122], hs.tone)); ctx.fillRect(X, sb, hs.w, base - sb);
+    ctx.strokeStyle = 'rgba(90,60,40,.35)'; ctx.lineWidth = 2; for (let y = sb + 20; y < base; y += 22) { ctx.beginPath(); ctx.moveTo(X, y); ctx.lineTo(X + hs.w, y); ctx.stroke(); }
+    for (let y = sb; y < base; y += 22) for (let x = X + ((y / 22) % 2 ? 0 : 18); x < X + hs.w; x += 40) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 22); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(80,45,30,.28)'; ctx.fillRect(X + hs.w - 22, top, 22, hh);
+    if (hs.par) { ctx.fillStyle = rgba(mixc([196, 150, 104], [214, 176, 130], hs.tone)); ctx.fillRect(X - 4, top - 14, hs.w + 8, 14); }
+    ctx.fillStyle = 'rgba(70,40,25,.45)'; ctx.fillRect(X - 4, top - 2, hs.w + 8, 5);
+    if (hs.door) { const dx = X + hs.w * hs.dx; ctx.fillStyle = '#3a2416'; ctx.beginPath(); ctx.roundRect(dx, base - 105, 52, 105, [9, 9, 0, 0]); ctx.fill(); }
+    if (hs.win) { ctx.fillStyle = '#4a2e1c'; for (let k = 0; k < 2; k++) ctx.fillRect(X + hs.w * (.62 + k * .14), top + 34, 11, 30); }
+  }
+  let g = ctx.createLinearGradient(0, base, 0, H); g.addColorStop(0, '#b8946a'); g.addColorStop(1, '#6e5238'); ctx.fillStyle = g; ctx.fillRect(0, base, W, H - base);
+  ctx.fillStyle = '#8f7556'; ctx.fillRect(0, base + 5, W, 26);
+  ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.lineWidth = 3; for (let x = -mod(off * 1.05, 64); x < W; x += 64) { ctx.beginPath(); ctx.moveTo(x, base + 5); ctx.lineTo(x, base + 31); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(70,50,30,.3)'; ctx.lineWidth = 2;
+  for (let j = 0; j < 6; j++) { const y = base + 44 + j * j * 8; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  if (variant === 'market') {
+    const r = rng(17);
+    for (let k = 0; k < 9; k++) {
+      const mx = mod(k * 330 + 120 - off * 1.15, W + 400) - 200, my = 880;
+      ctx.fillStyle = '#9a7a4a'; ctx.beginPath(); ctx.ellipse(mx, my, 120, 26, 0, 0, TAU); ctx.fill();
+      for (let i = 0; i < 5; i++) { const px = mx - 80 + i * 40, kind = (k + i) % 3; if (kind === 0) { const pg = ctx.createLinearGradient(px - 16, 0, px + 16, 0); pg.addColorStop(0, '#c87a48'); pg.addColorStop(1, '#7a3c22'); ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(px, my - 22, 16, 20, 0, 0, TAU); ctx.fill(); } else if (kind === 1) { ctx.fillStyle = '#c9a35a'; ctx.beginPath(); ctx.ellipse(px, my - 10, 18, 11, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 2; ctx.stroke(); } else { for (let b = 0; b < 7; b++) { ctx.fillStyle = b % 2 ? '#d0502c' : '#e98a3a'; ctx.beginPath(); ctx.arc(px - 12 + b * 4, my - 8 - Math.sin(b / 6 * Math.PI) * 10, 3.2, 0, TAU); ctx.fill(); } } }
+      person(ctx, mx + 130, 880, 175, Math.PI / 2, -1, ['#e8dcc4', '#b5533a', '#7d5a3a'][k % 3], {});
+    }
+  }
+  const pots = variant === 'carry';
+  const WK = [[120, 1, 1.1, 830, 150, '#e8dcc4', 0], [520, -1, 1.0, 826, 145, '#b5533a', 1], [830, 1, .9, 832, 148, '#d9c7a4', 0], [1300, -1, 1.2, 828, 142, '#7d5a3a', 0], [1640, 1, 1, 830, 150, '#5f6f8a', 1], [700, 1, 1.0, 960, 225, '#c9a35a', 1], [60, -1, 1.1, 968, 232, '#ece2cc', 0], [1500, -1, .95, 964, 222, '#5f6f8a', 0], [1100, 1, 1.05, 966, 228, '#a4553a', 0]];
+  for (const [x0, dir, sp, y, s, col, pot] of WK) {
+    const lane = y > 900 ? 1.3 : 1, x = mod(x0 + dir * sp * 70 * u - off * lane + 200, W + 400) - 200;
+    person(ctx, x, y, s, u * sp * 5.2 + x0, dir, col, { pot: pots || !!pot, shawl: pot ? null : (x0 % 3 ? null : '#a4553a') });
+  }
+  ctx.save(); ctx.filter = 'blur(7px)'; const fx = mod(1700 - u * 300, W + 900) - 450; ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.ellipse(fx, 1040, 140, 170, 0, 0, TAU); ctx.fill(); ctx.restore();
+  dust(ctx, u, 80, 'rgba(255,220,170,1)', 9);
+  ctx.fillStyle = 'rgba(255,170,90,.08)'; ctx.fillRect(0, 0, W, H);
+}
+function workshop(ctx, u, d, kind) {
+  const z = lerp(1, 1.07, eInOut(u / d)); ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-W / 2, -H / 2);
+  let g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, '#5a3a22'); g.addColorStop(1, '#1e130c'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  glow(ctx, 220, 260, 900, 'rgba(255,190,120,.35)');
+  ctx.fillStyle = '#2c1c12'; ctx.fillRect(0, 600, W, H - 600);
+  g = ctx.createLinearGradient(0, 640, 0, H); g.addColorStop(0, '#9a7a56'); g.addColorStop(1, '#5e4630'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-50, 690); ctx.lineTo(W + 50, 650); ctx.lineTo(W + 50, H + 20); ctx.lineTo(-50, H + 20); ctx.fill();
+  const r = rng(kind.length * 7);
+  ctx.fillStyle = 'rgba(40,25,15,.25)'; for (let i = 0; i < 300; i++) { ctx.beginPath(); ctx.arc(r() * W, 680 + r() * 400, 1 + r() * 2.5, 0, TAU); ctx.fill(); }
+  const skin = '#6b4430', arm = (x1, y1, x2, y2, w = 46) => { ctx.strokeStyle = skin; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+  if (kind === 'beads') {
+    for (let i = 0; i < 70; i++) { const bx = 1180 + r() * 600, by = 760 + r() * 200, s = 9 + r() * 10, ag = r() < .3; const bg = ctx.createRadialGradient(bx - s * .3, by - s * .3, 1, bx, by, s); bg.addColorStop(0, ag ? '#efe2c8' : '#ffb07a'); bg.addColorStop(1, ag ? '#8a6a4a' : '#9c2e18'); ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(bx, by, s * 1.3, s, r() * 3, 0, TAU); ctx.fill(); if (ag) { ctx.strokeStyle = 'rgba(90,60,40,.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(bx, by, s * .8, s * .5, 0, 0, TAU); ctx.stroke(); } }
+    ctx.strokeStyle = '#c9a77a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(1250, 140); ctx.quadraticCurveTo(1520, 420, 1800, 140); ctx.stroke();
+    for (let i = 0; i <= 26; i++) { const t = i / 26, x = (1 - t) * (1 - t) * 1250 + 2 * t * (1 - t) * 1520 + t * t * 1800, y = (1 - t) * (1 - t) * 140 + 2 * t * (1 - t) * 420 + t * t * 140; const bg = ctx.createRadialGradient(x - 4, y - 4, 1, x, y, 14); bg.addColorStop(0, '#ffb07a'); bg.addColorStop(1, '#a3321a'); ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(x, y, 9, 14, Math.atan2(420 - 140, 270) * (1 - 2 * t), 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#7d6a58'; ctx.beginPath(); ctx.ellipse(820, 760, 150, 46, 0, 0, TAU); ctx.fill();
+    const bx = Math.sin(u * 7) * 150;
+    ctx.fillStyle = '#d0502c'; ctx.beginPath(); ctx.ellipse(820, 724, 22, 16, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#5a3a1e'; ctx.fillRect(812, 330, 16, 390);
+    for (let k = 0; k < 6; k++) { const yy = 360 + mod(k * 60 + u * 400, 360); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(812, yy, 16, 6); }
+    ctx.strokeStyle = '#8a6a3a'; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(560 + bx, 520); ctx.quadraticCurveTo(820 + bx, 470, 1080 + bx, 520); ctx.stroke();
+    ctx.strokeStyle = '#e0d2b0'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(560 + bx, 520); ctx.lineTo(820, 545); ctx.lineTo(1080 + bx, 520); ctx.stroke();
+    arm(250, 900, 560 + bx, 525); arm(1200, 160, 840, 315, 50);
+    ctx.fillStyle = '#4a3a2a'; ctx.beginPath(); ctx.ellipse(820, 318, 46, 22, 0, 0, TAU); ctx.fill();
+    for (let i = 0; i < 18; i++) { const a = r() * TAU, rr = mod(u * 60 + i * 9, 80); ctx.fillStyle = `rgba(255,220,180,${.6 * (1 - rr / 80)})`; ctx.beginPath(); ctx.arc(820 + Math.cos(a) * rr, 724 + Math.sin(a) * rr * .4, 2, 0, TAU); ctx.fill(); }
+  } else if (kind === 'shell') {
+    const cx = 760, cy = 690;
+    g = ctx.createRadialGradient(cx - 80, cy - 60, 20, cx, cy, 300); g.addColorStop(0, '#fff6ea'); g.addColorStop(1, '#c9b49a'); ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(cx - 330, cy + 30); ctx.bezierCurveTo(cx - 260, cy - 190, cx + 120, cy - 230, cx + 300, cy - 70); ctx.bezierCurveTo(cx + 380, cy, cx + 260, cy + 140, cx + 40, cy + 150); ctx.bezierCurveTo(cx - 140, cy + 160, cx - 300, cy + 120, cx - 330, cy + 30); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,110,90,.6)'; ctx.lineWidth = 3; for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.ellipse(cx + 170 - k * 18, cy - 40 + k * 4, 120 - k * 18, 70 - k * 10, -.3, 0, TAU); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(240,170,150,.6)'; ctx.beginPath(); ctx.ellipse(cx - 160, cy + 50, 120, 50, .1, 0, TAU); ctx.fill();
+    const sx = Math.sin(u * 5) * 70;
+    ctx.save(); ctx.translate(cx + 40 + sx, cy - 210); ctx.rotate(.15); ctx.fillStyle = '#3a3530'; ctx.fillRect(-180, -6, 360, 12); ctx.fillStyle = '#6a4a2a'; ctx.fillRect(170, -22, 120, 44); ctx.restore();
+    arm(1300, 260, cx + 330 + sx, cy - 170);
+    for (let k = 0; k < 9; k++) { const bx = 1380 + (k % 3) * 120, by = 900 - Math.floor(k / 3) * 40; ctx.strokeStyle = '#f2e8d8'; ctx.lineWidth = 16; ctx.beginPath(); ctx.ellipse(bx, by, 50, 20, 0, 0, TAU); ctx.stroke(); ctx.strokeStyle = 'rgba(120,90,70,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(bx, by, 58, 27, 0, 0, TAU); ctx.stroke(); }
+    for (let i = 0; i < 26; i++) { const a = r() * Math.PI, rr = mod(u * 70 + i * 13, 120); ctx.fillStyle = `rgba(255,250,240,${.7 * (1 - rr / 120)})`; ctx.beginPath(); ctx.arc(cx + 40 + Math.cos(a) * rr, cy - 190 + Math.sin(a) * rr * .6, 2.2, 0, TAU); ctx.fill(); }
+  } else {
+    const fx = 620, fb = 760;
+    glow(ctx, fx, fb - 120, 700, `rgba(255,120,40,${.45 + .1 * Math.sin(u * 9)})`);
+    g = ctx.createLinearGradient(fx - 240, 0, fx + 240, 0); g.addColorStop(0, '#8a5a3a'); g.addColorStop(1, '#4a2e1c'); ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(fx - 240, fb); ctx.quadraticCurveTo(fx - 230, fb - 330, fx, fb - 360); ctx.quadraticCurveTo(fx + 230, fb - 330, fx + 240, fb); ctx.fill();
+    g = ctx.createRadialGradient(fx, fb - 90, 10, fx, fb - 90, 120); g.addColorStop(0, '#fff3b0'); g.addColorStop(.4, '#ff9a2a'); g.addColorStop(1, '#a3300a'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(fx, fb - 80, 100, 80, 0, Math.PI, TAU); ctx.lineTo(fx + 100, fb); ctx.lineTo(fx - 100, fb); ctx.fill();
+    for (let i = 0; i < 40; i++) { const ph = mod(u * .8 + r(), 1), x = fx + (r() - .5) * 160 + Math.sin(u * 3 + i) * 20 * ph, y = fb - 360 - ph * 420; ctx.fillStyle = `rgba(255,${180 + 60 * r() | 0},90,${1 - ph})`; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, TAU); ctx.fill(); }
+    const tilt = .35 + .25 * Math.sin(u * .8);
+    ctx.fillStyle = '#5a5048'; ctx.fillRect(1100, 850, 420, 50); ctx.fillStyle = '#2a2420'; ctx.fillRect(1130, 862, 360, 26);
+    ctx.save(); ctx.translate(1180, 640); ctx.rotate(tilt); ctx.fillStyle = '#6a4a38'; ctx.beginPath(); ctx.moveTo(-60, -50); ctx.lineTo(60, -50); ctx.lineTo(40, 40); ctx.lineTo(-40, 40); ctx.fill(); ctx.fillStyle = '#ffb040'; ctx.fillRect(-52, -50, 104, 12); ctx.restore();
+    const lx = 1180 + Math.cos(tilt) * 60, ly = 640 + Math.sin(tilt) * 60 - 50;
+    ctx.strokeStyle = '#ffcc55'; ctx.lineWidth = 14; ctx.shadowColor = '#ff9a2a'; ctx.shadowBlur = 30; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(lx + 40, ly + 120, 1260, 870); ctx.stroke();
+    ctx.fillStyle = '#ffb040'; ctx.fillRect(1140, 866, 200 + 120 * mod(u * .2, 1), 18); ctx.shadowBlur = 0;
+    arm(1500, 300, 1240, 600, 50);
+    ctx.fillStyle = '#4f7a5a'; for (const [x, y] of [[1650, 930], [1760, 960], [1580, 990]]) { ctx.beginPath(); ctx.moveTo(x - 50, y); ctx.lineTo(x + 50, y - 10); ctx.lineTo(x + 30, y + 24); ctx.lineTo(x - 40, y + 24); ctx.fill(); }
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,170,90,.06)'; ctx.fillRect(0, 0, W, H);
+}
+const SITES = [['हड़प्पा', 995, 210], ['मोहनजोदड़ो', 290, 455], ['राखीगढ़ी', 1470, 305], ['लोथल', 890, 815], ['धोलावीरा', 600, 710]];
+function sitesMap(ctx, u, d) {
+  paper(ctx);
+  ctx.strokeStyle = 'rgba(140,110,80,.15)'; ctx.lineWidth = 1; for (let x = 0; x < W; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y < H; y += 80) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  txt(ctx, 'हड़प्पा सभ्यता के कुछ प्रमुख नगर', W / 2, 110, 46, '#5a3e22', 'center', 700, 0);
+  SITES.forEach(([n, x, y], i) => {
+    const a = i === 4 ? prog(CURT, LS(SHOTS[curShot].first) + .2, LS(SHOTS[curShot].first) + .8) : at(SHOTS[curShot].first + 2, i * .55, .4); if (a <= 0) return;
+    const main = i === 4; ctx.save(); ctx.globalAlpha = a;
+    if (main) { const pl = mod(u * .8, 1); ctx.strokeStyle = `rgba(200,60,40,${(1 - pl) * .8})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, 14 + pl * 60, 0, TAU); ctx.stroke(); }
+    ctx.fillStyle = main ? '#c0392b' : '#7a5530'; ctx.beginPath(); ctx.arc(x, y, main ? 16 : 11, 0, TAU); ctx.fill();
+    txt(ctx, n, x, y - 44, main ? 48 : 38, main ? '#b5531c' : '#4a3018', 'center', 700, 0); ctx.restore();
+  });
+  note(ctx, 'सरलीकृत रेखाचित्र — केवल स्थलों की सापेक्ष स्थिति; सीमाएँ नहीं दिखाई गईं', 170);
+  ctx.save(); ctx.translate(W - 110, 200); ctx.fillStyle = '#5a3e22'; ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(14, 8); ctx.lineTo(0, 0); ctx.lineTo(-14, 8); ctx.fill(); txt(ctx, 'N', 0, 34, 26, '#5a3e22', 'center', 700, 0); ctx.restore();
+}
+function tradeMap(ctx, u, d, fade = 0) {
+  paper(ctx, '#e2e3da');
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, 'rgba(80,130,160,.10)'); g.addColorStop(1, 'rgba(80,130,160,.22)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  txt(ctx, 'प्राचीन व्यापार के रास्ते', W / 2, 105, 46, '#2e3e4a', 'center', 700, 0);
+  const N = { D: [1480, 600, 'धोलावीरा'], M: [800, 690, 'मगन (ओमान प्रायद्वीप)'], S: [360, 250, 'मेसोपोटामिया'] };
+  const f0 = SHOTS[curShot].first, rA = fade ? 1 : eInOut(at(f0 + 2, 0, 2.2)), rB = fade ? 1 : eInOut(at(f0 + 2, 1.8, 2.2));
+  const route = (A, B, c, k, cx, cy) => { if (k <= 0) return; ctx.save(); ctx.globalAlpha = 1 - fade * .75; ctx.strokeStyle = '#2b6f8f'; ctx.lineWidth = 6; ctx.setLineDash([22, 14]); ctx.lineDashOffset = -u * 40; ctx.beginPath(); const n = 40; for (let i = 0; i <= n * k; i++) { const t = i / n, x = (1 - t) * (1 - t) * A[0] + 2 * t * (1 - t) * cx + t * t * B[0], y = (1 - t) * (1 - t) * A[1] + 2 * t * (1 - t) * cy + t * t * B[1]; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore();
+    const t = mod(u * .12 + c, 1) * k, bx = (1 - t) * (1 - t) * A[0] + 2 * t * (1 - t) * cx + t * t * B[0], by = (1 - t) * (1 - t) * A[1] + 2 * t * (1 - t) * cy + t * t * B[1];
+    if (!fade) { ctx.fillStyle = '#6a4a2a'; ctx.beginPath(); ctx.moveTo(bx - 22, by); ctx.lineTo(bx + 22, by); ctx.lineTo(bx + 14, by + 10); ctx.lineTo(bx - 14, by + 10); ctx.fill(); ctx.fillStyle = '#f2e6cc'; ctx.beginPath(); ctx.moveTo(bx, by - 32); ctx.lineTo(bx + 16, by - 2); ctx.lineTo(bx, by - 2); ctx.fill(); } };
+  route(N.D, N.M, 0, rA, 1150, 820); route(N.M, N.S, .5, rB, 520, 600);
+  for (const [k, [x, y, n]] of Object.entries(N)) { const a = k === 'D' ? 1 : k === 'M' ? clamp(rA * 1.3) : clamp(rB * 1.3); if (a <= 0) continue; ctx.save(); ctx.globalAlpha = a * (1 - (k === 'D' ? 0 : fade * .6)); ctx.fillStyle = k === 'D' ? '#c0392b' : '#2e3e4a'; ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill(); txt(ctx, n, x, y - 46, 42, k === 'D' ? '#b5531c' : '#2e3e4a', 'center', 700, 0); ctx.restore(); }
+  if (fade) { ctx.save(); ctx.globalAlpha = fade; txt(ctx, 'व्यापार में बदलाव? (विद्वानों की एक व्याख्या)', W / 2, 840, 38, '#7a2a1a', 'center', 700, 0); ctx.restore(); }
+  note(ctx, 'सरलीकृत रेखाचित्र · पैमाने पर नहीं · समुद्री रास्ते सांकेतिक', 165);
+}
+function phasesPanel(ctx, u) {
+  city(ctx, u, { pal: PALS.dusk, ruin: .9, tx: 0, ty: 0, yaw: .3 + u * .01, pitch: .5, dist: 1700 });
+  ctx.fillStyle = 'rgba(8,8,20,.55)'; ctx.fillRect(0, 0, W, H);
+  const f0 = SHOTS[curShot].first, a = prog(u, .3, .9); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; panel(ctx, 220, 260, 1480, 440);
+  txt(ctx, 'धोलावीरा — बसावट के दौर (सरलीकृत)', W / 2, 330, 44, '#f5c66a', 'center', 700, 0);
+  const x0 = 300, x1 = 1620, y = 470, segs = [[0, .2, 'शुरुआती बस्ती', '#8aa0b8'], [.2, .58, 'विकसित नगर', '#f5c66a'], [.58, .7, 'बदलाव', '#d98a5a'], [.7, .76, 'अंतराल', null], [.76, 1, 'छोटी, सादी बस्तियाँ', '#a08a7a']];
+  const k = eInOut(prog(u, .6, 4.5));
+  segs.forEach(([s, e, n, c], i) => { const xa = lerp(x0, x1, s), xb = lerp(x0, x1, e), vis = clamp((k - s) / (e - s)); if (vis <= 0) return;
+    if (c) { ctx.fillStyle = c; ctx.fillRect(xa, y - 26, (xb - xa) * vis - 4, 52); } else { ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.setLineDash([8, 8]); ctx.strokeRect(xa, y - 26, (xb - xa) * vis - 4, 52); ctx.setLineDash([]); }
+    if (vis > .6) txt(ctx, n, (xa + xb) / 2, y + (i % 2 ? 70 : -66), 30, '#fff', 'center', 600, 5); });
+  txt(ctx, 'लगभग 3000 ईसा पूर्व', x0, y + 140, 28, 'rgba(255,255,255,.8)', 'left', 600, 0);
+  txt(ctx, 'लगभग 1500 ईसा पूर्व', x1, y + 140, 28, 'rgba(255,255,255,.8)', 'right', 600, 0);
+  txt(ctx, 'उत्खनन-निदेशक आर. एस. बिष्ट ने यहाँ सात चरण बताए हैं · तिथियों पर विद्वानों में मतभेद', W / 2, 660, 24, 'rgba(255,235,210,.85)', 'center', 600, 0);
+  ctx.restore();
+}
+function climatePanel(ctx, u) {
+  city(ctx, u, { pal: PALS.today, ruin: .5, wet: 0, level: .1, tx: 0, ty: 0, yaw: .4 + u * .01, pitch: .45, dist: 2000 });
+  ctx.fillStyle = 'rgba(8,8,20,.55)'; ctx.fillRect(0, 0, W, H);
+  const f0 = SHOTS[curShot].first, a = at(f0, -.3, .6); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; panel(ctx, 260, 200, 1400, 560);
+  txt(ctx, 'नमी / बारिश — सांकेतिक रुझान', W / 2, 260, 40, '#f5c66a', 'center', 700, 0);
+  const x0 = 360, x1 = 1580, yb = 680, yt = 320;
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, yt); ctx.lineTo(x0, yb); ctx.lineTo(x1, yb); ctx.stroke();
+  const k = eInOut(at(f0, 0, 4)); ctx.strokeStyle = '#7fe3ff'; ctx.lineWidth = 6; ctx.shadowColor = '#7fe3ff'; ctx.shadowBlur = 12; ctx.beginPath();
+  for (let i = 0; i <= 200 * k; i++) { const t = i / 200, v = .78 - .45 * eInOut(prog(t, .35, .85)) + .06 * Math.sin(t * 40) - .12 * Math.exp(-Math.pow((t - .62) / .04, 2)) - .1 * Math.exp(-Math.pow((t - .78) / .05, 2)); const x = lerp(x0, x1, t), y = lerp(yb, yt, v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.stroke(); ctx.shadowBlur = 0;
+  if (k > .7) { txt(ctx, 'लंबे सूखे?', lerp(x0, x1, .66), lerp(yb, yt, .2) - 40, 30, '#ffd36a', 'center', 700, 5); }
+  txt(ctx, 'समय →', x1 - 40, yb + 34, 26, 'rgba(255,255,255,.8)', 'right', 600, 0);
+  txt(ctx, 'उदाहरणात्मक ग्राफ़ — वास्तविक आँकड़े नहीं', W / 2, 730, 24, 'rgba(255,235,210,.85)', 'center', 600, 0);
+  ctx.restore();
+}
+function monthsBar(ctx, u, d) {
+  heatScene(ctx, u, d, null); ctx.fillStyle = 'rgba(10,10,20,.35)'; ctx.fillRect(0, 0, W, H);
+  const M = ['जन', 'फ़र', 'मार्च', 'अप्रै', 'मई', 'जून', 'जुला', 'अग', 'सित', 'अक्टू', 'नव', 'दिस'], bw = 128, x0 = W / 2 - bw * 6, y = 360;
+  txt(ctx, 'साल के 12 महीने', W / 2, 230, 46, '#fff', 'center', 700, 7);
+  M.forEach((m, i) => { const a = prog(u, .1 + i * .06, .4 + i * .06), wet = i >= 5 && i <= 8, x = x0 + i * bw; ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = wet ? rgba([60, 140, 200], .9 * prog(u, 1.2, 1.8) + .1) : 'rgba(225,190,140,.85)'; ctx.beginPath(); ctx.roundRect(x + 6, y, bw - 12, 150, 14); ctx.fill();
+    txt(ctx, m, x + bw / 2, y + 190, 30, '#fff', 'center', 600, 5);
+    if (wet && u > 1.4) { ctx.strokeStyle = 'rgba(220,240,255,.85)'; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k < 6; k++) { const rx = x + 20 + k * 17, ry = y + 20 + mod(u * 160 + k * 37, 110); ctx.moveTo(rx, ry); ctx.lineTo(rx - 4, ry + 16); } ctx.stroke(); }
+    ctx.restore(); });
+  pill(ctx, 'मानसून — आम तौर पर लगभग जून से सितंबर', W / 2, 640, 32, prog(u, 1.6, 2.2), '#cfefff');
+}
+function modernHouse(ctx, u, d) {
+  sky(ctx, [[0, '#3e4a5a'], [1, '#8a96a4']], H); rain(ctx, u, .9);
+  ctx.fillStyle = '#6a6f78'; ctx.fillRect(0, 760, W, H - 760);
+  ctx.fillStyle = '#d8d2c4'; ctx.fillRect(560, 360, 640, 400); ctx.fillStyle = '#b9b2a2'; ctx.fillRect(540, 340, 680, 24);
+  ctx.fillStyle = '#4a5a6a'; for (const x of [620, 780, 940]) ctx.fillRect(x, 440, 100, 120); ctx.fillStyle = '#5a4030'; ctx.fillRect(1060, 560, 90, 200);
+  ctx.fillStyle = '#7a8088'; ctx.fillRect(1220, 344, 22, 470); ctx.fillRect(1220, 800, 200, 22);
+  ctx.fillStyle = '#3a4048'; ctx.fillRect(1380, 820, 300, 200); ctx.fillStyle = '#4a93b6'; const lv = lerp(.1, .75, prog(u, .3, d)); ctx.fillRect(1392, 1008 - 176 * lv, 276, 176 * lv);
+  ctx.strokeStyle = 'rgba(220,245,255,.9)'; ctx.lineWidth = 5; ctx.setLineDash([16, 14]); ctx.lineDashOffset = -u * 60; ctx.beginPath(); ctx.moveTo(1231, 350); ctx.lineTo(1231, 811); ctx.lineTo(1400, 811); ctx.stroke(); ctx.setLineDash([]);
+  txt(ctx, 'छत', 880, 300, 32, '#fff', 'center', 700, 6); txt(ctx, 'टंकी / भूमिगत टैंक', 1530, 1050 - 30, 28, '#fff', 'center', 700, 6);
+  pill(ctx, 'आज: रेनवॉटर हार्वेस्टिंग', W / 2, 160, 36, prog(u, .3, .9), '#cfefff');
+}
+function modernCity(ctx, u, d) {
+  sky(ctx, [[0, '#5a6a80'], [.6, '#d9b38a'], [1, '#f2cfa0']], H * .72);
+  glow(ctx, W * .3, H * .55, 700, 'rgba(255,200,140,.5)');
+  const r = rng(23); let x = -40;
+  while (x < W + 40) { const w = 50 + r() * 110, h = 120 + r() * 360, sh = mod(-u * 10, 1); ctx.fillStyle = `rgb(${60 + r() * 30 | 0},${62 + r() * 30 | 0},${74 + r() * 30 | 0})`; ctx.fillRect(x - u * 12, H * .72 - h, w, h); ctx.fillStyle = 'rgba(255,220,150,.35)'; for (let yy = H * .72 - h + 14; yy < H * .72 - 10; yy += 26) for (let xx = x - u * 12 + 8; xx < x - u * 12 + w - 10; xx += 18) if (r() < .3) ctx.fillRect(xx, yy, 8, 12); x += w + 6; }
+  ctx.fillStyle = '#3a3a40'; ctx.fillRect(0, H * .72, W, H);
+  for (let i = 0; i < 7; i++) { const px = 300 + i * 70, py = H * .86; ctx.fillStyle = i % 2 ? '#2e6f9a' : '#b04a30'; ctx.beginPath(); ctx.ellipse(px, py - 30, 26, 30, 0, 0, TAU); ctx.fill(); ctx.fillRect(px - 10, py - 70, 20, 12); }
+  fog(ctx, H * .66, .25, u * 30, 1.4);
+  pill(ctx, 'आज की चुनौती: पानी की कमी', W / 2, 150, 34, prog(u, .3, .9));
+}
+function excavScene(ctx, u, d) {
+  sky(ctx, [[0, '#7fa6c8'], [1, '#efe6d6']], 360);
+  ctx.fillStyle = '#b89a72'; ctx.fillRect(0, 340, W, H);
+  const r = rng(51); const layers = ['#a88a62', '#9a7a52', '#8d6e4a', '#a08260', '#7e6244'];
+  layers.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(240, 420 + i * 110); for (let x = 240; x <= 1680; x += 60) ctx.lineTo(x, 420 + i * 110 + Math.sin(x * .01 + i) * 10); ctx.lineTo(1680, 1080); ctx.lineTo(240, 1080); ctx.fill(); });
+  ctx.strokeStyle = 'rgba(60,40,20,.5)'; ctx.lineWidth = 3; ctx.strokeRect(240, 420, 1440, 700);
+  const rev = eInOut(prog(u, .3, d * .8));
+  ctx.fillStyle = '#cdb690'; for (let k = 0; k < 7; k++) for (let j = 0; j < 4; j++) { const bx = 420 + k * 120 + (j % 2) * 40, by = 900 - j * 46; if (r() < rev * 1.2) { ctx.fillRect(bx, by, 110, 42); ctx.strokeStyle = 'rgba(70,50,30,.5)'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, 110, 42); } }
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; for (let x = 240; x <= 1680; x += 240) { ctx.beginPath(); ctx.moveTo(x, 360); ctx.lineTo(x, 420); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(240, 400); ctx.lineTo(1680, 400); ctx.stroke();
+  person(ctx, 1320, 880, 230, Math.PI / 2 + Math.sin(u * 3) * .2, -1, '#d8d0b8', { hat: '#e0d2a0', skin: '#8a5a3a' });
+  person(ctx, 1500, 380, 200, u * 2, -1, '#6a8aa0', { hat: '#e0d2a0', skin: '#7a4a32' });
+  person(ctx, 200, 390, 210, Math.PI / 2, 1, '#b0a080', { hat: '#d8c890', skin: '#6a4430' });
+  ctx.fillStyle = '#5a5a60'; ctx.beginPath(); ctx.moveTo(1240, 920); ctx.lineTo(1290, 920); ctx.lineTo(1282, 980); ctx.lineTo(1248, 980); ctx.fill();
+  dust(ctx, u, 40, 'rgba(255,240,210,1)', 21);
+  title(ctx, '1989 – 2005', 200, at(SHOTS[curShot].first, 0, .6), 90);
+  txt(ctx, 'भारतीय पुरातत्व सर्वेक्षण (ASI) · आर. एस. बिष्ट के नेतृत्व में', W / 2, 290, 34, `rgba(255,255,255,${at(SHOTS[curShot].first, .5, .6)})`, 'center', 700, 7);
+}
+function signScene(ctx, u, d) {
+  const z = lerp(1, 1.08, eInOut(u / d)); ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-W / 2, -H / 2);
+  ctx.fillStyle = '#6e604e'; ctx.fillRect(0, 0, W, H);
+  const r = rng(61); ctx.strokeStyle = 'rgba(40,30,20,.5)'; ctx.lineWidth = 3; for (let y = 0; y < H; y += 70) for (let x = (y / 70 % 2) * 60; x < W; x += 140 + r() * 30) { ctx.strokeRect(x, y, 130 + r() * 20, 66); }
+  glow(ctx, W / 2, H * .4, 900, 'rgba(255,210,150,.35)');
+  ctx.fillStyle = 'rgba(30,24,18,.55)'; ctx.beginPath(); ctx.roundRect(260, 300, 1400, 230, 18); ctx.fill();
+  ctx.strokeStyle = '#efe6d2'; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let i = 0; i < 10; i++) {
+    const cx = 340 + i * 138, cy = 415, a = prog(u, .3 + i * .12, .6 + i * .12); if (a <= 0) continue; ctx.globalAlpha = a; ctx.beginPath();
+    switch (i % 5) {
+      case 0: ctx.arc(cx, cy, 44, 0, TAU); for (let k = 0; k < 4; k++) { const an = k * Math.PI / 4; ctx.moveTo(cx + Math.cos(an) * 44, cy + Math.sin(an) * 44); ctx.lineTo(cx - Math.cos(an) * 44, cy - Math.sin(an) * 44); } break;
+      case 1: ctx.moveTo(cx - 34, cy - 50); ctx.lineTo(cx - 34, cy + 30); ctx.quadraticCurveTo(cx, cy + 60, cx + 34, cy + 30); ctx.lineTo(cx + 34, cy - 50); break;
+      case 2: ctx.moveTo(cx - 40, cy - 50); ctx.lineTo(cx + 40, cy + 50); ctx.moveTo(cx + 40, cy - 50); ctx.lineTo(cx - 40, cy + 50); ctx.moveTo(cx, cy - 55); ctx.lineTo(cx, cy + 55); break;
+      case 3: ctx.moveTo(cx - 20, cy - 55); ctx.lineTo(cx - 20, cy + 55); ctx.moveTo(cx + 20, cy - 55); ctx.lineTo(cx + 20, cy + 55); break;
+      default: ctx.moveTo(cx - 40, cy + 50); ctx.lineTo(cx, cy - 50); ctx.lineTo(cx + 40, cy + 50); ctx.moveTo(cx - 24, cy + 10); ctx.lineTo(cx + 24, cy + 10);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+  pill(ctx, 'प्रतीकात्मक चिह्न — असली शिलालेख की नकल नहीं', W / 2, 640, 30, prog(u, .5, 1));
+  txt(ctx, 'सिंधु लिपि — अब तक पूरी तरह पढ़ी नहीं जा सकी', W / 2, 200, 40, `rgba(255,255,255,${at(SHOTS[curShot].first + 1, 0, .6)})`, 'center', 700, 7);
+}
+function migrateScene(ctx, u, d) {
+  sky(ctx, [[0, '#2b2d5c'], [.5, '#a0507a'], [.8, '#f08a5d'], [1, '#ffc98b']], 700);
+  glow(ctx, W * .78, 620, 900, 'rgba(255,160,90,.6)'); ctx.fillStyle = '#ffe2b0'; ctx.beginPath(); ctx.arc(W * .78, 640, 70, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#5a3a3a'; ctx.fillRect(0, 690, W, H);
+  const g = ctx.createLinearGradient(0, 690, 0, H); g.addColorStop(0, '#7a4a3a'); g.addColorStop(1, '#2a1a1a'); ctx.fillStyle = g; ctx.fillRect(0, 690, W, H);
+  for (let i = 0; i < 7; i++) { const x = 200 + i * 150 + u * 40 + (i % 2) * 30, y = 820 + (i % 3) * 30, s = 200 + (i % 3) * 20; ctx.save(); ctx.globalAlpha = .95; person(ctx, x, y, s, u * 4 + i, 1, '#241414', { skin: '#241414', pot: i % 2 === 0 }); ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x - 60, y + 4, 90, 10, 0, 0, TAU); ctx.fill(); }
+  dust(ctx, u, 50, 'rgba(255,200,150,1)', 33);
+  pill(ctx, 'एक संभावना: लोग छोटे समूहों में नई जगहों पर बसे', W / 2, 160, 32, prog(u, .3, .9));
+}
+function artifacts(ctx, u, d) {
+  ctx.fillStyle = '#0c0b0f'; ctx.fillRect(0, 0, W, H);
+  const pan = lerp(0, -120, eInOut(u / d)), items = [['मिट्टी के बर्तन', 'pot'], ['मनके', 'beads'], ['सोना', 'gold'], ['हाथीदाँत', 'ivory'], ['ताँबा', 'copper']];
+  items.forEach(([n, k], i) => {
+    const cx = 330 + i * 330 + pan, cy = 520, a = prog(u, .2 + i * .35, .7 + i * .35); if (a <= 0) return;
+    ctx.save(); ctx.globalAlpha = a; glow(ctx, cx, cy - 60, 260, 'rgba(255,230,190,.22)');
+    ctx.fillStyle = '#26232a'; ctx.beginPath(); ctx.ellipse(cx, cy + 120, 130, 24, 0, 0, TAU); ctx.fill();
+    if (k === 'pot') { const g = ctx.createLinearGradient(cx - 90, 0, cx + 90, 0); g.addColorStop(0, '#c0583a'); g.addColorStop(1, '#6a2a1a'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx - 40, cy - 110); ctx.bezierCurveTo(cx - 130, cy - 40, cx - 100, cy + 100, cx - 30, cy + 115); ctx.lineTo(cx + 30, cy + 115); ctx.bezierCurveTo(cx + 100, cy + 100, cx + 130, cy - 40, cx + 40, cy - 110); ctx.fill(); ctx.strokeStyle = '#1a1010'; ctx.lineWidth = 6; for (const yy of [-50, -20, 40]) { ctx.beginPath(); ctx.moveTo(cx - 96, cy + yy); ctx.quadraticCurveTo(cx, cy + yy + 14, cx + 96, cy + yy); ctx.stroke(); } }
+    if (k === 'beads') { for (let b = 0; b < 15; b++) { const t = b / 14, x = cx - 100 + t * 200, y = cy - 40 + Math.sin(t * Math.PI) * 90; const g = ctx.createRadialGradient(x - 4, y - 4, 1, x, y, 16); g.addColorStop(0, '#ffb07a'); g.addColorStop(1, '#9c2e18'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, 11, 16, 0, 0, TAU); ctx.fill(); } }
+    if (k === 'gold') { for (let b = 0; b < 12; b++) { const x = cx - 70 + (b % 4) * 46, y = cy - 30 + Math.floor(b / 4) * 46; const g = ctx.createRadialGradient(x - 5, y - 5, 1, x, y, 18); g.addColorStop(0, '#fff3b0'); g.addColorStop(1, '#a37a1a'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill(); } }
+    if (k === 'ivory') { ctx.fillStyle = '#efe4c8'; ctx.fillRect(cx - 80, cy - 90, 160, 70); for (let t = 0; t < 14; t++) ctx.fillRect(cx - 76 + t * 11.4, cy - 22, 6, 110); }
+    if (k === 'copper') { ctx.fillStyle = '#7a9a7a'; ctx.beginPath(); ctx.moveTo(cx - 90, cy - 30); ctx.lineTo(cx + 60, cy - 60); ctx.lineTo(cx + 100, cy + 10); ctx.lineTo(cx + 60, cy + 70); ctx.lineTo(cx - 90, cy + 30); ctx.fill(); ctx.fillStyle = '#b8743a'; ctx.fillRect(cx - 60, cy - 10, 100, 14); }
+    txt(ctx, n, cx, cy + 190, 36, '#f5c66a', 'center', 700, 0); ctx.restore();
+  });
+  note(ctx, 'प्रतीकात्मक चित्रण — खुदाई में मिली वस्तुओं की असली तस्वीरें नहीं', 150);
+}
+function stoneBrick(ctx, u, d) {
+  const sp = lerp(W, W / 2, eInOut(prog(u, .1, 1.1)));
+  ctx.fillStyle = '#7a3a24'; ctx.fillRect(0, 0, W, H);
+  for (let y = 0; y < H; y += 54) for (let x = (y / 54 % 2) * -60; x < W; x += 120) { ctx.fillStyle = (x + y) % 7 ? '#a24e30' : '#93452a'; ctx.fillRect(x + 3, y + 3, 114, 48); }
+  ctx.save(); ctx.beginPath(); ctx.rect(sp, 0, W - sp, H); ctx.clip();
+  ctx.fillStyle = '#5a5040'; ctx.fillRect(0, 0, W, H); const r = rng(3);
+  for (let y = 0; y < H; y += 90) { let x = -40; while (x < W) { const w = 120 + r() * 160; ctx.fillStyle = `rgb(${190 + r() * 30 | 0},${168 + r() * 26 | 0},${130 + r() * 24 | 0})`; ctx.beginPath(); ctx.roundRect(x + 4, y + 4 + r() * 6, w - 8, 80 - r() * 8, 10); ctx.fill(); x += w; } }
+  ctx.restore();
+  ctx.fillStyle = '#f5c66a'; ctx.fillRect(sp - 3, 0, 6, H);
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, W, H);
+  pill(ctx, 'कई हड़प्पाई शहर — पकी ईंटें', W * .25, 200, 34, at(SHOTS[curShot].first + 1, -.2, .5));
+  pill(ctx, 'धोलावीरा — बड़े पैमाने पर पत्थर', W * .75, 200, 34, at(SHOTS[curShot].first + 2, -.2, .5), '#ffd36a');
+}
+
+// =====================================================================
+//  SHOTS
+// =====================================================================
+let curShot = 0;
+const S = {};
+S.RANN = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.gold, salt: true, ruin: 1, tx: 0, ty: 0, yaw: lerp(2.1, 2.3, e), pitch: lerp(.05, .08, e), dist: lerp(5600, 4300, e), f: 1800, cy: H * .52 }); fog(ctx, cam.hz + 50, .25, u * 40, 1.4); dust(ctx, u, 70, 'rgba(255,225,180,1)'); pill(ctx, 'कच्छ, गुजरात', W / 2, 150, 32, prog(u, .3, 1)); };
+S.HEAT1 = (ctx, u, d) => heatScene(ctx, u, d, 'कम बारिश · तेज़ धूप');
+S.ISLAND = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.today, salt: true, ruin: 1, tx: 0, ty: 0, yaw: lerp(2.3, 2.5, e), pitch: lerp(.09, .18, e), dist: lerp(3300, 2000, e), cy: H * .5 }); };
+S.R2C = (ctx, u, d) => { const e = eInOut(u / d), ruin = 1 - eInOut(prog(u / d, .15, .7)); city(ctx, u, { pal: mixPal(PALS.gold, PALS.today, ruin), ruin, tx: 0, ty: 0, yaw: lerp(2.5, 2.85, e), pitch: lerp(.36, .44, e), dist: lerp(1800, 1450, e) }); pill(ctx, 'आज', W / 2, 150, 32, 1 - prog(u / d, .1, .3)); pill(ctx, 'लगभग 5,000 साल पहले — कलात्मक पुनर्निर्माण', W / 2, 150, 32, prog(u / d, .6, .75), '#ffd36a'); };
+S.WALLFLY = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.gold, people: true, glint: .6, tx: lerp(-330, 260, e), ty: -250, tz: 4, yaw: lerp(.35, .1, e), pitch: lerp(.22, .3, e), dist: lerp(260, 230, e), f: 1400 }); dust(ctx, u, 40, 'rgba(255,225,180,1)', 4); };
+S.DROP = dropScene;
+S.TITLE = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.gold, tx: 0, ty: -20, yaw: lerp(-.4, -.12, e), pitch: lerp(.5, .6, e), dist: lerp(1550, 1300, e), cy: H * .55 }); topShade(ctx, .4, .6); const f0 = SHOTS[curShot].first; title(ctx, 'धोलावीरा', 190, at(f0 + 1, -.1, .7), 140); txt(ctx, '5,000 साल पुरानी इंजीनियरिंग की कहानी', W / 2, 290, 38, `rgba(255,240,220,${at(f0 + 1, .6, .7)})`, 'center', 600, 6); };
+
+S.MAPK = (ctx, u, d) => {
+  const z = lerp(.95, 1.7, eInOut(prog(u / d, .05, .95))), KX = 515, KY = 760, T = ([x, y]) => [W / 2 + (x - KX) * z, H * .5 + (y - KY) * z];
+  paper(ctx);
+  const land = '#cfae80', edge = '#a88458', main = [[-900, 1260], [100, 1190], [300, 1222], [520, 1160], [760, 1200], [980, 1130], [2000, 1170], [2000, 2600], [-900, 2600]];
+  const kh = [], r = rng(14); for (let i = 0; i < 30; i++) { const a = i / 30 * TAU; kh.push([640 + Math.cos(a) * (175 + 22 * Math.sin(a * 3) + 12 * r()), 800 + Math.sin(a) * (88 + 12 * Math.sin(a * 2 + 1) + 8 * r())]); }
+  const bl = (cx, cy, rx, ry, sd) => { const q = rng(sd), p = []; for (let i = 0; i < 22; i++) { const a = i / 22 * TAU; p.push([cx + Math.cos(a) * rx * (.8 + .3 * q()), cy + Math.sin(a) * ry * (.8 + .3 * q())]); } return p; };
+  for (const shp of [main, kh, bl(900, 850, 110, 55, 3), bl(330, 930, 120, 60, 8)]) { poly(ctx, shp.map(T), land); ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); }
+  const lb = (s, pt, size, col, w = 700) => { const q = T(pt); txt(ctx, s, q[0], q[1], size, col, 'center', w, 0); };
+  lb('कच्छ का बड़ा रण', [520, 600], 44, '#8c7a66', 600); lb('खडीर बेट', [670, 830], 40, '#5a3e22'); lb('कच्छ', [560, 1300], 50, '#5a3e22');
+  const q = T([KX, KY]), pa = eOut(prog(u, .3, .9)), pl = mod(u * .8, 1);
+  ctx.strokeStyle = `rgba(200,60,40,${(1 - pl) * .8})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(q[0], q[1], 14 + pl * 70, 0, TAU); ctx.stroke();
+  ctx.save(); ctx.translate(q[0], q[1] - (1 - pa) * 80); ctx.globalAlpha = pa; ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-26, -34, -30, -60, 0, -74); ctx.bezierCurveTo(30, -60, 26, -34, 0, 0); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -50, 10, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.globalAlpha = prog(u, .7, 1.2); txt(ctx, 'धोलावीरा', q[0], q[1] - 116, 54, '#b5531c', 'center', 700, 0); ctx.restore();
+  ctx.save(); ctx.translate(W - 110, 200); ctx.fillStyle = '#5a3e22'; ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(14, 8); ctx.lineTo(0, 0); ctx.lineTo(-14, 8); ctx.fill(); txt(ctx, 'N', 0, 34, 26, '#5a3e22', 'center', 700, 0); ctx.restore();
+  note(ctx, 'सरलीकृत नक्शा · पैमाने पर नहीं', 120);
+};
+S.RANNM = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, .3), rann: 1, ruin: 1, tx: 0, ty: 0, yaw: lerp(-.7, -.45, e), pitch: lerp(.22, .3, e), dist: lerp(4600, 3600, e), cy: H * .48 }); pill(ctx, 'मानसून में रण के बड़े हिस्से में पानी भर जाता है', W / 2, 150, 30, prog(u, .4, 1)); };
+S.SITES = sitesMap;
+S.TIMEL = (ctx, u, d) => {
+  const e = eInOut(u / d); city(ctx, u, { pal: PALS.sunset, tx: 0, ty: 0, yaw: lerp(.95, .62, e), pitch: lerp(.5, .46, e), dist: lerp(1800, 1550, e), cy: H * .58 }); topShade(ctx, .45, .65);
+  const f0 = SHOTS[curShot].first, tl = eInOut(prog(CURT, LS(f0) - .2, LE(f0) + .3)), a = prog(u, .1, .6), y = 250, x0 = 460, x1 = 1460;
+  ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  ctx.strokeStyle = '#f5c66a'; ctx.shadowColor = '#f5c66a'; ctx.shadowBlur = 16; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(lerp(x0, x1, tl), y); ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff'; for (const x of [x0, lerp(x0, x1, tl)]) { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.fill(); } ctx.restore();
+  txt(ctx, 'लगभग 3000 ईसा पूर्व', x0, y + 56, 30, `rgba(255,255,255,${a})`, 'center', 600, 6);
+  txt(ctx, 'लगभग 1500 ईसा पूर्व', x1, y + 56, 30, `rgba(255,255,255,${a * prog(tl, .85, 1)})`, 'center', 600, 6);
+  title(ctx, '≈ 1,500 वर्ष', y - 100, at(f0 + 1, -.2, .6), 84);
+  txt(ctx, 'अलग-अलग दौर — बीच में अंतराल भी', W / 2, y + 110, 28, `rgba(255,235,210,${at(f0 + 1, .3, .6)})`, 'center', 600, 6);
+};
+S.GROW = (ctx, u, d) => { const e = eInOut(u / d), g = lerp(.04, 1, eInOut(prog(u / d, .1, .92))); city(ctx, u, { pal: PALS.gold, grow: g, level: lerp(.2, .8, g), tx: 0, ty: 0, yaw: lerp(-.2, .25, e), pitch: lerp(.7, .62, e), dist: lerp(1500, 1350, e) }); pill(ctx, 'छोटी बस्ती → बड़ा नगर (प्रतीकात्मक)', W / 2, 150, 30, prog(u, .3, .9)); };
+S.STONE = stoneBrick;
+S.GLINT = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.gold, glint: 1, level: .82, people: true, tx: 345, ty: 60, tz: -3, yaw: lerp(-.45, -.2, e), pitch: lerp(.5, .38, e), dist: lerp(420, 240, e), cy: H * .42 }); dust(ctx, u, 40, 'rgba(255,230,190,1)', 5); };
+
+S.HEAT2 = (ctx, u, d) => heatScene(ctx, u, d, 'मौसमी नाला — साल के ज़्यादातर समय सूखा');
+S.CLOUDS = (ctx, u, d) => { const st = eInOut(prog(u / d, .1, .6)); const cam = city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, st), ruin: .0, tx: 0, ty: 0, yaw: lerp(.5, .7, u / d), pitch: .12, dist: 2600, cy: H * .55 }); fog(ctx, cam.hz - 120, .35 * st, u * 60, 2.2); rain(ctx, u, prog(u / d, .45, .7)); };
+S.STREAMS = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, tx: 0, ty: 20, yaw: lerp(.3, .12, e), pitch: lerp(.86, .8, e), dist: lerp(2700, 2300, e) }); const f0 = SHOTS[curShot].first; label3(ctx, cam, -560, mansarY(-560), 0, 'मनसर', at(f0 + 1, 0, .5), { dy: -100, size: 48, sub: 'उत्तर', col: '#bfe9ff' }); label3(ctx, cam, -560, manharY(-560), 0, 'मनहर', at(f0 + 1, 1, .5), { dy: 110, size: 48, sub: 'दक्षिण', col: '#bfe9ff' }); };
+S.MONSOON = (ctx, u, d) => { const st = eInOut(prog(u / d, 0, .4)), wet = eInOut(prog(u / d, .25, .95)); const cam = city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, st), wet, tx: 0, ty: 20, yaw: .12 - u * .01, pitch: .78, dist: 2200 }); rain(ctx, u, st); };
+S.DRYUP = (ctx, u, d) => { const wet = 1 - eInOut(prog(u / d, .1, .85)); city(ctx, u, { pal: PALS.day, wet, tx: 0, ty: 20, yaw: .05 - u * .01, pitch: .78, dist: lerp(2200, 2500, u / d) }); pill(ctx, 'बारिश ख़त्म — नाले फिर सूखे', W / 2, 150, 30, prog(u / d, .5, .7)); };
+S.STREET = (ctx, u, d) => streetScene(ctx, u, d);
+S.CAL = monthsBar;
+S.RUNOFF = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, wet: 1, noChannels: true, noDams: true, tx: -700, ty: 0, yaw: lerp(-1.45, -1.6, e), pitch: .42, dist: lerp(2600, 2300, e), cy: H * .5 }); flowDash(ctx, cam, WORLD.mansar, WORLD.cum.mansar, u, 90, '#7fe3ff', 5, 2, 70, 24); flowDash(ctx, cam, WORLD.manhar, WORLD.cum.manhar, u, 90, '#7fe3ff', 5, 2, 70, 24); pill(ctx, 'रोका न जाए, तो पानी बहकर रण में', W / 2, 150, 30, prog(u, .4, 1), '#cfefff'); };
+S.RESLOW = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.day, level: .1, tx: 350, ty: 120, tz: -4, yaw: lerp(2.5, 2.75, e), pitch: lerp(.6, .5, e), dist: lerp(280, 200, e), cy: H * .42 }); };
+S.QUEST = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.dusk, tx: 0, ty: 0, yaw: lerp(.9, 1.0, e), pitch: lerp(.4, .5, e), dist: lerp(1800, 1350, e) }); ctx.fillStyle = 'rgba(5,5,15,.25)'; ctx.fillRect(0, 0, W, H); };
+
+S.RAINCITY = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, .75), wet: 1, channelWater: 1, level: .5, tx: 100, ty: 0, yaw: lerp(.6, .8, e), pitch: .5, dist: lerp(900, 700, e) }); rain(ctx, u, .9); };
+S.DAM = (ctx, u, d) => { const e = eInOut(u / d), x = 560, y = mansarY(560); const cam = city(ctx, u, { pal: PALS.day, wet: 1, channelWater: 1, tx: x - 30, ty: y - 40, yaw: lerp(.55, .85, e), pitch: lerp(.48, .4, e), dist: lerp(240, 170, e), cy: H * .45 }); const f0 = SHOTS[curShot].first; label3(ctx, cam, x, y, 3.2, 'बाँध', at(f0, .2, .5), { dy: -120, size: 46, col: '#ffd36a' }); label3(ctx, cam, 530, 360, .3, 'शहर की ओर', at(f0 + 1, .3, .5), { dy: 110, size: 40, col: '#7fe3ff' }); };
+S.CHAN = (ctx, u, d) => {
+  const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, wet: 1, channelWater: prog(u / d, .1, .35), level: lerp(.35, .85, u / d), tx: 160, ty: 40, yaw: lerp(.08, -.06, e), pitch: lerp(.95, .88, e), dist: lerp(1800, 1550, e) });
+  ctx.fillStyle = 'rgba(5,15,35,.28)'; ctx.fillRect(0, 0, W, H);
+  WORLD.channels.forEach((ch, i) => flowDash(ctx, cam, ch, WORLD.cum.ch[i], u, 60, '#7fe3ff', 6, 2, 40, 18));
+  flowDash(ctx, cam, WORLD.mansar, WORLD.cum.mansar, u, 70, 'rgba(127,227,255,.7)', 5, 2, 70, 22); flowDash(ctx, cam, WORLD.manhar, WORLD.cum.manhar, u, 70, 'rgba(127,227,255,.7)', 5, 2, 70, 22);
+  for (const [x, f] of [[560, mansarY], [300, manharY], [-260, manharY]]) { const q = cam.p(x, f(x), 3); if (q) { ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(q[0], q[1], 24 + 4 * Math.sin(u * 4), 0, TAU); ctx.stroke(); } }
+  label3(ctx, cam, 470, 334, 1, 'नहर', prog(u, .6, 1.1), { dy: -110, dx: 80, size: 42, col: '#7fe3ff' }); label3(ctx, cam, 350, -60, 0, 'जलाशय', prog(u, 1.2, 1.7), { dy: -40, dx: 200, size: 42, col: '#7fe3ff' });
+};
+S.RESFILL = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.day, people: true, channelWater: 1, level: lerp(.12, .86, eInOut(prog(u / d, .05, .95))), tx: 350, ty: 160, tz: -4, yaw: lerp(2.55, 2.85, e), pitch: lerp(.55, .48, e), dist: lerp(260, 190, e), cy: H * .42 }); };
+S.RESROCK = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.gold, people: true, level: .45, tx: 350, ty: -180, tz: -5, yaw: lerp(-.5, -.15, e), pitch: lerp(.62, .52, e), dist: lerp(200, 150, e), cy: H * .45 }); const f0 = SHOTS[curShot].first; label3(ctx, cam, 337, -120, -3, 'सीढ़ीनुमा किनारे', at(f0 + 1, 0, .5), { dy: -150, dx: -120, size: 40, col: '#ffd36a' }); };
+S.RESRING = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, tx: 0, ty: -20, yaw: lerp(.25, -.1, e), pitch: lerp(1.2, 1.1, e), dist: lerp(1500, 1350, e), cy: H * .5 }); ctx.fillStyle = 'rgba(5,10,25,.2)'; ctx.fillRect(0, 0, W, H); const a = .6 + .4 * Math.sin(u * 3); for (const R of WORLD.res) { const s = proj(cam, rect3(R.x0, R.y0, R.x1, R.y1, .5)); if (s) { path2(ctx, s); ctx.strokeStyle = `rgba(127,227,255,${a})`; ctx.lineWidth = 5; ctx.shadowColor = '#7fe3ff'; ctx.shadowBlur = 18; ctx.stroke(); ctx.shadowBlur = 0; } } label3(ctx, cam, 350, 100, 0, 'जलाशय', prog(u, .3, .8), { dy: -80, dx: 200, size: 42, col: '#7fe3ff' }); label3(ctx, cam, -270, -280, 0, 'जलाशय', prog(u, .6, 1.1), { dy: 90, dx: -150, size: 42, col: '#7fe3ff' }); label3(ctx, cam, 215, -278, 0, 'जलाशय', prog(u, .9, 1.4), { dy: 100, dx: 150, size: 42, col: '#7fe3ff' }); note(ctx, 'सरलीकृत योजना · जलाशयों की संख्या और आकार सांकेतिक', 112); };
+S.CITRUN = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, .5), level: .6, tx: -30, ty: -230, yaw: lerp(.3, .55, e), pitch: .55, dist: lerp(650, 520, e) }); rain(ctx, u, .5); const fl = [[[60, -200], [120, -250], [200, -270]], [[-100, -230], [-180, -265], [-260, -275]], [[90, -180], [200, -150], [340, -120]]]; fl.forEach(p => flowDash(ctx, cam, p, polyLen(p), u, 50, '#7fe3ff', 5, 13, 30, 12)); label3(ctx, cam, -30, -225, 14, 'ऊँचा हिस्सा', prog(u, .4, .9), { dy: -130, size: 40, col: '#ffd36a' }); note(ctx, 'व्याख्यात्मक चित्र · बहाव की दिशा सांकेतिक', 112); };
+S.CUT = (ctx, u, d) => {
+  const p = u / d, z = lerp(1, 1.08, eInOut(p)), sh = lerp(0, 40, p), GY = 380;
+  const T = (x, y) => [(x - W / 2 - sh) * z + W / 2, (y - 540) * z + 540];
+  ctx.save(); ctx.translate(W / 2, 540); ctx.scale(z, z); ctx.translate(-W / 2 - sh, -540);
+  sky(ctx, [[0, '#6f9fd0'], [.7, '#bcd3e6'], [1, '#efe8d8']], GY); glow(ctx, 200, 120, 420, 'rgba(255,250,220,.6)');
+  let g = ctx.createLinearGradient(0, GY, 0, 640); g.addColorStop(0, '#9a744c'); g.addColorStop(1, '#7a5a3a'); ctx.fillStyle = g; ctx.fillRect(-100, GY, W + 300, 260);
+  g = ctx.createLinearGradient(0, 640, 0, H); g.addColorStop(0, '#77706a'); g.addColorStop(1, '#4e4944'); ctx.fillStyle = g; ctx.fillRect(-100, 640, W + 300, H);
+  const r = rng(6); ctx.strokeStyle = 'rgba(30,25,20,.35)'; ctx.lineWidth = 2; for (let i = 0; i < 8; i++) { const y = 670 + i * 55 + r() * 20; ctx.beginPath(); ctx.moveTo(-100, y); for (let x = -100; x < W + 300; x += 80) ctx.lineTo(x, y + (r() - .5) * 16); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(40,25,15,.25)'; for (let i = 0; i < 300; i++) { ctx.beginPath(); ctx.arc(r() * (W + 200) - 100, GY + 10 + r() * 250, 1 + r() * 3, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#c9a77a'; ctx.fillRect(-100, GY - 6, W + 300, 10);
+  for (const [x, w, h] of [[40, 300, 140], [760, 140, 110]]) { ctx.fillStyle = '#d8b88a'; ctx.fillRect(x, GY - h, w, h); ctx.fillStyle = '#b9966c'; ctx.fillRect(x, GY - h * .4, w, h * .4); ctx.fillStyle = '#3a2416'; ctx.fillRect(x + w * .4, GY - 70, 38, 70); }
+  const wx = 540, ww = 110, wb = 1040;
+  ctx.fillStyle = '#18130f'; ctx.fillRect(wx - ww / 2, GY, ww, wb - GY);
+  for (let y = GY; y < 640; y += 22) for (const sdd of [-1, 1]) { const bx = sdd < 0 ? wx - ww / 2 - 20 : wx + ww / 2; ctx.fillStyle = '#b8a07c'; ctx.fillRect(bx, y + 1, 20, 20); ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.strokeRect(bx, y + 1, 20, 20); }
+  ctx.fillStyle = '#5f5852'; for (const sdd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(wx + sdd * ww / 2, 640); for (let y = 640; y <= wb; y += 40) ctx.lineTo(wx + sdd * (ww / 2 + 6 + 10 * Math.sin(y * .07)), y); ctx.lineTo(wx + sdd * ww / 2, wb); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = '#c9b28c'; ctx.fillRect(wx - ww / 2 - 26, GY - 42, 28, 42); ctx.fillRect(wx + ww / 2 - 2, GY - 42, 28, 42);
+  g = ctx.createLinearGradient(0, 930, 0, wb); g.addColorStop(0, '#5aa7c8'); g.addColorStop(1, '#1d4a64'); ctx.fillStyle = g; ctx.fillRect(wx - ww / 2, 930 + Math.sin(u * 2) * 3, ww, wb - 930);
+  const py = lerp(GY - 20, 900, (Math.sin(u * 1.1 - 1.4) + 1) / 2);
+  ctx.strokeStyle = '#d9c39a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx, GY - 86); ctx.lineTo(wx, py - 28); ctx.stroke();
+  ctx.fillStyle = '#9c5a32'; ctx.beginPath(); ctx.ellipse(wx, py, 22, 26, 0, 0, TAU); ctx.fill(); ctx.fillRect(wx - 9, py - 34, 18, 10);
+  ctx.strokeStyle = '#7a5a3a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(wx - 56, GY - 42); ctx.lineTo(wx - 46, GY - 92); ctx.lineTo(wx + 46, GY - 92); ctx.lineTo(wx + 56, GY - 42); ctx.stroke();
+  const dy0 = GY + 14, dy1 = GY + 60, dx0 = 680, dx1 = 1260;
+  ctx.fillStyle = '#2a2018'; ctx.fillRect(dx0, dy0, dx1 - dx0, dy1 - dy0); ctx.fillStyle = '#b8a07c'; ctx.fillRect(dx0, dy1, dx1 - dx0, 14);
+  for (let x = dx0; x < dx1; x += 64) { ctx.fillStyle = '#cdb690'; ctx.fillRect(x + 2, dy0 - 16, 60, 16); ctx.strokeStyle = 'rgba(60,40,25,.6)'; ctx.strokeRect(x + 2, dy0 - 16, 60, 16); }
+  ctx.fillStyle = '#4a93b6'; ctx.fillRect(dx0, dy1 - 20, dx1 - dx0, 20);
+  ctx.strokeStyle = 'rgba(220,245,255,.9)'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); for (let x = dx0 + mod(u * 90, 50); x < dx1 - 10; x += 50) { ctx.moveTo(x, dy1 - 10); ctx.lineTo(x + 18, dy1 - 10); } ctx.stroke();
+  const rx = 1260; ctx.fillStyle = '#b8a07c'; ctx.beginPath(); ctx.moveTo(rx, GY); ctx.lineTo(rx + 30, GY); for (let k = 0; k < 4; k++) { ctx.lineTo(rx + 30 + k * 40, GY + 80 + k * 80); ctx.lineTo(rx + 70 + k * 40, GY + 80 + k * 80); } ctx.lineTo(rx + 190, 800); ctx.lineTo(rx, 800); ctx.closePath(); ctx.fill();
+  g = ctx.createLinearGradient(0, 500, 0, 780); g.addColorStop(0, '#5aa7c8'); g.addColorStop(1, '#1d4a64'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(rx + 100, 500); ctx.lineTo(W + 200, 500); ctx.lineTo(W + 200, 780); ctx.lineTo(rx + 190, 780); ctx.lineTo(rx + 150, 640); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(90,170,210,.8)'; ctx.beginPath(); ctx.moveTo(dx1, dy1 - 20); ctx.quadraticCurveTo(dx1 + 40, dy1 - 8, dx1 + 70, 500); ctx.lineTo(dx1 + 50, 500); ctx.quadraticCurveTo(dx1 + 20, dy1, dx1, dy1); ctx.fill();
+  ctx.restore();
+  const f0 = SHOTS[curShot].first;
+  let a = at(f0, -.2, .6), q = T(wx + ww / 2 + 20, 760); txt(ctx, 'चट्टान काटकर बना कुआँ', 900, 740, 40, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 720, 750, q[0] + 8, q[1], `rgba(255,211,106,${a})`, 5);
+  a = at(f0 + 1, -.2, .6); q = T(960, dy0 - 18); txt(ctx, 'पत्थरों से ढकी नाली', 960, 210, 40, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 960, 240, q[0], q[1] - 10, `rgba(255,211,106,${a})`, 5);
+  a = at(f0 + 1, 1, .5); q = T(rx + 200, 560); txt(ctx, 'जलाशय', 1620, 260, 40, `rgba(255,255,255,${a})`, 'center', 700, 8); if (a > 0) arrow(ctx, 1600, 290, q[0], q[1] - 20, `rgba(255,211,106,${a})`, 5);
+  note(ctx, 'व्याख्यात्मक चित्र · सरलीकृत', 110);
+};
+S.SYSTEM = (ctx, u, d) => {
+  const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, wet: 1, channelWater: 1, level: .8, tx: 120, ty: 0, yaw: lerp(.25, -.05, e), pitch: lerp(.95, .85, e), dist: lerp(1900, 1650, e), cy: H * .5 });
+  ctx.fillStyle = 'rgba(5,15,35,.3)'; ctx.fillRect(0, 0, W, H);
+  const f0 = SHOTS[curShot].first, t1 = LS(f0 + 1), dd = LE(f0 + 1) - t1, on = k => prog(CURT, t1 + dd * k / 5 - .1, t1 + dd * k / 5 + .3);
+  if (on(0) > 0) for (const [x, f] of [[560, mansarY], [300, manharY], [-260, manharY]]) { const q = cam.p(x, f(x), 3); if (q) { ctx.strokeStyle = `rgba(255,211,106,${on(0)})`; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(q[0], q[1], 24, 0, TAU); ctx.stroke(); } }
+  if (on(1) > 0) WORLD.channels.forEach((ch, i) => flowDash(ctx, cam, ch, WORLD.cum.ch[i], u, 60, `rgba(127,227,255,${on(1)})`, 6, 2, 40, 18));
+  if (on(2) > 0) for (const R of WORLD.res) { const s = proj(cam, rect3(R.x0, R.y0, R.x1, R.y1, .5)); if (s) { path2(ctx, s); ctx.strokeStyle = `rgba(127,227,255,${on(2)})`; ctx.lineWidth = 5; ctx.stroke(); } }
+  if (on(3) > 0) { const q = cam.p(30, -225, 13); if (q) { glow(ctx, q[0], q[1], 60, `rgba(255,211,106,${.8 * on(3)})`); ctx.fillStyle = `rgba(255,240,200,${on(3)})`; ctx.beginPath(); ctx.arc(q[0], q[1], 9, 0, TAU); ctx.fill(); } }
+  if (on(4) > 0) WORLD.streets.slice(0, 10).forEach(s => { const p = s.ax === 'x' ? [[s.a, s.c], [s.b, s.c]] : [[s.c, s.a], [s.c, s.b]]; flowDash(ctx, cam, p, polyLen(p), u, 30, `rgba(160,240,150,${on(4)})`, 3, .5, 26, 10); });
+  panel(ctx, 1500, 250, 360, 420, .55);
+  ['बाँध', 'नहरें', 'जलाशय', 'कुएँ', 'नालियाँ'].forEach((n, k) => { const a = on(k), col = ['#ffd36a', '#7fe3ff', '#7fe3ff', '#ffd36a', '#a0f096'][k]; ctx.fillStyle = a > 0 ? col : 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(1550, 320 + k * 76, 12, 0, TAU); ctx.fill(); txt(ctx, n, 1590, 320 + k * 76, 40, a > 0 ? '#fff' : 'rgba(255,255,255,.4)', 'left', 700, 0); });
+  if (prog(CURT, LS(f0 + 2) - .2, LS(f0 + 2) + .4) > 0) pill(ctx, 'हर हिस्सा एक-दूसरे से जुड़ा', W / 2, 150, 34, prog(CURT, LS(f0 + 2) - .2, LS(f0 + 2) + .4), '#ffd36a');
+};
+S.MODERN = modernHouse;
+S.HANDS = (ctx, u, d) => streetScene(ctx, u, d, 'carry');
+S.TEASE = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.sunset, tx: 0, ty: 0, yaw: lerp(1.0, 1.3, e), pitch: lerp(.45, .65, e), dist: lerp(1700, 1450, e) }); };
+
+S.TOPDOWN = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, tx: 0, ty: 0, yaw: lerp(.2, -.1, e), pitch: lerp(1.3, 1.2, e), dist: lerp(1700, 1450, e), cy: H * .5 }); const f0 = SHOTS[curShot].first, tw = eInOut(prog(CURT, LS(f0 + 1) - .3, LE(f0 + 1) + .5)), wp = [[-385, -310], [385, -310], [385, 310], [-385, 310], [-385, -310]], cum = polyLen(wp), tot = cum[4] * tw; ctx.save(); ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 6; ctx.shadowColor = '#ffd36a'; ctx.shadowBlur = 18; ctx.beginPath(); for (let s = 0; s < tot; s += 20) { const a = polyAt(wp, cum, s), b = polyAt(wp, cum, Math.min(tot, s + 20)); seg3(ctx, cam, [a[0], a[1], 10], [b[0], b[1], 10]); } ctx.stroke(); ctx.restore(); if (tw > 0) pill(ctx, 'किलेबंदी', W / 2, 150, 34, clamp(tw * 3), '#ffd36a'); note(ctx, 'सरलीकृत योजना · पैमाने पर नहीं', 1000 - 70); };
+S.ZONES = (ctx, u, d) => {
+  const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.day, tx: 0, ty: -10, yaw: lerp(.42, -.12, e), pitch: lerp(1.0, .9, e), dist: lerp(1550, 1400, e), cy: H * .5 });
+  ctx.fillStyle = 'rgba(5,10,25,.18)'; ctx.fillRect(0, 0, W, H);
+  const f0 = SHOTS[curShot].first;
+  const zone = (x0, y0, x1, y1, z, col, a) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = a; const s = fill3(ctx, cam, rect3(x0, y0, x1, y1, z), col.replace('A', '.28')); if (s) { ctx.strokeStyle = col.replace('A', '1'); ctx.lineWidth = 4; ctx.stroke(); } ctx.restore(); };
+  const a1 = at(f0 + 1, -.2, .5), aCB = at(f0 + 2, -.2, .5), a2 = at(f0 + 3, -.2, .5), a3 = at(f0 + 3, (LE(f0 + 3) - LS(f0 + 3)) * .55, .5);
+  zone(-175, -285, 100, -165, 14, 'rgba(255,211,106,A)', a1); zone(-265, -100, 145, 150, 7, 'rgba(127,227,255,A)', a2); zone(160, -240, 325, 292, 7, 'rgba(160,240,150,A)', a3);
+  label3(ctx, cam, -60, -225, 14, 'सिटाडेल (दुर्ग)', a1 * (1 - aCB), { dy: 140, dx: -120, size: 46, col: '#ffd36a' });
+  label3(ctx, cam, 30, -225, 20, 'कैसल', aCB, { dy: -120, dx: 60, size: 40, col: '#ffd36a' }); label3(ctx, cam, -110, -232, 14, 'बेली', aCB, { dy: 130, dx: -100, size: 40, col: '#ffd36a' });
+  label3(ctx, cam, -60, 25, 7, 'मिडिल टाउन', a2, { dy: -160, dx: -60, size: 46, col: '#7fe3ff' }); label3(ctx, cam, 245, 120, 7, 'लोअर टाउन', a3, { dy: -150, dx: 120, size: 46, col: '#a0f096' });
+  note(ctx, 'सरलीकृत योजना · पैमाने पर नहीं', 112);
+};
+S.CERE = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.gold, people: true, tx: lerp(-80, -20, e), ty: -140, yaw: Math.PI - .15, pitch: lerp(.26, .32, e), dist: lerp(260, 220, e), f: 1400, cy: H * .45 }); const f0 = SHOTS[curShot].first; label3(ctx, cam, -40, -138, .3, 'खुला मैदान', at(f0, .3, .5), { dy: -170, size: 44, col: '#ffd36a' }); pill(ctx, 'व्याख्या: सार्वजनिक / समारोह स्थल', W / 2, 150, 30, at(f0 + 1, 0, .5)); };
+S.FLY = (ctx, u, d) => { const p = u / d, e = eInOut(p), y = MAIN_ST ? MAIN_ST.c : 51.5; city(ctx, u + 20, { pal: PALS.gold, people: true, tx: lerp(-200, 210, eInOut(p * .95)), ty: y, tz: lerp(4, 0, e), yaw: lerp(1.5708, 1.35, e), pitch: lerp(.2, .4, e), dist: lerp(70, 300, eIn(p)), f: 1300, cy: H * .45 }); dust(ctx, u, 50, 'rgba(255,225,180,1)', 7); };
+S.RESPLAN = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.gold, tx: 0, ty: 0, yaw: lerp(-.5, -.2, e), pitch: lerp(.75, .7, e), dist: lerp(1500, 1350, e), cy: H * .5 }); const a = prog(u, .5, 1.2) * (.65 + .35 * Math.sin(u * 3)); for (const R of WORLD.res) { const s = proj(cam, rect3(R.x0, R.y0, R.x1, R.y1, .5)); if (s) { path2(ctx, s); ctx.strokeStyle = `rgba(127,227,255,${a})`; ctx.lineWidth = 5; ctx.shadowColor = '#7fe3ff'; ctx.shadowBlur = 16; ctx.stroke(); ctx.shadowBlur = 0; } } const f0 = SHOTS[curShot].first; pill(ctx, 'पानी — योजना का हिस्सा', W / 2, 150, 34, at(f0 + 3, -.2, .5), '#7fe3ff'); };
+S.CITCLOSE = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.gold, people: true, tx: -40, ty: -225, tz: 8, yaw: lerp(.2, .9, e), pitch: .42, dist: lerp(380, 320, e), cy: H * .45 }); };
+S.MARKET = (ctx, u, d) => streetScene(ctx, u, d, 'market');
+
+S.STREET2 = (ctx, u, d) => streetScene(ctx, u + 30, d, 'market');
+S.BEADS = (ctx, u, d) => workshop(ctx, u, d, 'beads');
+S.SHELL = (ctx, u, d) => workshop(ctx, u, d, 'shell');
+S.COPPER = (ctx, u, d) => workshop(ctx, u, d, 'copper');
+S.ARTI = artifacts;
+S.TRADE = (ctx, u, d) => tradeMap(ctx, u, d, 0);
+S.MARKET2 = (ctx, u, d) => streetScene(ctx, u + 60, d, 'market');
+S.DUSK = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.sunset, PALS.dusk, e), tx: 0, ty: 0, yaw: lerp(.7, .9, e), pitch: .45, dist: lerp(1500, 1800, e) }); };
+
+S.PHASES = phasesPanel;
+S.DECL = (ctx, u, d) => { const e = eInOut(u / d), ruin = lerp(0, .35, e); city(ctx, u, { pal: mixPal(PALS.gold, PALS.today, e), ruin, level: lerp(.7, .35, e), tx: 0, ty: 0, yaw: lerp(.3, .5, e), pitch: .5, dist: lerp(1450, 1350, e) }); };
+S.HIATUS = (ctx, u, d) => { const p = u / d, e = eInOut(p), f0 = SHOTS[curShot].first, late = eInOut(prog(CURT, LS(f0 + 1) - .5, LS(f0 + 1) + 1)); city(ctx, u, { pal: PALS.today, ruin: lerp(.55, .9, e), keep: .12 * late, level: .15, tx: 0, ty: 0, yaw: lerp(.5, .75, e), pitch: .55, dist: lerp(1300, 1100, e) }); dust(ctx, u, 60, 'rgba(240,220,190,1)', 41); pill(ctx, 'बाद की छोटी बस्तियाँ (प्रतीकात्मक)', W / 2, 150, 30, late); };
+S.Q2 = (ctx, u, d) => { city(ctx, u, { pal: PALS.dusk, ruin: .9, tx: 0, ty: 0, yaw: .8 + u * .02, pitch: .4, dist: 1600 }); ctx.fillStyle = 'rgba(5,5,15,.45)'; ctx.fillRect(0, 0, W, H); ctx.save(); ctx.globalAlpha = .25 * prog(u, .2, 1); txt(ctx, '?', W / 2, H * .42, 420, '#f5c66a', 'center', 800, 0); ctx.restore(); const f0 = SHOTS[curShot].first; pill(ctx, 'कोई एक पक्का जवाब नहीं', W / 2, 150, 34, at(f0 + 1, 0, .5)); };
+S.CLIMATE = climatePanel;
+S.DRYS = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.today, ruin: .4, wet: 0, level: lerp(.25, .03, e), tx: 340, ty: 60, tz: -3, yaw: lerp(-.4, -.2, e), pitch: .5, dist: lerp(450, 330, e), cy: H * .45 }); dust(ctx, u * 2, 120, 'rgba(240,215,180,1)', 44); fog(ctx, H * .5, .2, u * 80, 1.5); };
+S.TRADEF = (ctx, u, d) => tradeMap(ctx, u, d, eInOut(prog(u / d, .1, .6)));
+S.MIGR = migrateScene;
+S.RUINSLOW = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.today, PALS.sunset, e), ruin: lerp(.5, 1, e), level: 0, tx: 0, ty: 0, yaw: lerp(.2, -.2, e), pitch: lerp(.55, .45, e), dist: lerp(1350, 1700, e) }); };
+S.NIGHT = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.night, ruin: 1, buried: lerp(0, .6, e), tx: 0, ty: 0, yaw: lerp(-.2, -.4, e), pitch: lerp(.32, .26, e), dist: lerp(1900, 2200, e), cy: H * .55 }); };
+
+S.MOUND = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.today, ruin: 1, buried: .75, tx: 0, ty: 0, yaw: lerp(-.6, -.4, e), pitch: lerp(.2, .26, e), dist: lerp(1500, 1250, e), cy: H * .5 }); pill(ctx, '‘कोटडा टिंबा’ — स्थानीय नाम', W / 2, 150, 32, prog(u, .3, .9)); };
+S.Y1968 = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.today, ruin: 1, buried: .55, tx: 0, ty: 0, yaw: lerp(-.4, -.25, e), pitch: .3, dist: lerp(1250, 1100, e), cy: H * .55 }); topShade(ctx, .45, .6); title(ctx, '1968', 200, prog(u, .2, .8), 130); txt(ctx, 'जगत पति जोशी · पुरातत्वविद (ASI)', W / 2, 310, 38, `rgba(255,255,255,${prog(u, .7, 1.3)})`, 'center', 700, 7); };
+S.EXCAV = excavScene;
+S.REVEAL = (ctx, u, d) => { const e = eInOut(u / d); const cam = city(ctx, u, { pal: PALS.today, ruin: 1, tx: 0, ty: 0, yaw: lerp(.3, -.1, e), pitch: lerp(.7, .62, e), dist: lerp(1450, 1300, e), cy: H * .5 }); const f0 = SHOTS[curShot].first, dd = LE(f0) - LS(f0), L = (i, x, y, z, s, o) => label3(ctx, cam, x, y, z, s, prog(CURT, LS(f0) + dd * i / 5, LS(f0) + dd * i / 5 + .4), o); L(0, -385, 0, 3, 'किलेबंदी', { dy: -120, dx: -60, size: 40, col: '#ffd36a' }); L(1, 350, 0, 0, 'जलाशय', { dy: -110, dx: 120, size: 40, col: '#7fe3ff' }); L(2, 560, mansarY(560), 1, 'बाँध', { dy: -90, size: 40, col: '#ffd36a' }); L(3, -60, 25, 1, 'घर', { dy: -120, size: 40, col: '#fff' }); L(4, 240, 100, 1, 'कार्यशालाएँ', { dy: 120, dx: 60, size: 40, col: '#fff' }); txt(ctx, 'कब्रिस्तान शहर के बाहर (यहाँ नहीं दिखाया गया)', W / 2, 112, 24, `rgba(255,255,255,${prog(CURT, LS(f0) + dd * .85, LS(f0) + dd * .85 + .4) * .85})`, 'center', 600, 5); };
+S.SIGN = signScene;
+S.UNESCO = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.today, ruin: 1, tx: 0, ty: 0, yaw: lerp(-.1, .2, e), pitch: lerp(.55, .5, e), dist: lerp(1500, 1400, e), cy: H * .56 }); topShade(ctx, .45, .6); const f0 = SHOTS[curShot].first; title(ctx, 'UNESCO विश्व धरोहर · 2021', 190, at(f0, .2, .7), 76); txt(ctx, '“Dholavira: a Harappan City”', W / 2, 280, 36, `rgba(255,255,255,${at(f0, .8, .6)})`, 'center', 600, 6); pill(ctx, 'भारत का पहला हड़प्पाई स्थल जिसे यह दर्जा मिला', W / 2, 360, 32, at(f0 + 1, 0, .5), '#ffd36a'); };
+
+S.MODCITY = modernCity;
+S.RAINRES = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.day, PALS.storm, .55), people: true, channelWater: 1, level: lerp(.3, .8, e), tx: 350, ty: 120, tz: -4, yaw: lerp(2.4, 2.7, e), pitch: lerp(.5, .42, e), dist: lerp(300, 220, e), cy: H * .42 }); rain(ctx, u, .7); };
+S.GOLD = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.gold, people: true, glint: .5, tx: 0, ty: 0, yaw: lerp(-.6, -.2, e), pitch: lerp(.38, .45, e), dist: lerp(1700, 1450, e) }); dust(ctx, u, 40, 'rgba(255,225,180,1)', 6); };
+S.FINAL = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: mixPal(PALS.today, PALS.dusk, prog(u / d, 0, .4)), ruin: 1, tx: 0, ty: 0, yaw: lerp(.25, -.05, e), pitch: lerp(.6, .42, e), dist: lerp(1300, 2200, e), cy: H * .58 }); topShade(ctx, .45, .7); const f0 = SHOTS[curShot].first; title(ctx, 'धोलावीरा', 180, at(f0, -.1, .7), 130); txt(ctx, 'सिर्फ़ एक प्राचीन शहर नहीं — एक सोच की कहानी', W / 2, 290, 40, `rgba(245,198,106,${at(f0 + 1, 0, .7)})`, 'center', 700, 7); };
+S.CTA = (ctx, u, d) => { const e = eInOut(u / d); city(ctx, u, { pal: PALS.dusk, ruin: 1, tx: 0, ty: 0, yaw: lerp(-.05, -.25, e), pitch: .42, dist: lerp(2200, 2500, e), cy: H * .58 }); topShade(ctx, .45, .7); const f0 = SHOTS[curShot].first, a = at(f0 + 1, 0, .6); if (a > 0) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#d32f2f'; ctx.beginPath(); ctx.roundRect(W / 2 - 200, 220, 400, 92, 46); ctx.fill(); txt(ctx, 'सब्सक्राइब करें', W / 2, 266, 44, '#fff', 'center', 700, 0); ctx.restore(); } const c = at(f0, 0, .6); txt(ctx, 'कमेंट में बताइए 💬', W / 2, 150, 40, `rgba(255,255,255,${c})`, 'center', 700, 7); };
+S.END = (ctx, u, d) => {
+  ctx.fillStyle = '#07070b'; ctx.fillRect(0, 0, W, H); const a = prog(u, .2, .8);
+  title(ctx, 'धोलावीरा', 330, a, 110);
+  txt(ctx, 'इस वीडियो के दृश्य एनिमेटेड चित्रण और कलात्मक पुनर्निर्माण हैं — ये पुरातात्विक फ़ुटेज नहीं हैं।', W / 2, 520, 32, `rgba(225,225,235,${a})`, 'center', 600, 0);
+  txt(ctx, 'नक्शे, योजना और ग्राफ़ सरलीकृत / सांकेतिक हैं। तिथियाँ लगभग हैं; पतन के कारणों पर शोध जारी है।', W / 2, 580, 28, `rgba(200,200,212,${a})`, 'center', 600, 0);
+  txt(ctx, 'Visuals are animated illustrations & artistic reconstructions, not archaeological footage.', W / 2, 650, 24, `rgba(170,170,185,${a})`, 'center', 500, 0);
+};
+
+// =====================================================================
+//  SCRIPT — [shot id, honesty tag, transition out, length] markers precede their lines
+// =====================================================================
+const CHAPTERS = [
+  { t: 'रहस्य', items: [
+    ['RANN', 'today'], 'गुजरात का कच्छ।', 'दूर-दूर तक फैली सफ़ेद, सूखी ज़मीन… और तेज़ धूप।',
+    ['HEAT1', 'illus'], 'यहाँ आज भी पानी की हर बूंद क़ीमती है।',
+    ['ISLAND', 'today'], 'लेकिन इसी सूखे इलाक़े में, एक टापू पर, पत्थरों के बीच एक राज़ छिपा है।',
+    ['R2C', 'recon'], 'आज से लगभग 5,000 साल पहले, यहाँ एक पूरा शहर बसा था।',
+    ['WALLFLY', 'recon'], 'मज़बूत दीवारें… सीधी सड़कें… और पत्थर से बने विशाल जलाशय।',
+    ['DROP', 'illus', 'ripple', .8], 'लेकिन सवाल यह है…', 'जहाँ आज पानी की कमी दिखाई देती है, वहाँ हज़ारों साल पहले एक पूरा शहर अपनी ज़रूरतों के लिए पानी कैसे जुटाता था?',
+    ['TITLE', 'recon', 'fadeblack', .8], 'इस सवाल का जवाब छिपा है एक नाम में —', 'धोलावीरा।',
+  ] },
+  { t: 'प्राचीन दुनिया की ओर', items: [
+    ['MAPK', 'diagram'], 'धोलावीरा कच्छ के बड़े रण में, खडीर बेट नाम के एक टापू पर है।',
+    ['RANNM', 'illus'], 'चारों तरफ़ नमक का विशाल मैदान है, जो मानसून में कई जगह पानी से भर जाता है।',
+    ['SITES', 'diagram'], 'यह शहर हड़प्पा सभ्यता का हिस्सा था —', 'वही सभ्यता, जिसे हम सिंधु घाटी सभ्यता के नाम से भी जानते हैं।', 'हड़प्पा, मोहनजोदड़ो, राखीगढ़ी और लोथल की तरह, धोलावीरा भी इस सभ्यता का एक बड़ा नगर था।',
+    ['TIMEL', 'recon'], 'यहाँ लोग लगभग 3000 ईसा पूर्व से 1500 ईसा पूर्व तक, अलग-अलग दौर में रहे।', 'यानी लगभग 1,500 साल।',
+    ['GROW', 'recon'], 'शुरुआत में यह एक छोटी बस्ती थी।', 'लेकिन धीरे-धीरे यह एक बड़े, सुनियोजित नगर में बदल गया।',
+    ['STONE', 'diagram'], 'और इस शहर की एक ख़ास बात इसे बाक़ी हड़प्पाई शहरों से अलग बनाती है।', 'ज़्यादातर हड़प्पाई शहरों में पकी ईंटों का खूब इस्तेमाल हुआ…', 'लेकिन धोलावीरा में बड़े पैमाने पर पत्थर का इस्तेमाल हुआ।',
+    ['GLINT', 'recon', 'fadeblack', .8], 'पर पत्थर से भी ज़्यादा क़ीमती चीज़ थी — पानी।',
+  ] },
+  { t: 'सबसे बड़ी चुनौती: पानी', items: [
+    ['HEAT2', 'illus'], 'कच्छ का यह इलाक़ा कम बारिश वाला, सूखा इलाक़ा है।', 'यहाँ कोई बड़ी नदी साल भर नहीं बहती।',
+    ['CLOUDS', 'illus'], 'बारिश कुछ ही महीनों में आती है… और कभी-कभी बहुत कम।',
+    ['STREAMS', 'diagram'], 'धोलावीरा के पास दो मौसमी नाले थे —', 'उत्तर में मनसर, और दक्षिण में मनहर।',
+    ['MONSOON', 'illus'], 'मानसून में ये नाले पानी से भर जाते…',
+    ['DRYUP', 'illus'], 'लेकिन बारिश ख़त्म होते ही, कुछ समय में सूख जाते।',
+    ['STREET', 'recon'], 'अब सोचिए।', 'एक बड़ा शहर। लोग, पशु, कारीगरी… और रोज़ की प्यास।',
+    ['CAL', 'diagram'], 'और सबके लिए पानी, साल के कुछ ही महीनों की बारिश पर निर्भर।',
+    ['RUNOFF', 'diagram'], 'अगर उस पानी को रोका न जाए, तो वह बहकर रण में चला जाता।',
+    ['RESLOW', 'recon'], 'यानी यहाँ पानी को संभालना कोई सुविधा नहीं था…', 'यह इस शहर के ज़िंदा रहने की शर्त थी।',
+    ['QUEST', 'recon', 'fadeblack', .8], 'तो धोलावीरा के लोगों ने क्या किया?',
+  ] },
+  { t: 'इंजीनियरिंग का कमाल', items: [
+    ['RAINCITY', 'recon'], 'उन्होंने बारिश के हर मौसम को एक मौक़े में बदल दिया।',
+    ['DAM', 'recon'], 'सबसे पहले, मौसमी नालों पर बाँध बनाए गए।', 'इन बाँधों से पानी को रोककर, शहर की ओर मोड़ा जा सकता था।',
+    ['CHAN', 'diagram'], 'फिर नहरों और रास्तों के ज़रिए, यह पानी शहर के जलाशयों तक पहुँचाया गया।',
+    ['RESFILL', 'recon'], 'और ये जलाशय कोई छोटे गड्ढे नहीं थे।', 'शहर की दीवारों के भीतर, पत्थर से बने कई बड़े जलाशय मिले हैं।',
+    ['RESROCK', 'recon'], 'कुछ को चट्टान काटकर गहरा किया गया था।', 'कुछ में नीचे उतरने के लिए सीढ़ियाँ बनी थीं।',
+    ['RESRING', 'diagram'], 'जलाशय शहर के एक बड़े हिस्से में फैले थे।', 'यानी बीच में इमारतें… और उनके आसपास पानी का भंडार।',
+    ['CITRUN', 'diagram'], 'बारिश का पानी भी बेकार नहीं जाता था।', 'शहर के ऊँचे हिस्सों से पानी नालियों के रास्ते बहकर जलाशयों तक पहुँचता था।',
+    ['CUT', 'diagram', 'warm', .5], 'सिटाडेल यानी दुर्ग वाले हिस्से में, चट्टान काटकर बनाया गया एक कुआँ भी मिला है।', 'और शहर में पत्थरों से ढकी बड़ी नालियाँ थीं, जो बरसाती पानी को आगे ले जाती थीं।',
+    ['SYSTEM', 'diagram'], 'ज़रा इस पूरे सिस्टम को एक साथ देखिए।', 'बाँध… नहरें… जलाशय… कुएँ… और नालियाँ।', 'हर हिस्सा एक-दूसरे से जुड़ा हुआ।',
+    ['MODERN', 'illus'], 'आज हम इसे “रेनवॉटर हार्वेस्टिंग” कहते हैं।',
+    ['HANDS', 'recon'], 'धोलावीरा के लोग हज़ारों साल पहले इसे अपनी ज़िंदगी का हिस्सा बना चुके थे।', 'वो भी बिना किसी आधुनिक मशीन के।',
+    ['TEASE', 'recon', 'fadeblack', .8], 'लेकिन पानी तो सिर्फ़ शुरुआत थी।', 'इस शहर की असली ताक़त थी — उसकी योजना।',
+  ] },
+  { t: 'एक सुनियोजित शहर', items: [
+    ['TOPDOWN', 'diagram'], 'ऊपर से देखें, तो धोलावीरा एक बड़े, लगभग चौकोर किले जैसा दिखता है।', 'चारों तरफ़ मज़बूत किलेबंदी।',
+    ['ZONES', 'diagram'], 'और अंदर, शहर तीन मुख्य हिस्सों में बँटा था।', 'सबसे ऊँचे हिस्से पर था सिटाडेल — यानी दुर्ग।', 'इसके भी दो भाग माने जाते हैं — कैसल और बेली।', 'फिर था मिडिल टाउन… और लोअर टाउन।',
+    ['CERE', 'recon'], 'सिटाडेल और मिडिल टाउन के बीच एक बड़ा खुला मैदान था।', 'पुरातत्वविद इसे एक सार्वजनिक या समारोह स्थल मानते हैं।',
+    ['FLY', 'recon'], 'शहर में बड़े प्रवेश द्वार थे, और व्यवस्थित सड़कें।',
+    ['RESPLAN', 'diagram'], 'और ध्यान दीजिए —', 'जलाशय इस योजना में सोच-समझकर शामिल किए गए थे।', 'यानी पानी का इंतज़ाम बाद में नहीं जोड़ा गया…', 'बल्कि वह शहर की योजना का हिस्सा था।',
+    ['CITCLOSE', 'recon'], 'शहर की यह बनावट संकेत देती है, कि यहाँ समाज भी व्यवस्थित ढंग से संगठित था।',
+    ['MARKET', 'recon', 'fadeblack', .8], 'पर इतने बड़े शहर में आख़िर रहते कौन थे?',
+  ] },
+  { t: 'यहाँ कौन रहता था?', items: [
+    ['STREET2', 'recon'], 'धोलावीरा सिर्फ़ इमारतों का शहर नहीं था। यह कारीगरों का शहर भी था।',
+    ['BEADS', 'recon'], 'खुदाई में यहाँ मनके बनाने की कार्यशालाएँ मिली हैं।', 'क़ीमती पत्थरों को काटा, घिसा और छेदा जाता था — ताकि छोटे-छोटे मनके बन सकें।',
+    ['SHELL', 'recon'], 'शंख से गहने और चूड़ियाँ बनाई जाती थीं।',
+    ['COPPER', 'recon'], 'और ताँबे से औज़ार और दूसरी वस्तुएँ।',
+    ['ARTI', 'illus'], 'यहाँ से मिट्टी के बर्तन, सोने और हाथीदाँत की वस्तुएँ भी मिली हैं।',
+    ['TRADE', 'diagram'], 'यह सामान सिर्फ़ यहीं इस्तेमाल नहीं होता था।', 'पुरातात्विक प्रमाण बताते हैं, कि हड़प्पा क्षेत्र का व्यापार दूर-दूर तक फैला था —', 'मेसोपोटामिया तक, और मगन तक, जिसे आज के ओमान प्रायद्वीप से जोड़ा जाता है।', 'धोलावीरा भी इसी बड़े व्यापार नेटवर्क का हिस्सा था।',
+    ['MARKET2', 'recon'], 'कल्पना कीजिए — कार्यशालाओं में काम करते कारीगर, बाज़ार की हलचल, और दूर से आते व्यापारी।', 'ध्यान रहे, ये दृश्य पुरातात्विक प्रमाणों पर आधारित कल्पना हैं।',
+    ['DUSK', 'recon', 'fadeblack', .8], 'लेकिन फिर… यह चहल-पहल धीरे-धीरे कम होने लगी।',
+  ] },
+  { t: 'पतन', items: [
+    ['PHASES', 'diagram'], 'कोई भी शहर हमेशा एक जैसा नहीं रहता।', 'धोलावीरा भी नहीं रहा।', 'पुरातत्वविदों ने यहाँ बसावट के कई अलग-अलग दौर पहचाने हैं।',
+    ['DECL', 'recon'], 'एक समय के बाद, शहर की भव्यता कम होती दिखाई देती है।',
+    ['HIATUS', 'recon'], 'कुछ समय के लिए यहाँ बसावट रुकी भी… और फिर लोग लौटे।', 'लेकिन बाद की बस्तियाँ छोटी और सादी थीं।',
+    ['Q2', 'illus'], 'ऐसा क्यों हुआ?', 'इसका कोई एक, पक्का जवाब नहीं है।',
+    ['CLIMATE', 'diagram'], 'कई शोध बताते हैं, कि इस दौर में जलवायु धीरे-धीरे और सूखी होती गई।', 'लंबे सूखे पड़े हो सकते हैं, और पानी के स्रोत बदले हो सकते हैं।',
+    ['DRYS', 'recon'], 'और जिस शहर की ज़िंदगी पानी पर टिकी थी, उसके लिए ये बदलाव बहुत बड़े थे।',
+    ['TRADEF', 'diagram'], 'कुछ विद्वान मानते हैं, कि व्यापार में आए बदलावों ने भी असर डाला होगा।',
+    ['MIGR', 'illus'], 'शायद लोग छोटे समूहों में, नई जगहों पर जाकर बसने लगे।',
+    ['RUINSLOW', 'recon'], 'यानी धोलावीरा एक रात में ख़त्म नहीं हुआ।', 'यह धीरे-धीरे बदला… सिमटा… और आख़िरकार वीरान हो गया।', 'शोधकर्ता आज भी इसके कारणों का अध्ययन कर रहे हैं।',
+    ['NIGHT', 'illus', 'fadeblack', 1.0], 'और फिर हज़ारों साल तक, यह शहर मिट्टी के नीचे सोता रहा।',
+  ] },
+  { t: 'फिर से खोज', items: [
+    ['MOUND', 'today'], 'स्थानीय लोग इस टीले को कोटडा टिंबा के नाम से जानते थे।',
+    ['Y1968', 'today'], '1968 में पुरातत्वविद जगत पति जोशी ने इस स्थल की पहचान की।',
+    ['EXCAV', 'illus'], 'फिर 1989 से 2005 तक, भारतीय पुरातत्व सर्वेक्षण ने, आर. एस. बिष्ट के नेतृत्व में यहाँ बड़े पैमाने पर खुदाई की।', 'परत-दर-परत, यह भूला हुआ शहर फिर से सामने आया।',
+    ['REVEAL', 'today'], 'किलेबंदी, जलाशय, बाँध, घर, कार्यशालाएँ… और एक कब्रिस्तान भी।',
+    ['SIGN', 'illus'], 'उत्तरी द्वार के पास सिंधु लिपि के दस बड़े चिह्न भी मिले, जिन्हें अक्सर ‘साइनबोर्ड’ कहा जाता है।', 'यह लिपि आज तक पूरी तरह पढ़ी नहीं जा सकी है।',
+    ['UNESCO', 'today', 'fadeblack', .8], 'और फिर 2021 में, यूनेस्को ने धोलावीरा को विश्व धरोहर सूची में शामिल किया।', 'यह दर्जा पाने वाला यह भारत का पहला हड़प्पाई स्थल है।',
+  ] },
+  { t: 'विरासत', items: [
+    ['MODCITY', 'illus'], 'आज, जब दुनिया के कई शहर पानी की कमी से जूझ रहे हैं…',
+    ['RAINRES', 'recon'], 'धोलावीरा हमें एक पुराना, लेकिन ज़रूरी सबक़ याद दिलाता है।', 'बारिश को रोकना, सहेजना, और समझदारी से इस्तेमाल करना।',
+    ['GOLD', 'recon', 'dissolve', 1.0], 'हज़ारों साल पहले, जब आधुनिक मशीनें नहीं थीं,', 'तब भी इंसान ने प्रकृति की सीमाओं को समझकर, उनके साथ जीने का तरीका खोज लिया था।',
+    ['FINAL', 'today'], 'धोलावीरा सिर्फ़ एक प्राचीन शहर नहीं…', 'बल्कि उस सोच की कहानी है, जो आज भी हमें बहुत कुछ सिखा सकती है।',
+    ['CTA', 'today'], 'अगर आपको यह कहानी पसंद आई, तो कमेंट में ज़रूर बताइए — धोलावीरा की कौन-सी बात आपको सबसे ज़्यादा हैरान करती है।', 'और भारत के ऐसे ही भूले-बिसरे इतिहास के लिए, चैनल को सब्सक्राइब कीजिए।',
+  ] },
+];
+const RATE = 2.8, LINES = [], SCN = [], SHOTS = [];
+{
+  const VO = window.VO, gap = VO ? 0.32 : 0.2;
+  let t = 0, idx = 0;
+  CHAPTERS.forEach((ch, ci) => {
+    const st = t; let lt = st + (ci === 0 ? 0.6 : 2.4), pend = null;
+    for (const it of ch.items) {
+      if (Array.isArray(it)) { pend = it; continue; }
+      if (pend) { SHOTS.push({ id: pend[0], tag: pend[1], out: pend[2] || 'cut', td: pend[3] || 0, si: ci, s: SHOTS.length && SHOTS[SHOTS.length - 1].si === ci ? lt - .3 : st, first: idx }); pend = null; }
+      const n = it.replace(/—/g, ' ').split(/\s+/).filter(Boolean).length;
+      const d = VO ? VO[idx] : Math.max(1.0, n / RATE);
+      LINES.push({ si: ci, txt: it, s: lt, e: lt + d }); idx++;
+      lt += d + gap + (/[…—?]$/.test(it) ? 0.3 : 0);
+    }
+    t = lt + (ci === CHAPTERS.length - 1 ? 1.5 : 0.6); SCN.push({ s: st, e: t });
+  });
+  SHOTS.forEach((sh, i) => { sh.d = (i < SHOTS.length - 1 ? SHOTS[i + 1].s : t) - sh.s; });
+  SHOTS.push({ id: 'END', s: t, d: 6, tag: null, out: 'cut', td: 0, si: CHAPTERS.length, first: LINES.length - 1 });
+}
+const TOTAL = SHOTS[SHOTS.length - 1].s + SHOTS[SHOTS.length - 1].d;
+window.TOTAL_FRAMES = Math.round(TOTAL * FPS);
+window.LINES = LINES; window.SHOTS = SHOTS.map(s => ({ id: s.id, s: +s.s.toFixed(2), d: +s.d.toFixed(2) }));
+window.CHAPTER_STARTS = SCN.map((c, i) => ({ t: +c.s.toFixed(1), title: CHAPTERS[i].t }));
+
+// =====================================================================
+//  COMPOSITING
+// =====================================================================
+const out = document.getElementById('out'), O = out.getContext('2d'), bufA = mk(W, H), bufB = mk(W, H), tmp = mk(W, H);
+function drawShot(i, buf, t) {
+  const sh = SHOTS[i], c = buf.getContext('2d'); curShot = i;
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.filter = 'none'; c.shadowBlur = 0; c.shadowColor = 'transparent';
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  S[sh.id](c, Math.max(0, t - sh.s), sh.d); c.restore();
+}
+function composite(o, type, A, B, k) {
+  switch (type) {
+    case 'ripple': { const tc = tmp.getContext('2d'); tc.globalAlpha = 1; tc.drawImage(A, 0, 0); tc.globalAlpha = eInOut(k); tc.drawImage(B, 0, 0); tc.globalAlpha = 1; const amp = Math.sin(k * Math.PI) * 26; for (let y = 0; y < H; y += 4) o.drawImage(tmp, 0, y, W, 4, Math.sin(y * .025 + k * 12) * amp, y, W, 4); break; }
+    case 'warm': o.drawImage(k < .5 ? A : B, 0, 0); o.fillStyle = `rgba(255,226,170,${Math.pow(1 - Math.abs(k - .5) * 2, 1.2)})`; o.fillRect(0, 0, W, H); break;
+    case 'fadeblack': o.drawImage(k < .5 ? A : B, 0, 0); o.fillStyle = `rgba(0,0,0,${1 - Math.abs(k - .5) * 2})`; o.fillRect(0, 0, W, H); break;
+    case 'dissolve': o.drawImage(A, 0, 0); o.globalAlpha = eInOut(k); o.drawImage(B, 0, 0); o.globalAlpha = 1; break;
+  }
+}
+const TAGS = { illus: 'एनिमेटेड चित्रण · ANIMATED ILLUSTRATION', diagram: 'व्याख्यात्मक चित्र · ILLUSTRATIVE DIAGRAM', recon: 'कलात्मक पुनर्निर्माण · ARTISTIC RECONSTRUCTION', today: 'आज के अवशेष (चित्रण) · PRESENT-DAY SITE, ILLUSTRATED' };
+function tag(ctx, k) {
+  if (!k) return; ctx.save(); ctx.font = '600 22px "Nirmala UI", "Segoe UI", sans-serif'; const t = TAGS[k], w = ctx.measureText(t).width;
+  ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.beginPath(); ctx.roundRect(28, 26, w + 32, 42, 21); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textBaseline = 'middle'; ctx.fillText(t, 44, 48); ctx.restore();
+}
+function chapterCard(ctx, ci, u) {
+  if (ci === 0 || ci >= CHAPTERS.length) return;
+  const a = eOut(prog(u, .1, .5)) * (1 - prog(u, 2.6, 3.1)); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a * .55; ctx.fillStyle = '#000'; ctx.fillRect(0, H * .36, W, H * .26); ctx.restore();
+  ctx.save(); ctx.globalAlpha = a;
+  txt(ctx, `अध्याय ${ci + 1}`, W / 2, H * .43, 34, '#f5c66a', 'center', 700, 0);
+  txt(ctx, CHAPTERS[ci].t, W / 2, H * .51, 78, '#ffffff', 'center', 700, 0);
+  ctx.font = '700 78px "Nirmala UI"'; const tw = ctx.measureText(CHAPTERS[ci].t).width; ctx.fillStyle = '#f5c66a'; ctx.fillRect(W / 2 - tw / 2 * a, H * .51 + 52, tw * a, 4);
+  ctx.restore();
+}
+const KEY = new Set(['धोलावीरा', 'पानी', 'बूंद', 'जलाशय', 'हड़प्पा', 'खडीर', 'मानसून', 'मौसमी', 'मनसर', 'मनहर', 'बाँध', 'नहरें', 'नहरों', 'कुआँ', 'कुएँ', 'नालियाँ', 'सिटाडेल', 'किलेबंदी', 'पत्थर', '5,000', '1,500', '1968', '2021', 'यूनेस्को', 'मेसोपोटामिया', 'मगन', 'मनके', 'जलवायु', 'योजना', 'इंजीनियरिंग']);
+function subtitle(ctx, s, a) {
+  ctx.save(); ctx.font = '700 50px "Nirmala UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const words = s.split(' ').filter(Boolean), sp = ctx.measureText(' ').width, lines = []; let cur = [], cw = 0;
+  for (const w of words) { const ww = ctx.measureText(w).width; if (cur.length && cw + sp + ww > 1560) { lines.push(cur); cur = []; cw = 0; } cw += (cur.length ? sp : 0) + ww; cur.push([w, ww]); }
+  if (cur.length) lines.push(cur);
+  const lh = 68, y0 = H - 82 - (lines.length - 1) * lh;
+  ctx.globalAlpha = a;
+  lines.forEach((ln, i) => {
+    const tw = ln.reduce((q, [, w]) => q + w, 0) + sp * (ln.length - 1); let x = W / 2 - tw / 2; const y = y0 + i * lh;
+    for (const [w, ww] of ln) { ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(w, x, y); ctx.fillStyle = KEY.has(w.replace(/[,।?!—…“”‘’]/g, '')) ? '#f5c66a' : '#ffffff'; ctx.fillText(w, x, y); x += ww + sp; }
+  });
+  ctx.restore();
+}
+function finish(ctx) {
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, W * .62); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalAlpha = .08; ctx.globalCompositeOperation = 'overlay'; ctx.drawImage(noise[FRAME % 4], 0, 0, W, H); ctx.restore();
+}
+window.renderFrame = f => {
+  FRAME = f; const t = f / FPS; CURT = t;
+  let i = SHOTS.length - 1; for (let j = 0; j < SHOTS.length; j++) if (t < SHOTS[j].s + SHOTS[j].d) { i = j; break; }
+  O.save(); O.fillStyle = '#000'; O.fillRect(0, 0, W, H);
+  let tr = null;
+  for (let j = 0; j < SHOTS.length - 1; j++) { const sh = SHOTS[j], b = sh.s + sh.d; if (sh.td > 0 && Math.abs(t - b) < sh.td / 2) tr = { j, k: (t - (b - sh.td / 2)) / sh.td }; }
+  if (tr) { drawShot(tr.j, bufA, t); drawShot(tr.j + 1, bufB, t); composite(O, SHOTS[tr.j].out, bufA, bufB, tr.k); }
+  else { drawShot(i, bufA, t); O.drawImage(bufA, 0, 0); }
+  finish(O);
+  tag(O, SHOTS[i].tag);
+  const ci = SHOTS[i].si; if (ci < CHAPTERS.length) chapterCard(O, ci, t - SCN[ci].s);
+  for (const L of LINES) if (t >= L.s - .05 && t <= L.e + .12) subtitle(O, L.txt, Math.min(1, (t - L.s + .05) / .12, (L.e + .12 - t) / .12));
+  if (t < .4) { O.fillStyle = `rgba(0,0,0,${1 - t / .4})`; O.fillRect(0, 0, W, H); }
+  if (t > TOTAL - .8) { O.fillStyle = `rgba(0,0,0,${prog(t, TOTAL - .8, TOTAL)})`; O.fillRect(0, 0, W, H); }
+  O.restore();
+  return out.toDataURL('image/jpeg', 0.92);
+};
+window.ready = true;
+</script>
+</body></html>
